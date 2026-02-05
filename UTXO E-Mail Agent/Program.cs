@@ -14,6 +14,10 @@ namespace UTXO_E_Mail_Agent;
 
 public class Program
 {
+    // Version information - update this with each release
+    private const string Version = "1.1.0";
+    private const string BuildDate = "2026-02-05";
+
     private static IConfiguration _configuration = null!;
     private static int _pollingIntervalSeconds;
     private static string _connectionString = null!;
@@ -30,7 +34,10 @@ public class Program
         _connectionString = _configuration.GetConnectionString("DefaultConnection")
             ?? throw new InvalidOperationException("Connection string 'DefaultConnection' not found.");
 
-        Console.WriteLine("NMKR E-Mail Agent");
+        Console.WriteLine("═══════════════════════════════════════════════════");
+        Console.WriteLine("  UTXO E-Mail Agent");
+        Console.WriteLine($"  Version: {Version} (Build: {BuildDate})");
+        Console.WriteLine("═══════════════════════════════════════════════════");
         Console.WriteLine($"Polling interval: {_pollingIntervalSeconds} seconds");
         Console.WriteLine("Starting main loop...");
 
