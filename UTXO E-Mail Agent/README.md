@@ -197,12 +197,82 @@ Test MCP servers individually via Admintool's MCP Request feature.
 
 ## 📦 Dependencies
 
+### Claude Agent SDK
+
+The application uses the **Claude Agent SDK** for .NET to interact with Claude AI. This SDK provides a powerful interface for:
+
+- Multi-turn conversations with Claude
+- Model Context Protocol (MCP) server integration
+- Tool usage and function calling
+- Prompt caching for efficiency
+- Built-in query helpers
+
+#### What is Claude Code?
+
+**Claude Code** is Anthropic's official CLI tool for building AI-powered applications. The Claude Agent SDK allows your .NET applications to programmatically interact with Claude Code's capabilities.
+
+#### Installation Requirements
+
+1. **Install Claude Code CLI** (required for the SDK to work):
+
+   **macOS/Linux:**
+   ```bash
+   brew install anthropics/claude/claude-code
+   ```
+
+   **Windows:**
+   ```bash
+   winget install Anthropic.ClaudeCode
+   ```
+
+   **npm (all platforms):**
+   ```bash
+   npm install -g @anthropics/claude-code
+   ```
+
+2. **Authenticate Claude Code:**
+   ```bash
+   claude-code auth login
+   ```
+   Follow the prompts to authenticate with your Anthropic account.
+
+3. **The SDK is already included** in this project via NuGet package reference in the `.csproj` file.
+
+#### How It's Used in This Project
+
+The agent uses the SDK in `AiProvider/Claude/ClaudeClass.cs`:
+
+```csharp
+using Claude.AgentSdk;
+
+// Initialize the Claude client
+var client = new ClaudeClient();
+
+// Make a query with MCP servers
+var response = await client.QueryAsync(prompt, options);
+```
+
+**Key Features Used:**
+- **QueryAsync**: Simple API for single queries
+- **QueryOptions**: Configure max turns, MCP servers, and model settings
+- **MCP Server Integration**: Dynamic tool registration per agent
+- **Multi-turn Support**: Handles complex workflows requiring multiple AI turns
+
+#### SDK Documentation
+
+For more information about the Claude Agent SDK:
+- [Claude Agent SDK GitHub](https://github.com/0xeb/claude-agent-sdk-dotnet)
+- [Claude Code Documentation](https://docs.claude.com/claude-code)
+- [MCP Protocol Specification](https://modelcontextprotocol.io)
+
+### Other Dependencies
+
 Key packages:
-- `Claude.AgentSdk`: Claude AI integration
+- `Claude.AgentSdk`: Claude AI integration (see above)
 - `Microsoft.EntityFrameworkCore`: Database access
 - `Pomelo.EntityFrameworkCore.MySql`: MySQL provider
 - `Newtonsoft.Json`: JSON processing
-- `MailKit`: Email operations (for some providers)
+- `MailKit`: Email operations (for IMAP/POP3 providers)
 
 ## 🔒 Security
 
@@ -224,7 +294,7 @@ Key packages:
 ## 📚 Related Documentation
 
 - [Main README](../README.md)
-- [Admintool README](../Admintool/README.md)
+- [Admintool README](../UTXO%20E-Mail%20Agent%20Admintool/README.md)
 - [MCP Servers Documentation](McpServers/README.md)
 - [Database Setup](McpServers/DATABASE_SETUP.md)
 
