@@ -5,6 +5,22 @@ All notable changes to the UTXO E-Mail Agent will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.0] - 2026-02-05
+
+### Fixed
+- **CRITICAL**: MCP tools now execute correctly when called by Claude
+  - Changed tool handler signature from `Func<JsonElement, Task<string>>` to `Func<Dictionary<string, JsonElement>, Task<string>>`
+  - Root cause: Claude Agent SDK explicitly excludes `JsonElement` from complex object handling
+  - SDK now generates proper input schema with `additionalProperties` support
+  - HTTP-based MCP servers defined in database can now be called successfully
+  - Tools no longer fail silently - handlers execute and log their activity
+
+### Technical Details
+- The SDK uses reflection to inspect delegate signatures for parameter binding
+- `JsonElement` parameter type resulted in empty schema generation
+- `Dictionary<string, JsonElement>` generates proper JSON schema for dynamic parameters
+- This fix is essential for all database-configured MCP servers to function
+
 ## [1.1.0] - 2026-02-05
 
 ### Added
