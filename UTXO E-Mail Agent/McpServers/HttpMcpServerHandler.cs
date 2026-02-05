@@ -24,8 +24,8 @@ public class HttpMcpServerHandler
     /// <summary>
     /// Führt einen HTTP-Call basierend auf der MCP-Server-Konfiguration aus
     /// </summary>
-    /// <param name="parametersJson">JsonElement mit Parametern</param>
-    private async Task<string> ExecuteAsync(int mcpserverid, int conversationid, JsonElement parametersJson)
+    /// <param name="parameters">Dictionary mit Parametern (ermöglicht dynamische Parameter)</param>
+    private async Task<string> ExecuteAsync(int mcpserverid, int conversationid, Dictionary<string, JsonElement> parameters)
     {
         try
         {
@@ -36,16 +36,16 @@ public class HttpMcpServerHandler
             var method = _mcpConfig.Call.ToUpper();
             var url = _mcpConfig.Url;
 
-            // Convert JsonElement to string for logging and HTTP calls
-            string? parameters = parametersJson.ValueKind == JsonValueKind.Undefined || parametersJson.ValueKind == JsonValueKind.Null
+            // Convert Dictionary to JSON string for logging and HTTP calls
+            string? parametersJson = parameters == null || parameters.Count == 0
                 ? null
-                : parametersJson.GetRawText();
+                : JsonSerializer.Serialize(parameters);
 
             Console.WriteLine($"[MCP {_mcpConfig.Name}] ========================================");
             Console.WriteLine($"[MCP {_mcpConfig.Name}] Executing {method} to {url}");
-            Console.WriteLine($"[MCP {_mcpConfig.Name}] Raw Parameters: {parameters ?? "(none)"}");
+            Console.WriteLine($"[MCP {_mcpConfig.Name}] Raw Parameters: {parametersJson ?? "(none)"}");
 
-            Mcpserverrequest mrequest = new Mcpserverrequest(){McpserverId = mcpserverid, ConversationId =  conversationid, Parameter =  parameters ?? "(none)", Created =  DateTime.Now};
+            Mcpserverrequest mrequest = new Mcpserverrequest(){McpserverId = mcpserverid, ConversationId =  conversationid, Parameter =  parametersJson ?? "(none)", Created =  DateTime.Now};
             
             
             HttpResponseMessage response;
@@ -53,19 +53,19 @@ public class HttpMcpServerHandler
             switch (method)
             {
                 case "GET":
-                    response = await ExecuteGetAsync(url, parameters);
+                    response = await ExecuteGetAsync(url, parametersJson);
                     break;
 
                 case "POST":
-                    response = await ExecutePostAsync(url, parameters);
+                    response = await ExecutePostAsync(url, parametersJson);
                     break;
 
                 case "PUT":
-                    response = await ExecutePutAsync(url, parameters);
+                    response = await ExecutePutAsync(url, parametersJson);
                     break;
 
                 case "DELETE":
-                    response = await ExecuteDeleteAsync(url, parameters);
+                    response = await ExecuteDeleteAsync(url, parametersJson);
                     break;
 
                 default:
@@ -181,11 +181,11 @@ public class HttpMcpServerHandler
 
     /// <summary>
     /// Erstellt ein MCP Tool für diesen Server
-    /// Format: Nimmt ein JsonElement als Parameter entgegen
+    /// Format: Nimmt ein Dictionary<string, JsonElement> als Parameter entgegen (für dynamische Parameter)
     /// </summary>
-    public static Func<JsonElement, Task<string>> CreateToolHandler(Mcpserver mcpConfig, int conversationid, string connectionString)
+    public static Func<Dictionary<string, JsonElement>, Task<string>> CreateToolHandler(Mcpserver mcpConfig, int conversationid, string connectionString)
     {
         var handler = new HttpMcpServerHandler(mcpConfig, connectionString);
-        return async (parametersJson) => await handler.ExecuteAsync(mcpConfig.Id, conversationid, parametersJson);
+        return async (parameters) => await handler.ExecuteAsync(mcpConfig.Id, conversationid, parameters);
     }
 }
