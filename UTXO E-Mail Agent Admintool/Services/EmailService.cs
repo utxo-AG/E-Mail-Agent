@@ -16,7 +16,8 @@ public class EmailService
 
     public async Task SendPasswordResetEmail(string toEmail, string toName, string username, string newPassword)
     {
-        var inboundApiKey = _configuration["Email:InboundApiKey"] ?? throw new InvalidOperationException("Email:InboundApiKey not configured");
+        var apiUrl = _configuration["Email:ApiUrl"] ?? throw new InvalidOperationException("Email:ApiUrl not configured");
+        var bearerToken = _configuration["Email:BearerToken"] ?? throw new InvalidOperationException("Email:BearerToken not configured");
         var fromEmail = _configuration["Email:FromEmail"] ?? throw new InvalidOperationException("Email:FromEmail not configured");
         var fromName = _configuration["Email:FromName"] ?? "UTXO E-Mail Agent";
 
@@ -65,8 +66,9 @@ UTXO E-Mail Agent Team
 
         try
         {
-            var request = new HttpRequestMessage(HttpMethod.Post, "https://inbound.new/api/e2/emails");
-            request.Headers.Add("Authorization", $"Bearer {inboundApiKey}");
+            var emailEndpoint = $"{apiUrl.TrimEnd('/')}/emails";
+            var request = new HttpRequestMessage(HttpMethod.Post, emailEndpoint);
+            request.Headers.Add("Authorization", $"Bearer {bearerToken}");
             request.Content = content;
 
             var response = await _httpClient.SendAsync(request);

@@ -10,8 +10,9 @@
     "DefaultConnection": "server=localhost;port=3306;user=root;password=your-password;database=emailagent"
   },
   "Email": {
+    "ApiUrl": "https://inbound.new/api/e2/",
+    "BearerToken": "your-inbound-api-key-here",
     "FromEmail": "noreply@yourdomain.com",
-    "FromName": "UTXO E-Mail Agent",
-    "InboundApiKey": "your-inbound-api-key-here"
+    "FromName": "UTXO E-Mail Agent"
   }
 }
