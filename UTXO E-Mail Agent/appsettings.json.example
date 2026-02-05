@@ -1,0 +1,21 @@
+{
+  "Logging": {
+    "LogLevel": {
+      "Default": "Information",
+      "Microsoft": "Warning"
+    }
+  },
+  "ConnectionStrings": {
+    "DefaultConnection": "server=localhost;port=3306;user=root;password=your-password;database=emailagent"
+  },
+  "AppSettings": {
+    "PollingIntervalSeconds": "60"
+  },
+  "Claude": {
+    "ApiKey": "YOUR_ANTHROPIC_API_KEY_HERE"
+  },
+  "Email": {
+    "ApiUrl": "https://inbound.new/api/e2/api/e2/emails?limit=50&offset=0&type=received&status=unread&domain=yourdomain.com",
+    "BearerToken": "YOUR_BEARER_TOKEN_HERE"
+  }
+}

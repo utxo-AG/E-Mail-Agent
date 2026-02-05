@@ -1,0 +1,149 @@
+@page "/administrators/add"
+@rendermode InteractiveServer
+@using UTXO_E_Mail_Agent_Shared.Models;
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.EntityFrameworkCore
+@using UTXO_E_Mail_Agent_Admintool.Services
+@attribute [Authorize]
+@inject IDbContextFactory<DefaultdbContext> DbFactory
+@inject NavigationManager NavigationManager
+@inject PasswordService PasswordService
+@inject ISnackbar Snackbar
+
+<PageTitle>Add New Administrator</PageTitle>
+
+<MudText Typo="Typo.h3" Class="mb-4">Add New Administrator</MudText>
+
+<MudPaper Class="pa-4">
+    <MudForm @ref="form" @bind-IsValid="@success">
+        <MudGrid>
+            <MudItem xs="12">
+                <MudTextField Label="Username"
+                              @bind-Value="newAdministrator.Username"
+                              Required="true"
+                              RequiredError="Username is required"
+                              HelperText="Must be unique" />
+            </MudItem>
+
+            <MudItem xs="12">
+                <MudTextField Label="Password"
+                              @bind-Value="password"
+                              Required="true"
+                              RequiredError="Password is required"
+                              InputType="InputType.Password"
+                              HelperText="Minimum 8 characters" />
+            </MudItem>
+
+            <MudItem xs="12">
+                <MudTextField Label="Confirm Password"
+                              @bind-Value="confirmPassword"
+                              Required="true"
+                              RequiredError="Password confirmation is required"
+                              InputType="InputType.Password"
+                              HelperText="Must match password"
+                              Validation="@(new Func<string, string?>(ValidatePasswordMatch))" />
+            </MudItem>
+
+            <MudItem xs="12" Class="d-flex justify-space-between">
+                <MudButton Variant="Variant.Filled"
+                           Color="Color.Default"
+                           OnClick="Cancel">
+                    Cancel
+                </MudButton>
+                <MudButton Variant="Variant.Filled"
+                           Color="Color.Primary"
+                           OnClick="Save"
+                           Disabled="@(!success)">
+                    Create Administrator
+                </MudButton>
+            </MudItem>
+        </MudGrid>
+    </MudForm>
+</MudPaper>
+
+@code {
+    private Administrator newAdministrator = new();
+    private MudForm? form;
+    private bool success;
+    private string password = "";
+    private string confirmPassword = "";
+
+    protected override void OnInitialized()
+    {
+        // Initialize new administrator with default values
+        newAdministrator = new Administrator
+        {
+            Username = "",
+            State = "active",
+            Passwordhash = ""
+        };
+    }
+
+    private string? ValidatePasswordMatch(string confirmPwd)
+    {
+        if (string.IsNullOrEmpty(confirmPwd))
+            return "Password confirmation is required";
+
+        if (confirmPwd != password)
+            return "Passwords do not match";
+
+        if (password.Length < 8)
+            return "Password must be at least 8 characters";
+
+        return null;
+    }
+
+    private void Cancel()
+    {
+        NavigationManager.NavigateTo("/administrators/manage");
+    }
+
+    private async Task Save()
+    {
+        // Validate password length
+        if (password.Length < 8)
+        {
+            Snackbar.Add("Password must be at least 8 characters", Severity.Error);
+            return;
+        }
+
+        // Validate passwords match
+        if (password != confirmPassword)
+        {
+            Snackbar.Add("Passwords do not match", Severity.Error);
+            return;
+        }
+
+        // Validate username is not empty
+        if (string.IsNullOrWhiteSpace(newAdministrator.Username))
+        {
+            Snackbar.Add("Username is required", Severity.Error);
+            return;
+        }
+
+        await using var db = await DbFactory.CreateDbContextAsync();
+
+        // Check for duplicate username
+        var existingAdmin = await db.Administrators
+            .Where(a => a.Username == newAdministrator.Username && a.State != "deleted")
+            .FirstOrDefaultAsync();
+
+        if (existingAdmin != null)
+        {
+            Snackbar.Add($"Username '{newAdministrator.Username}' already exists", Severity.Error);
+            return;
+        }
+
+        // Hash the password
+        newAdministrator.Passwordhash = PasswordService.HashPassword(password);
+
+        // Add new administrator to database
+        db.Administrators.Add(newAdministrator);
+        await db.SaveChangesAsync();
+
+        Snackbar.Add($"Administrator '{newAdministrator.Username}' created successfully", Severity.Success);
+
+        // Navigate back to manage administrators page
+        NavigationManager.NavigateTo("/administrators/manage");
+    }
+}

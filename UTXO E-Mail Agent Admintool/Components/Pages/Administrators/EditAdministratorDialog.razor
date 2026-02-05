@@ -1,0 +1,245 @@
+@using UTXO_E_Mail_Agent_Shared.Models;
+@using Microsoft.EntityFrameworkCore
+@using UTXO_E_Mail_Agent_Admintool.Services
+@inject IDbContextFactory<DefaultdbContext> DbFactory
+@inject PasswordService PasswordService
+@inject ISnackbar Snackbar
+
+<MudDialog>
+    <DialogContent>
+        <MudForm @ref="form" @bind-IsValid="@success">
+            <MudGrid>
+                <MudItem xs="12">
+                    <MudTextField Label="Username"
+                                  Value="@editAdministrator.Username"
+                                  ReadOnly="true"
+                                  Disabled="true"
+                                  HelperText="Username cannot be changed" />
+                </MudItem>
+
+                <MudItem xs="12" sm="6">
+                    <MudSelect Label="State"
+                               @bind-Value="editAdministrator.State"
+                               Required="true"
+                               RequiredError="State is required">
+                        <MudSelectItem Value="@("active")">Active</MudSelectItem>
+                        <MudSelectItem Value="@("blocked")">Blocked</MudSelectItem>
+                    </MudSelect>
+                </MudItem>
+
+                <MudItem xs="12" sm="6">
+                    <MudTextField Label="Failed Login Attempts"
+                                  Value="@editAdministrator.Loginattempts.ToString()"
+                                  ReadOnly="true"
+                                  Disabled="true"
+                                  HelperText="@GetLoginAttemptsHelperText()" />
+                </MudItem>
+
+                @if (editAdministrator.Loginattempts > 0)
+                {
+                    <MudItem xs="12">
+                        <MudAlert Severity="Severity.Warning" Variant="Variant.Filled">
+                            This administrator has @editAdministrator.Loginattempts failed login attempt(s).
+                            @if (editAdministrator.State == "blocked")
+                            {
+                                <text>The account is currently blocked.</text>
+                            }
+                        </MudAlert>
+                    </MudItem>
+
+                    <MudItem xs="12">
+                        <MudButton Variant="Variant.Filled"
+                                   Color="Color.Warning"
+                                   StartIcon="@Icons.Material.Filled.LockOpen"
+                                   OnClick="ResetLoginAttempts"
+                                   Disabled="resettingAttempts">
+                            @if (resettingAttempts)
+                            {
+                                <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+                                <span>Resetting...</span>
+                            }
+                            else
+                            {
+                                <span>Reset Login Attempts & Unblock</span>
+                            }
+                        </MudButton>
+                    </MudItem>
+                }
+
+                <MudItem xs="12">
+                    <MudTextField Label="Password"
+                                  Value="@GetPasswordDisplay()"
+                                  ReadOnly="true"
+                                  InputType="InputType.Password"
+                                  HelperText="Password is hashed and cannot be displayed" />
+                </MudItem>
+
+                @if (!string.IsNullOrEmpty(newGeneratedPassword))
+                {
+                    <MudItem xs="12">
+                        <MudAlert Severity="Severity.Success" Variant="Variant.Filled">
+                            <MudText Typo="Typo.body1"><strong>New Password Generated:</strong></MudText>
+                            <MudText Typo="Typo.h6" Class="mt-2">@newGeneratedPassword</MudText>
+                            <MudText Typo="Typo.caption" Class="mt-2">Please save this password securely. It will not be shown again.</MudText>
+                        </MudAlert>
+                    </MudItem>
+                }
+
+                <MudItem xs="12">
+                    <MudButton Variant="Variant.Filled"
+                               Color="Color.Warning"
+                               StartIcon="@Icons.Material.Filled.Key"
+                               OnClick="GenerateNewPassword"
+                               Disabled="generatingPassword">
+                        @if (generatingPassword)
+                        {
+                            <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+                            <span>Generating...</span>
+                        }
+                        else
+                        {
+                            <span>Generate New Password</span>
+                        }
+                    </MudButton>
+                </MudItem>
+            </MudGrid>
+        </MudForm>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel">Cancel</MudButton>
+        <MudButton Color="Color.Primary" OnClick="Save" Disabled="@(!success)">Save</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter]
+    IMudDialogInstance MudDialog { get; set; } = default!;
+
+    [Parameter]
+    public Administrator Administrator { get; set; } = default!;
+
+    private Administrator editAdministrator = new();
+    private MudForm? form;
+    private bool success = true;
+    private bool generatingPassword = false;
+    private bool resettingAttempts = false;
+    private string? newGeneratedPassword = null;
+
+    protected override void OnInitialized()
+    {
+        // Create a copy to avoid modifying the original until save
+        editAdministrator = new Administrator
+        {
+            Id = Administrator.Id,
+            Username = Administrator.Username,
+            Passwordhash = Administrator.Passwordhash,
+            State = Administrator.State,
+            Loginattempts = Administrator.Loginattempts
+        };
+    }
+
+    private string GetPasswordDisplay()
+    {
+        return !string.IsNullOrEmpty(editAdministrator.Passwordhash) ? "••••••••••" : "";
+    }
+
+    private string GetLoginAttemptsHelperText()
+    {
+        if (editAdministrator.Loginattempts == 0)
+            return "No failed login attempts";
+
+        if (editAdministrator.Loginattempts >= 3)
+            return "Account blocked after 3 failed attempts";
+
+        return $"{editAdministrator.Loginattempts} of 3 failed attempts";
+    }
+
+    private async Task ResetLoginAttempts()
+    {
+        resettingAttempts = true;
+        try
+        {
+            await using var db = await DbFactory.CreateDbContextAsync();
+            var admin = await db.Administrators.FindAsync(Administrator.Id);
+            if (admin != null)
+            {
+                admin.Loginattempts = 0;
+                admin.State = "active";
+                await db.SaveChangesAsync();
+
+                // Update local copy
+                editAdministrator.Loginattempts = 0;
+                editAdministrator.State = "active";
+
+                Snackbar.Add($"Login attempts reset and account unblocked for '{editAdministrator.Username}'", Severity.Success);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error resetting login attempts: {ex.Message}", Severity.Error);
+            Console.WriteLine($"[EditAdministratorDialog] Error: {ex}");
+        }
+        finally
+        {
+            resettingAttempts = false;
+        }
+    }
+
+    private async Task GenerateNewPassword()
+    {
+        generatingPassword = true;
+        try
+        {
+            // Generate new password
+            newGeneratedPassword = PasswordService.GeneratePassword();
+
+            // Hash the password
+            var passwordHash = PasswordService.HashPassword(newGeneratedPassword);
+
+            // Update in database
+            await using var db = await DbFactory.CreateDbContextAsync();
+            var admin = await db.Administrators.FindAsync(Administrator.Id);
+            if (admin != null)
+            {
+                admin.Passwordhash = passwordHash;
+                await db.SaveChangesAsync();
+
+                // Update local copy
+                editAdministrator.Passwordhash = passwordHash;
+
+                Snackbar.Add("New password generated successfully", Severity.Success);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error generating password: {ex.Message}", Severity.Error);
+            Console.WriteLine($"[EditAdministratorDialog] Error: {ex}");
+        }
+        finally
+        {
+            generatingPassword = false;
+        }
+    }
+
+    private void Cancel()
+    {
+        MudDialog.Cancel();
+    }
+
+    private async Task Save()
+    {
+        await using var db = await DbFactory.CreateDbContextAsync();
+        var admin = await db.Administrators.FindAsync(Administrator.Id);
+
+        if (admin != null)
+        {
+            admin.State = editAdministrator.State;
+            // Note: Username is not editable
+            // Note: Passwordhash is only updated via GenerateNewPassword button
+            // Note: Loginattempts is only updated via ResetLoginAttempts button or automatically via AuthService
+
+            await db.SaveChangesAsync();
+            MudDialog.Close(DialogResult.Ok(true));
+        }
+    }
+}

@@ -1,0 +1,46 @@
+## Build results
+bin/
+obj/
+[Dd]ebug/
+[Rr]elease/
+x64/
+x86/
+[Bb]in/
+[Oo]bj/
+[Ll]og/
+[Ll]ogs/
+
+## Visual Studio / Rider / VS Code
+.vs/
+.vscode/
+.idea/
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+*.userprefs
+riderModule.iml
+/_ReSharper.Caches/
+.DS_Store
+
+## NuGet Packages
+/packages/
+*.nupkg
+*.snupkg
+project.lock.json
+project.fragment.lock.json
+artifacts/
+
+## Application Settings (contains sensitive data)
+appsettings.json
+appsettings.Development.json
+appsettings.Production.json
+
+## Secrets and credentials
+*.pfx
+*.p12
+credentials.json
+secrets.json
+
+## External repositories (managed separately)
+claude-agent-sdk-dotnet/

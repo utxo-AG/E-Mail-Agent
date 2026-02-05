@@ -1,0 +1,127 @@
+@inject IDbContextFactory<DefaultdbContext> DbFactory
+
+<MudDialog>
+    <DialogContent>
+        <MudForm @ref="form" @bind-IsValid="@success">
+            <MudGrid>
+                <MudItem xs="12">
+                    <MudTextField Label="Name"
+                                  @bind-Value="editServer.Name"
+                                  Required="true"
+                                  RequiredError="Name is required" />
+                </MudItem>
+
+                <MudItem xs="12">
+                    <MudTextField Label="Description"
+                                  @bind-Value="editServer.Description"
+                                  Required="true"
+                                  RequiredError="Description is required"
+                                  Lines="5"
+                                  Variant="Variant.Outlined"
+                                  HelperText="This description will be added to the system prompt" />
+                </MudItem>
+
+                <MudItem xs="12">
+                    <MudTextField Label="URL"
+                                  @bind-Value="editServer.Url"
+                                  Required="true"
+                                  RequiredError="URL is required"
+                                  Placeholder="https://api.example.com" />
+                </MudItem>
+
+                <MudItem xs="12">
+                    <MudSelect Label="HTTP Method"
+                               @bind-Value="editServer.Call"
+                               Required="true"
+                               RequiredError="HTTP Method is required">
+                        <MudSelectItem Value="@("POST")">POST</MudSelectItem>
+                        <MudSelectItem Value="@("GET")">GET</MudSelectItem>
+                        <MudSelectItem Value="@("DELETE")">DELETE</MudSelectItem>
+                        <MudSelectItem Value="@("UPDATE")">UPDATE</MudSelectItem>
+                    </MudSelect>
+                </MudItem>
+            </MudGrid>
+        </MudForm>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel">Cancel</MudButton>
+        <MudButton Color="Color.Primary" OnClick="Save" Disabled="@(!success)">Save</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter]
+    IMudDialogInstance MudDialog { get; set; } = default!;
+
+    [Parameter]
+    public int AgentId { get; set; }
+
+    [Parameter]
+    public Mcpserver? McpServer { get; set; }
+
+    private Mcpserver editServer = new();
+    private MudForm? form;
+    private bool success;
+
+    protected override void OnInitialized()
+    {
+        if (McpServer != null)
+        {
+            // Edit mode - copy existing server
+            editServer = new Mcpserver
+            {
+                Id = McpServer.Id,
+                AgentId = McpServer.AgentId,
+                Name = McpServer.Name,
+                Description = McpServer.Description,
+                Url = McpServer.Url,
+                Call = McpServer.Call
+            };
+        }
+        else
+        {
+            // Create mode - initialize new server
+            editServer = new Mcpserver
+            {
+                AgentId = AgentId,
+                Name = "",
+                Description = "",
+                Url = "",
+                Call = ""
+            };
+        }
+    }
+
+    private void Cancel()
+    {
+        MudDialog.Cancel();
+    }
+
+    private async Task Save()
+    {
+        await using var db = await DbFactory.CreateDbContextAsync();
+
+        if (McpServer != null)
+        {
+            // Update existing MCP server
+            var existing = await db.Mcpservers.FindAsync(McpServer.Id);
+            if (existing != null)
+            {
+                existing.Name = editServer.Name;
+                existing.Description = editServer.Description;
+                existing.Url = editServer.Url;
+                existing.Call = editServer.Call;
+
+                await db.SaveChangesAsync();
+            }
+        }
+        else
+        {
+            // Create new MCP server
+            db.Mcpservers.Add(editServer);
+            await db.SaveChangesAsync();
+        }
+
+        MudDialog.Close(DialogResult.Ok(true));
+    }
+}

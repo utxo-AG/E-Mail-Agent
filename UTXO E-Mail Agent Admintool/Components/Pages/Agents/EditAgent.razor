@@ -1,0 +1,404 @@
+@page "/agents/edit/{CustomerId:int}/{AgentId:int}"
+@page "/agents/create/{CustomerId:int}"
+@rendermode InteractiveServer
+@attribute [Authorize]
+@inject IDbContextFactory<DefaultdbContext> DbFactory
+@inject NavigationManager NavigationManager
+@inject IDialogService DialogService
+
+<PageTitle>@(AgentId.HasValue ? "Edit Agent" : "Create New Agent")</PageTitle>
+
+<MudText Typo="Typo.h3" Class="mb-4">@(AgentId.HasValue ? "Edit Agent" : "Create New Agent")</MudText>
+
+@if (agent == null && AgentId.HasValue)
+{
+    <MudProgressCircular Indeterminate="true" />
+}
+else
+{
+    <MudPaper Class="pa-4">
+        <MudForm @ref="form" @bind-IsValid="@success">
+            <MudGrid>
+                <MudItem xs="12" md="6">
+                    <MudTextField Label="Email Address"
+                                  @bind-Value="agent.Emailaddress"
+                                  Required="true"
+                                  RequiredError="Email is required"
+                                  InputType="InputType.Email" />
+                </MudItem>
+
+                <MudItem xs="12" md="6">
+                    <MudSelect Label="State" @bind-Value="agent.State" Required="true">
+                        <MudSelectItem Value="@("active")">Active</MudSelectItem>
+                        <MudSelectItem Value="@("inactive")">Inactive</MudSelectItem>
+                    </MudSelect>
+                </MudItem>
+
+                <MudItem xs="12" md="6">
+                    <MudTextField Label="Default Language"
+                                  @bind-Value="agent.Defaultlanguage"
+                                  Required="true"
+                                  Placeholder="e.g., en, de, fr" />
+                </MudItem>
+              
+                <MudItem xs="12" md="6">
+                    <MudSelect Label="Email Provider" @bind-Value="agent.Emailprovider" Required="true">
+                        <MudSelectItem Value="@("inbound")">Inbound</MudSelectItem>
+                        <MudSelectItem Value="@("imap")">IMAP</MudSelectItem>
+                        <MudSelectItem Value="@("exchange")">Exchange</MudSelectItem>
+                        <MudSelectItem Value="@("pop3")">POP3</MudSelectItem>
+                    </MudSelect>
+                </MudItem>
+
+                @if (agent.Emailprovider?.ToLower() == "inbound")
+                {
+                    <MudItem xs="12" md="6">
+                        <MudSelect Label="Email Provider Type" @bind-Value="agent.Emailprovidertype" Required="true">
+                            <MudSelectItem Value="@("polling")">Polling</MudSelectItem>
+                            <MudSelectItem Value="@("webhook")">Webhook</MudSelectItem>
+                        </MudSelect>
+                    </MudItem>
+                }
+
+                @if (agent.Emailprovider?.ToLower() == "imap" || agent.Emailprovider?.ToLower() == "pop3" || agent.Emailprovider?.ToLower() == "exchange")
+                {
+                    <MudItem xs="12">
+                        <MudDivider Class="my-2" />
+                        <MudText Typo="Typo.subtitle1" Class="mt-2 mb-2">Email Server Configuration</MudText>
+                    </MudItem>
+
+                    <MudItem xs="12" md="6">
+                        <MudTextField Label="Email Server"
+                                      @bind-Value="agent.Emailserver"
+                                      Required="true"
+                                      Placeholder="@(agent.Emailprovider?.ToLower() == "exchange" ? "e.g., outlook.office365.com" : "e.g., imap.gmail.com, pop3.gmail.com")" />
+                    </MudItem>
+
+                    <MudItem xs="12" md="6">
+                        <MudNumericField Label="Email Port (optional)"
+                                         @bind-Value="agent.Emailport"
+                                         Min="1"
+                                         Max="65535"
+                                         Placeholder="@(agent.Emailprovider?.ToLower() == "exchange" ? "e.g., 443 (default)" : "e.g., 993 (IMAP), 995 (POP3)")" />
+                    </MudItem>
+
+                    <MudItem xs="12" md="6">
+                        <MudTextField Label="Email Username"
+                                      @bind-Value="agent.Emailusername"
+                                      Required="true"
+                                      Placeholder="@(agent.Emailprovider?.ToLower() == "exchange" ? "e.g., user@domain.com" : "")" />
+                    </MudItem>
+
+                    <MudItem xs="12" md="6">
+                        <MudTextField Label="Email Password"
+                                      @bind-Value="agent.Emailpassword"
+                                      Required="true"
+                                      InputType="InputType.Password" />
+                    </MudItem>
+
+                    <MudItem xs="12" md="6">
+                        <MudSwitch Label="Use SSL/TLS"
+                                   @bind-Value="agent.Emailusessl"
+                                   Color="Color.Primary" />
+                    </MudItem>
+
+                    <MudItem xs="12">
+                        <MudDivider Class="my-2" />
+                    </MudItem>
+                }
+
+                <MudItem xs="12" md="6">
+                    <MudSelect Label="AI Provider" @bind-Value="agent.Aiprovider" Required="true">
+                        <MudSelectItem Value="@("openai")">OpenAI</MudSelectItem>
+                        <MudSelectItem Value="@("claude")">Anthropic</MudSelectItem>
+                        <MudSelectItem Value="@("azure")">Azure</MudSelectItem>
+                    </MudSelect>
+                </MudItem>
+
+                <MudItem xs="12" md="6">
+                    <MudTextField Label="AI Model"
+                                  @bind-Value="agent.Aimodel"
+                                  Required="true"
+                                  Placeholder="e.g., gpt-4, claude-3" />
+                </MudItem>
+
+                <MudItem xs="12">
+                    <MudTextField Label="Company Information"
+                                  @bind-Value="agent.Companyinformation"
+                                  Lines="5"
+                                  Variant="Variant.Outlined" />
+                </MudItem>
+
+                <MudItem xs="12">
+                    <MudTextField Label="Task to be Completed"
+                                  @bind-Value="agent.Tasktobecompleted"
+                                  Lines="5"
+                                  Variant="Variant.Outlined" />
+                </MudItem>
+
+                <MudItem xs="12" Class="d-flex justify-space-between">
+                    <MudButton Variant="Variant.Filled"
+                               Color="Color.Default"
+                               OnClick="Cancel">
+                        Cancel
+                    </MudButton>
+                    <MudButton Variant="Variant.Filled"
+                               Color="Color.Primary"
+                               OnClick="Save"
+                               Disabled="@(!success)">
+                        Save
+                    </MudButton>
+                </MudItem>
+            </MudGrid>
+        </MudForm>
+    </MudPaper>
+
+    @if (AgentId.HasValue)
+    {
+        <MudPaper Class="pa-4 mt-4">
+            <MudText Typo="Typo.h5" Class="mb-4">MCP Servers</MudText>
+
+            @if (mcpServers == null)
+            {
+                <MudProgressCircular Indeterminate="true" />
+            }
+            else if (mcpServers.Count == 0)
+            {
+                <MudAlert Severity="Severity.Info" Class="mb-4">No MCP servers configured for this agent.</MudAlert>
+            }
+            else
+            {
+                <MudTable Items="@mcpServers" Hover="true" Striped="true" Dense="true" Class="mb-4">
+                    <HeaderContent>
+                        <MudTh>Name</MudTh>
+                        <MudTh>Description</MudTh>
+                        <MudTh>URL</MudTh>
+                        <MudTh>Actions</MudTh>
+                    </HeaderContent>
+                    <RowTemplate>
+                        <MudTd>@context.Name</MudTd>
+                        <MudTd>
+                            @if (context.Description != null && context.Description.Length > 50)
+                            {
+                                <MudTooltip Text="@context.Description">
+                                    <span>@(context.Description.Substring(0, 50))...</span>
+                                </MudTooltip>
+                            }
+                            else
+                            {
+                                <span>@context.Description</span>
+                            }
+                        </MudTd>
+                        <MudTd>
+                            <MudText Typo="Typo.caption">@context.Url</MudText>
+                        </MudTd>
+                        <MudTd>
+                            <MudTooltip Text="Edit">
+                                <MudIconButton Icon="@Icons.Material.Filled.Edit"
+                                               Color="Color.Primary"
+                                               Size="Size.Small"
+                                               OnClick="@(() => EditMcpServer(context))" />
+                            </MudTooltip>
+                            <MudTooltip Text="Delete">
+                                <MudIconButton Icon="@Icons.Material.Filled.Delete"
+                                               Color="Color.Error"
+                                               Size="Size.Small"
+                                               OnClick="@(() => DeleteMcpServer(context))" />
+                            </MudTooltip>
+                        </MudTd>
+                    </RowTemplate>
+                </MudTable>
+            }
+
+            <MudButton Variant="Variant.Filled"
+                       Color="Color.Primary"
+                       StartIcon="@Icons.Material.Filled.Add"
+                       OnClick="CreateMcpServer">
+                Add MCP Server
+            </MudButton>
+        </MudPaper>
+    }
+}
+
+@code {
+    [Parameter]
+    public int CustomerId { get; set; }
+
+    [Parameter]
+    public int? AgentId { get; set; }
+
+    private Agent agent = new();
+    private MudForm? form;
+    private bool success;
+    private List<Mcpserver>? mcpServers;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (AgentId.HasValue)
+        {
+            await LoadAgent();
+            await LoadMcpServers();
+        }
+        else
+        {
+            // Initialize new agent with defaults
+            agent = new Agent
+            {
+                CustomerId = CustomerId,
+                State = "active",
+                Defaultlanguage = "en",
+                Emailprovider = "smtp",
+                Emailprovidertype = "imap",
+                Aiprovider = "anthropic",
+                Aimodel = "claude-3-sonnet"
+            };
+        }
+    }
+
+    private async Task LoadAgent()
+    {
+        if (!AgentId.HasValue) return;
+
+        await using var db = await DbFactory.CreateDbContextAsync();
+        var loadedAgent = await db.Agents.FindAsync(AgentId.Value);
+        if (loadedAgent != null)
+        {
+            agent = loadedAgent;
+        }
+    }
+
+    private void Cancel()
+    {
+        NavigationManager.NavigateTo("/clients/manage");
+    }
+
+    private async Task Save()
+    {
+        // Auto-set provider type to polling for IMAP, POP3, and Exchange
+        if (agent.Emailprovider?.ToLower() == "imap" ||
+            agent.Emailprovider?.ToLower() == "pop3" ||
+            agent.Emailprovider?.ToLower() == "exchange")
+        {
+            agent.Emailprovidertype = "polling";
+        }
+
+        await using var db = await DbFactory.CreateDbContextAsync();
+
+        if (AgentId.HasValue)
+        {
+            // Update existing agent
+            var existingAgent = await db.Agents.FindAsync(AgentId.Value);
+            if (existingAgent != null)
+            {
+                existingAgent.Emailaddress = agent.Emailaddress;
+                existingAgent.State = agent.State;
+                existingAgent.Defaultlanguage = agent.Defaultlanguage;
+                existingAgent.Emailprovider = agent.Emailprovider;
+                existingAgent.Emailprovidertype = agent.Emailprovidertype;
+                existingAgent.Emailusername = agent.Emailusername;
+                existingAgent.Emailpassword = agent.Emailpassword;
+                existingAgent.Emailserver = agent.Emailserver;
+                existingAgent.Emailport = agent.Emailport;
+                existingAgent.Emailusessl = agent.Emailusessl;
+                existingAgent.Aiprovider = agent.Aiprovider;
+                existingAgent.Aimodel = agent.Aimodel;
+                existingAgent.Companyinformation = agent.Companyinformation;
+                existingAgent.Tasktobecompleted = agent.Tasktobecompleted;
+
+                await db.SaveChangesAsync();
+            }
+        }
+        else
+        {
+            // Create new agent
+            db.Agents.Add(agent);
+            await db.SaveChangesAsync();
+        }
+
+        NavigationManager.NavigateTo("/clients/manage");
+    }
+
+    private async Task LoadMcpServers()
+    {
+        if (!AgentId.HasValue) return;
+
+        await using var db = await DbFactory.CreateDbContextAsync();
+        mcpServers = await db.Mcpservers
+            .Where(m => m.AgentId == AgentId.Value)
+            .AsNoTracking()
+            .ToListAsync();
+    }
+
+    private async Task CreateMcpServer()
+    {
+        if (!AgentId.HasValue) return;
+
+        var parameters = new DialogParameters<EditMcpServerDialog>
+        {
+            { x => x.AgentId, AgentId.Value },
+            { x => x.McpServer, null }
+        };
+
+        var options = new DialogOptions
+        {
+            CloseButton = true,
+            MaxWidth = MaxWidth.Medium,
+            FullWidth = true
+        };
+
+        var dialog = await DialogService.ShowAsync<EditMcpServerDialog>("Add MCP Server", parameters, options);
+        var result = await dialog.Result;
+
+        if (result != null && !result.Canceled)
+        {
+            await LoadMcpServers();
+        }
+    }
+
+    private async Task EditMcpServer(Mcpserver mcpServer)
+    {
+        if (!AgentId.HasValue) return;
+
+        var parameters = new DialogParameters<EditMcpServerDialog>
+        {
+            { x => x.AgentId, AgentId.Value },
+            { x => x.McpServer, mcpServer }
+        };
+
+        var options = new DialogOptions
+        {
+            CloseButton = true,
+            MaxWidth = MaxWidth.Medium,
+            FullWidth = true
+        };
+
+        var dialog = await DialogService.ShowAsync<EditMcpServerDialog>("Edit MCP Server", parameters, options);
+        var result = await dialog.Result;
+
+        if (result != null && !result.Canceled)
+        {
+            await LoadMcpServers();
+        }
+    }
+
+    private async Task DeleteMcpServer(Mcpserver mcpServer)
+    {
+        var result = await DialogService.ShowMessageBox(
+            "Confirm Delete",
+            $"Are you sure you want to delete MCP server '{mcpServer.Name}'?",
+            yesText: "Delete",
+            cancelText: "Cancel");
+
+        if (result == true)
+        {
+            await using var db = await DbFactory.CreateDbContextAsync();
+            var serverToDelete = await db.Mcpservers.FindAsync(mcpServer.Id);
+            if (serverToDelete != null)
+            {
+                db.Mcpservers.Remove(serverToDelete);
+                await db.SaveChangesAsync();
+                await LoadMcpServers();
+            }
+        }
+    }
+}

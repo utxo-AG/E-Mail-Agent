@@ -1,0 +1,184 @@
+@inject IDbContextFactory<DefaultdbContext> DbFactory
+
+<MudDialog>
+    <DialogContent>
+        @if (conversation == null)
+        {
+            <MudProgressCircular Indeterminate="true" />
+        }
+        else
+        {
+            <MudGrid>
+                <MudItem xs="12">
+                    <MudText Typo="Typo.h6" Class="mb-2">Email Details</MudText>
+                </MudItem>
+
+                <MudItem xs="12" md="6">
+                    <MudTextField Label="From"
+                                  Value="@conversation.Emailfrom"
+                                  ReadOnly="true"
+                                  Variant="Variant.Filled" />
+                </MudItem>
+
+                <MudItem xs="12" md="6">
+                    <MudTextField Label="Received"
+                                  Value="@conversation.Emailreceived.ToString("dd.MM.yyyy HH:mm:ss")"
+                                  ReadOnly="true"
+                                  Variant="Variant.Filled" />
+                </MudItem>
+
+                <MudItem xs="12">
+                    <MudTextField Label="Subject"
+                                  Value="@conversation.Subject"
+                                  ReadOnly="true"
+                                  Variant="Variant.Filled" />
+                </MudItem>
+
+                <MudItem xs="12">
+                    <MudTextField Label="Message ID"
+                                  Value="@conversation.Messageid"
+                                  ReadOnly="true"
+                                  Variant="Variant.Filled" />
+                </MudItem>
+
+                <MudItem xs="12">
+                    <MudTabs Elevation="2" Rounded="true" ApplyEffectsToContainer="true" PanelClass="pa-4">
+                        <MudTabPanel Text="Text Email">
+                            <MudPaper Class="pa-4" Elevation="0">
+                                <pre style="white-space: pre-wrap; word-wrap: break-word;">@conversation.Text</pre>
+                            </MudPaper>
+                        </MudTabPanel>
+                        @if (!string.IsNullOrEmpty(conversation.Htmltext))
+                        {
+                            <MudTabPanel Text="HTML Email">
+                                <MudPaper Class="pa-4" Elevation="0">
+                                    <div>@((MarkupString)(conversation.Htmltext ?? ""))</div>
+                                </MudPaper>
+                            </MudTabPanel>
+                        }
+                    </MudTabs>
+                </MudItem>
+
+                @if (!string.IsNullOrEmpty(conversation.Prompt))
+                {
+                    <MudItem xs="12">
+                        <MudDivider Class="my-4" />
+                        <MudText Typo="Typo.h6" Class="mb-2">AI Prompt</MudText>
+                        <MudPaper Class="pa-4" Elevation="1">
+                            <pre style="white-space: pre-wrap; word-wrap: break-word;">@conversation.Prompt</pre>
+                        </MudPaper>
+                    </MudItem>
+                }
+
+                @if (!string.IsNullOrEmpty(conversation.Aiexplanation))
+                {
+                    <MudItem xs="12">
+                        <MudText Typo="Typo.h6" Class="mb-2">AI Explanation</MudText>
+                        <MudPaper Class="pa-4" Elevation="1">
+                            <pre style="white-space: pre-wrap; word-wrap: break-word;">@conversation.Aiexplanation</pre>
+                        </MudPaper>
+                    </MudItem>
+                }
+
+                @if (!string.IsNullOrEmpty(conversation.Agentresponsetext))
+                {
+                    <MudItem xs="12">
+                        <MudDivider Class="my-4" />
+                        <MudText Typo="Typo.h6" Class="mb-2">Agent Response</MudText>
+                    </MudItem>
+
+                    <MudItem xs="12">
+                        <MudTextField Label="Response Subject"
+                                      Value="@conversation.Agentresponsesubject"
+                                      ReadOnly="true"
+                                      Variant="Variant.Filled" />
+                    </MudItem>
+
+                    <MudItem xs="12">
+                        <MudTabs Elevation="2" Rounded="true" ApplyEffectsToContainer="true" PanelClass="pa-4">
+                            <MudTabPanel Text="Text Response">
+                                <MudPaper Class="pa-4" Elevation="0">
+                                    <pre style="white-space: pre-wrap; word-wrap: break-word;">@conversation.Agentresponsetext</pre>
+                                </MudPaper>
+                            </MudTabPanel>
+                            @if (!string.IsNullOrEmpty(conversation.Agentresponsehtml))
+                            {
+                                <MudTabPanel Text="HTML Response">
+                                    <MudPaper Class="pa-4" Elevation="0">
+                                        <div>@((MarkupString)(conversation.Agentresponsehtml ?? ""))</div>
+                                    </MudPaper>
+                                </MudTabPanel>
+                            }
+                        </MudTabs>
+                    </MudItem>
+                }
+
+                @if (conversation.ConversationAttachments != null && conversation.ConversationAttachments.Any())
+                {
+                    <MudItem xs="12">
+                        <MudDivider Class="my-4" />
+                        <MudText Typo="Typo.h6" Class="mb-2">Attachments</MudText>
+                        <MudPaper Class="pa-4" Elevation="1">
+                            @foreach (var attachment in conversation.ConversationAttachments)
+                            {
+                                <MudPaper Class="pa-3 mb-2" Elevation="0" Style="border: 1px solid #e0e0e0;">
+                                    <MudGrid>
+                                        <MudItem xs="10">
+                                            <MudText>
+                                                <MudIcon Icon="@Icons.Material.Filled.AttachFile" Size="Size.Small" Class="mr-2" />
+                                                @attachment.Filename
+                                            </MudText>
+                                            <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                                @attachment.ContentType
+                                            </MudText>
+                                        </MudItem>
+                                        <MudItem xs="2" Class="d-flex align-end justify-end">
+                                            <MudIconButton Icon="@Icons.Material.Filled.Download"
+                                                           Color="Color.Primary"
+                                                           Href="@($"/api/attachments/download/{attachment.Id}")"
+                                                           Target="_blank"
+                                                           Size="Size.Small"
+                                                           Title="Download" />
+                                        </MudItem>
+                                    </MudGrid>
+                                </MudPaper>
+                            }
+                        </MudPaper>
+                    </MudItem>
+                }
+            </MudGrid>
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton Color="Color.Primary" OnClick="Close">Close</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter]
+    IMudDialogInstance MudDialog { get; set; } = default!;
+
+    [Parameter]
+    public int ConversationId { get; set; }
+
+    private Conversation? conversation;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadConversation();
+    }
+
+    private async Task LoadConversation()
+    {
+        await using var db = await DbFactory.CreateDbContextAsync();
+        conversation = await db.Conversations
+            .Include(c => c.ConversationAttachments)
+            .AsNoTracking()
+            .FirstOrDefaultAsync(c => c.Id == ConversationId);
+    }
+
+    private void Close()
+    {
+        MudDialog.Close();
+    }
+}

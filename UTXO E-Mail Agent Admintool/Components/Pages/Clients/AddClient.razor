@@ -1,0 +1,216 @@
+@page "/clients/add"
+@rendermode InteractiveServer
+@attribute [Authorize]
+@inject IDbContextFactory<DefaultdbContext> DbFactory
+@inject NavigationManager NavigationManager
+@using Microsoft.EntityFrameworkCore
+
+<PageTitle>Add New Client</PageTitle>
+
+<MudText Typo="Typo.h3" Class="mb-4">Add New Client</MudText>
+
+<MudPaper Class="pa-4">
+    <MudForm @ref="form" @bind-IsValid="@success">
+        <MudGrid>
+            <MudItem xs="12" sm="6">
+                <MudTextField Label="First Name"
+                              @bind-Value="newCustomer.Firstname"
+                              Required="true"
+                              RequiredError="First name is required" />
+            </MudItem>
+
+            <MudItem xs="12" sm="6">
+                <MudTextField Label="Last Name"
+                              @bind-Value="newCustomer.Lastname"
+                              Required="true"
+                              RequiredError="Last name is required" />
+            </MudItem>
+
+            <MudItem xs="12">
+                <MudTextField Label="Company Name"
+                              @bind-Value="newCustomer.Companyname"
+                              HelperText="Optional" />
+            </MudItem>
+
+            <MudItem xs="12">
+                <MudTextField Label="Street"
+                              @bind-Value="newCustomer.Street"
+                              Required="true"
+                              RequiredError="Street is required" />
+            </MudItem>
+
+            <MudItem xs="12" sm="4">
+                <MudTextField Label="ZIP Code"
+                              @bind-Value="newCustomer.Zip"
+                              Required="true"
+                              RequiredError="ZIP code is required" />
+            </MudItem>
+
+            <MudItem xs="12" sm="8">
+                <MudTextField Label="City"
+                              @bind-Value="newCustomer.City"
+                              Required="true"
+                              RequiredError="City is required" />
+            </MudItem>
+
+            <MudItem xs="12">
+                <MudSelect Label="Country"
+                           @bind-Value="newCustomer.Country"
+                           Required="true"
+                           RequiredError="Country is required">
+                    @* Most used countries first *@
+                    <MudSelectItem Value="@("Germany")">Germany</MudSelectItem>
+                    <MudSelectItem Value="@("Austria")">Austria</MudSelectItem>
+                    <MudSelectItem Value="@("Switzerland")">Switzerland</MudSelectItem>
+                    <MudDivider />
+                    @* Other countries alphabetically *@
+                    <MudSelectItem Value="@("Albania")">Albania</MudSelectItem>
+                    <MudSelectItem Value="@("Belgium")">Belgium</MudSelectItem>
+                    <MudSelectItem Value="@("Bosnia and Herzegovina")">Bosnia and Herzegovina</MudSelectItem>
+                    <MudSelectItem Value="@("Bulgaria")">Bulgaria</MudSelectItem>
+                    <MudSelectItem Value="@("Croatia")">Croatia</MudSelectItem>
+                    <MudSelectItem Value="@("Cyprus")">Cyprus</MudSelectItem>
+                    <MudSelectItem Value="@("Czech Republic")">Czech Republic</MudSelectItem>
+                    <MudSelectItem Value="@("Denmark")">Denmark</MudSelectItem>
+                    <MudSelectItem Value="@("Estonia")">Estonia</MudSelectItem>
+                    <MudSelectItem Value="@("Finland")">Finland</MudSelectItem>
+                    <MudSelectItem Value="@("France")">France</MudSelectItem>
+                    <MudSelectItem Value="@("Greece")">Greece</MudSelectItem>
+                    <MudSelectItem Value="@("Hungary")">Hungary</MudSelectItem>
+                    <MudSelectItem Value="@("Iceland")">Iceland</MudSelectItem>
+                    <MudSelectItem Value="@("Ireland")">Ireland</MudSelectItem>
+                    <MudSelectItem Value="@("Italy")">Italy</MudSelectItem>
+                    <MudSelectItem Value="@("Latvia")">Latvia</MudSelectItem>
+                    <MudSelectItem Value="@("Liechtenstein")">Liechtenstein</MudSelectItem>
+                    <MudSelectItem Value="@("Lithuania")">Lithuania</MudSelectItem>
+                    <MudSelectItem Value="@("Luxembourg")">Luxembourg</MudSelectItem>
+                    <MudSelectItem Value="@("Malta")">Malta</MudSelectItem>
+                    <MudSelectItem Value="@("Moldova")">Moldova</MudSelectItem>
+                    <MudSelectItem Value="@("Monaco")">Monaco</MudSelectItem>
+                    <MudSelectItem Value="@("Montenegro")">Montenegro</MudSelectItem>
+                    <MudSelectItem Value="@("Netherlands")">Netherlands</MudSelectItem>
+                    <MudSelectItem Value="@("North Macedonia")">North Macedonia</MudSelectItem>
+                    <MudSelectItem Value="@("Norway")">Norway</MudSelectItem>
+                    <MudSelectItem Value="@("Poland")">Poland</MudSelectItem>
+                    <MudSelectItem Value="@("Portugal")">Portugal</MudSelectItem>
+                    <MudSelectItem Value="@("Romania")">Romania</MudSelectItem>
+                    <MudSelectItem Value="@("Serbia")">Serbia</MudSelectItem>
+                    <MudSelectItem Value="@("Slovakia")">Slovakia</MudSelectItem>
+                    <MudSelectItem Value="@("Slovenia")">Slovenia</MudSelectItem>
+                    <MudSelectItem Value="@("Spain")">Spain</MudSelectItem>
+                    <MudSelectItem Value="@("Sweden")">Sweden</MudSelectItem>
+                    <MudSelectItem Value="@("Turkey")">Turkey</MudSelectItem>
+                    <MudSelectItem Value="@("Ukraine")">Ukraine</MudSelectItem>
+                    <MudSelectItem Value="@("United Kingdom")">United Kingdom</MudSelectItem>
+                    <MudDivider />
+                    <MudSelectItem Value="@("United States")">United States</MudSelectItem>
+                    <MudSelectItem Value="@("Canada")">Canada</MudSelectItem>
+                    <MudSelectItem Value="@("Other")">Other</MudSelectItem>
+                </MudSelect>
+            </MudItem>
+
+            <MudItem xs="12">
+                <MudTextField Label="Email Address"
+                              @bind-Value="newCustomer.Emailaddress"
+                              Required="true"
+                              RequiredError="Email is required"
+                              InputType="InputType.Email" />
+            </MudItem>
+
+            <MudItem xs="12">
+                <MudTextField Label="Username"
+                              @bind-Value="newCustomer.Username"
+                              HelperText="Optional - for customer portal access" />
+            </MudItem>
+
+            <MudItem xs="12">
+                <MudSelect Label="Package"
+                           @bind-Value="newCustomer.PackageId"
+                           T="int?"
+                           Clearable="true"
+                           ToStringFunc="@(id => GetPackageDisplay(id))"
+                           HelperText="Select a package or leave empty for no package">
+                    @foreach (var package in packages)
+                    {
+                        <MudSelectItem Value="@((int?)package.Id)">
+                            @package.Description (@package.Maxconvsations conversations/month - @package.Price.ToString("C"))
+                        </MudSelectItem>
+                    }
+                </MudSelect>
+            </MudItem>
+
+            <MudItem xs="12" Class="d-flex justify-space-between">
+                <MudButton Variant="Variant.Filled"
+                           Color="Color.Default"
+                           OnClick="Cancel">
+                    Cancel
+                </MudButton>
+                <MudButton Variant="Variant.Filled"
+                           Color="Color.Primary"
+                           OnClick="Save"
+                           Disabled="@(!success)">
+                    Create Client
+                </MudButton>
+            </MudItem>
+        </MudGrid>
+    </MudForm>
+</MudPaper>
+
+@code {
+    private Customer newCustomer = new();
+    private MudForm? form;
+    private bool success;
+    private List<Package> packages = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        // Load packages from database
+        await using var db = await DbFactory.CreateDbContextAsync();
+        packages = await db.Packages.AsNoTracking().ToListAsync();
+
+        // Initialize new customer with default values
+        newCustomer = new Customer
+        {
+            Firstname = "",
+            Lastname = "",
+            Companyname = "",
+            Street = "",
+            Zip = "",
+            City = "",
+            Country = "",
+            Emailaddress = "",
+            State = "active",
+            Username = "",
+            PackageId = null
+        };
+    }
+
+    private string GetPackageDisplay(int? packageId)
+    {
+        if (!packageId.HasValue)
+            return "No package";
+
+        var package = packages.FirstOrDefault(p => p.Id == packageId.Value);
+        if (package == null)
+            return packageId.Value.ToString();
+
+        return $"{package.Description} ({package.Maxconvsations} conversations/month - {package.Price:C})";
+    }
+
+    private void Cancel()
+    {
+        NavigationManager.NavigateTo("/clients/manage");
+    }
+
+    private async Task Save()
+    {
+        await using var db = await DbFactory.CreateDbContextAsync();
+
+        // Add new customer to database
+        db.Customers.Add(newCustomer);
+        await db.SaveChangesAsync();
+
+        // Navigate back to manage clients page
+        NavigationManager.NavigateTo("/clients/manage");
+    }
+}

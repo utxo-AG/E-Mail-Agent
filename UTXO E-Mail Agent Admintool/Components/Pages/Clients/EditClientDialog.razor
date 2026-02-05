@@ -1,0 +1,296 @@
+@inject IDbContextFactory<DefaultdbContext> DbFactory
+@inject PasswordService PasswordService
+@inject EmailService EmailService
+@inject ISnackbar Snackbar
+@using UTXO_E_Mail_Agent_Admintool.Services
+
+<MudDialog>
+    <DialogContent>
+        <MudForm @ref="form" @bind-IsValid="@success">
+            <MudGrid>
+                <MudItem xs="12" sm="6">
+                    <MudTextField Label="First Name"
+                                  @bind-Value="editCustomer.Firstname"
+                                  Required="true"
+                                  RequiredError="First name is required" />
+                </MudItem>
+                <MudItem xs="12" sm="6">
+                    <MudTextField Label="Last Name"
+                                  @bind-Value="editCustomer.Lastname"
+                                  Required="true"
+                                  RequiredError="Last name is required" />
+                </MudItem>
+                <MudItem xs="12">
+                    <MudTextField Label="Company Name"
+                                  @bind-Value="editCustomer.Companyname" />
+                </MudItem>
+                <MudItem xs="12">
+                    <MudTextField Label="Street"
+                                  @bind-Value="editCustomer.Street"
+                                  Required="true" />
+                </MudItem>
+                <MudItem xs="12" sm="4">
+                    <MudTextField Label="ZIP Code"
+                                  @bind-Value="editCustomer.Zip"
+                                  Required="true" />
+                </MudItem>
+                <MudItem xs="12" sm="8">
+                    <MudTextField Label="City"
+                                  @bind-Value="editCustomer.City"
+                                  Required="true" />
+                </MudItem>
+                <MudItem xs="12">
+                    <MudSelect Label="Country"
+                               @bind-Value="editCustomer.Country"
+                               Required="true"
+                               RequiredError="Country is required">
+                        @* Most used countries first *@
+                        <MudSelectItem Value="@("Germany")">Germany</MudSelectItem>
+                        <MudSelectItem Value="@("Austria")">Austria</MudSelectItem>
+                        <MudSelectItem Value="@("Switzerland")">Switzerland</MudSelectItem>
+                        <MudDivider />
+                        @* Other countries alphabetically *@
+                        <MudSelectItem Value="@("Albania")">Albania</MudSelectItem>
+                        <MudSelectItem Value="@("Belgium")">Belgium</MudSelectItem>
+                        <MudSelectItem Value="@("Bosnia and Herzegovina")">Bosnia and Herzegovina</MudSelectItem>
+                        <MudSelectItem Value="@("Bulgaria")">Bulgaria</MudSelectItem>
+                        <MudSelectItem Value="@("Croatia")">Croatia</MudSelectItem>
+                        <MudSelectItem Value="@("Cyprus")">Cyprus</MudSelectItem>
+                        <MudSelectItem Value="@("Czech Republic")">Czech Republic</MudSelectItem>
+                        <MudSelectItem Value="@("Denmark")">Denmark</MudSelectItem>
+                        <MudSelectItem Value="@("Estonia")">Estonia</MudSelectItem>
+                        <MudSelectItem Value="@("Finland")">Finland</MudSelectItem>
+                        <MudSelectItem Value="@("France")">France</MudSelectItem>
+                        <MudSelectItem Value="@("Greece")">Greece</MudSelectItem>
+                        <MudSelectItem Value="@("Hungary")">Hungary</MudSelectItem>
+                        <MudSelectItem Value="@("Iceland")">Iceland</MudSelectItem>
+                        <MudSelectItem Value="@("Ireland")">Ireland</MudSelectItem>
+                        <MudSelectItem Value="@("Italy")">Italy</MudSelectItem>
+                        <MudSelectItem Value="@("Latvia")">Latvia</MudSelectItem>
+                        <MudSelectItem Value="@("Liechtenstein")">Liechtenstein</MudSelectItem>
+                        <MudSelectItem Value="@("Lithuania")">Lithuania</MudSelectItem>
+                        <MudSelectItem Value="@("Luxembourg")">Luxembourg</MudSelectItem>
+                        <MudSelectItem Value="@("Malta")">Malta</MudSelectItem>
+                        <MudSelectItem Value="@("Moldova")">Moldova</MudSelectItem>
+                        <MudSelectItem Value="@("Monaco")">Monaco</MudSelectItem>
+                        <MudSelectItem Value="@("Montenegro")">Montenegro</MudSelectItem>
+                        <MudSelectItem Value="@("Netherlands")">Netherlands</MudSelectItem>
+                        <MudSelectItem Value="@("North Macedonia")">North Macedonia</MudSelectItem>
+                        <MudSelectItem Value="@("Norway")">Norway</MudSelectItem>
+                        <MudSelectItem Value="@("Poland")">Poland</MudSelectItem>
+                        <MudSelectItem Value="@("Portugal")">Portugal</MudSelectItem>
+                        <MudSelectItem Value="@("Romania")">Romania</MudSelectItem>
+                        <MudSelectItem Value="@("Serbia")">Serbia</MudSelectItem>
+                        <MudSelectItem Value="@("Slovakia")">Slovakia</MudSelectItem>
+                        <MudSelectItem Value="@("Slovenia")">Slovenia</MudSelectItem>
+                        <MudSelectItem Value="@("Spain")">Spain</MudSelectItem>
+                        <MudSelectItem Value="@("Sweden")">Sweden</MudSelectItem>
+                        <MudSelectItem Value="@("Turkey")">Turkey</MudSelectItem>
+                        <MudSelectItem Value="@("Ukraine")">Ukraine</MudSelectItem>
+                        <MudSelectItem Value="@("United Kingdom")">United Kingdom</MudSelectItem>
+                        <MudDivider />
+                        <MudSelectItem Value="@("United States")">United States</MudSelectItem>
+                        <MudSelectItem Value="@("Canada")">Canada</MudSelectItem>
+                        <MudSelectItem Value="@("Other")">Other</MudSelectItem>
+                    </MudSelect>
+                </MudItem>
+                <MudItem xs="12">
+                    <MudTextField Label="Email Address"
+                                  @bind-Value="editCustomer.Emailaddress"
+                                  Required="true"
+                                  RequiredError="Email is required"
+                                  InputType="InputType.Email" />
+                </MudItem>
+
+                <MudItem xs="12" sm="6">
+                    <MudTextField Label="Username"
+                                  @bind-Value="editCustomer.Username"
+                                  HelperText="Optional - for customer portal access" />
+                </MudItem>
+
+                <MudItem xs="12" sm="6">
+                    <MudTextField Label="Password"
+                                  Value="@GetPasswordDisplay()"
+                                  ReadOnly="true"
+                                  InputType="InputType.Password"
+                                  HelperText="Password is hashed and cannot be displayed" />
+                </MudItem>
+
+                <MudItem xs="12">
+                    <MudButton Variant="Variant.Filled"
+                               Color="Color.Warning"
+                               StartIcon="@Icons.Material.Filled.Key"
+                               OnClick="GenerateAndSendPassword"
+                               Disabled="sendingPassword">
+                        @if (sendingPassword)
+                        {
+                            <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+                            <span>Sending...</span>
+                        }
+                        else
+                        {
+                            <span>Generate & Send New Password</span>
+                        }
+                    </MudButton>
+                </MudItem>
+
+                <MudItem xs="12">
+                    <MudSelect Label="Package"
+                               @bind-Value="editCustomer.PackageId"
+                               T="int?"
+                               Clearable="true"
+                               ToStringFunc="@(id => GetPackageDisplay(id))"
+                               HelperText="Select a package or leave empty for no package">
+                        @foreach (var package in packages)
+                        {
+                            <MudSelectItem Value="@((int?)package.Id)">
+                                @package.Description (@package.Maxconvsations conversations/month - @package.Price.ToString("C"))
+                            </MudSelectItem>
+                        }
+                    </MudSelect>
+                </MudItem>
+            </MudGrid>
+        </MudForm>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel">Cancel</MudButton>
+        <MudButton Color="Color.Primary" OnClick="Save" Disabled="@(!success)">Save</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter]
+    IMudDialogInstance MudDialog { get; set; } = default!;
+
+    [Parameter]
+    public Customer Customer { get; set; } = default!;
+
+    private Customer editCustomer = new();
+    private MudForm? form;
+    private bool success;
+    private bool sendingPassword = false;
+    private List<Package> packages = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        // Load packages from database
+        await using var db = await DbFactory.CreateDbContextAsync();
+        packages = await db.Packages.AsNoTracking().ToListAsync();
+
+        // Create a copy to avoid modifying the original until save
+        editCustomer = new Customer
+        {
+            Id = Customer.Id,
+            Firstname = Customer.Firstname,
+            Lastname = Customer.Lastname,
+            Companyname = Customer.Companyname,
+            Street = Customer.Street,
+            Zip = Customer.Zip,
+            City = Customer.City,
+            Country = Customer.Country,
+            Emailaddress = Customer.Emailaddress,
+            State = Customer.State,
+            Username = Customer.Username,
+            Passwordhash = Customer.Passwordhash,
+            PackageId = Customer.PackageId
+        };
+    }
+
+    private string GetPasswordDisplay()
+    {
+        return !string.IsNullOrEmpty(editCustomer.Passwordhash) ? "••••••••••" : "";
+    }
+
+    private string GetPackageDisplay(int? packageId)
+    {
+        if (!packageId.HasValue)
+            return "No package";
+
+        var package = packages.FirstOrDefault(p => p.Id == packageId.Value);
+        if (package == null)
+            return packageId.Value.ToString();
+
+        return $"{package.Description} ({package.Maxconvsations} conversations/month - {package.Price:C})";
+    }
+
+    private async Task GenerateAndSendPassword()
+    {
+        if (string.IsNullOrEmpty(editCustomer.Username))
+        {
+            Snackbar.Add("Please set a username first before generating a password", Severity.Warning);
+            return;
+        }
+
+        sendingPassword = true;
+        try
+        {
+            // Generate new password
+            var newPassword = PasswordService.GeneratePassword();
+
+            // Hash the password
+            var passwordHash = PasswordService.HashPassword(newPassword);
+
+            // Update in database first
+            await using var db = await DbFactory.CreateDbContextAsync();
+            var customer = await db.Customers.FindAsync(Customer.Id);
+            if (customer != null)
+            {
+                customer.Passwordhash = passwordHash;
+                await db.SaveChangesAsync();
+
+                // Update local copy
+                editCustomer.Passwordhash = passwordHash;
+
+                // Send email
+                await EmailService.SendPasswordResetEmail(
+                    editCustomer.Emailaddress,
+                    $"{editCustomer.Firstname} {editCustomer.Lastname}",
+                    editCustomer.Username,
+                    newPassword
+                );
+
+                Snackbar.Add($"New password sent to {editCustomer.Emailaddress}", Severity.Success);
+            }
+        }
+        
+
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error sending password: {ex.Message}", Severity.Error);
+            Console.WriteLine($"[EditClientDialog] Error: {ex}");
+        }
+        finally
+        {
+            sendingPassword = false;
+        }
+    }
+
+    private void Cancel()
+    {
+        MudDialog.Cancel();
+    }
+
+    private async Task Save()
+    {
+        await using var db = await DbFactory.CreateDbContextAsync();
+        var customer = await db.Customers.FindAsync(Customer.Id);
+
+        if (customer != null)
+        {
+            customer.Firstname = editCustomer.Firstname;
+            customer.Lastname = editCustomer.Lastname;
+            customer.Companyname = editCustomer.Companyname;
+            customer.Street = editCustomer.Street;
+            customer.Zip = editCustomer.Zip;
+            customer.City = editCustomer.City;
+            customer.Country = editCustomer.Country;
+            customer.Emailaddress = editCustomer.Emailaddress;
+            customer.Username = editCustomer.Username;
+            customer.PackageId = editCustomer.PackageId;
+            // Note: Passwordhash is only updated via GenerateAndSendPassword button
+
+            await db.SaveChangesAsync();
+            MudDialog.Close(DialogResult.Ok(true));
+        }
+    }
+}

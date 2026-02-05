@@ -1,0 +1,125 @@
+@inject IDbContextFactory<DefaultdbContext> DbFactory
+
+<MudDialog>
+    <DialogContent>
+        @if (requests == null)
+        {
+            <MudProgressCircular Indeterminate="true" />
+        }
+        else if (requests.Count == 0)
+        {
+            <MudAlert Severity="Severity.Info">No MCP server requests for this conversation.</MudAlert>
+        }
+        else
+        {
+            <MudTable Items="@requests" Hover="true" Striped="true" Dense="true" Breakpoint="Breakpoint.Sm">
+                <HeaderContent>
+                    <MudTh>Server Name</MudTh>
+                    <MudTh>Created</MudTh>
+                    <MudTh>Actions</MudTh>
+                </HeaderContent>
+                <RowTemplate>
+                    <MudTd>
+                        <MudText Typo="Typo.body2"><strong>@context.Mcpserver.Name</strong></MudText>
+                        <MudText Typo="Typo.caption">@context.Mcpserver.Description</MudText>
+                    </MudTd>
+                    <MudTd>@context.Created.ToString("dd.MM.yyyy HH:mm:ss")</MudTd>
+                    <MudTd>
+                        <MudButton Size="Size.Small"
+                                   Variant="Variant.Outlined"
+                                   Color="Color.Primary"
+                                   OnClick="@(() => ShowRequestDetails(context))">
+                            Details
+                        </MudButton>
+                    </MudTd>
+                </RowTemplate>
+            </MudTable>
+
+            @if (selectedRequest != null)
+            {
+                <MudDivider Class="my-4" />
+                <MudText Typo="Typo.h6" Class="mb-2">Request Details: @selectedRequest.Mcpserver.Name</MudText>
+
+                <MudGrid>
+                    <MudItem xs="12">
+                        <MudText Typo="Typo.subtitle2">MCP Server Info</MudText>
+                        <MudSimpleTable Dense="true" Class="mb-4">
+                            <tbody>
+                                <tr>
+                                    <td><strong>Name:</strong></td>
+                                    <td>@selectedRequest.Mcpserver.Name</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Description:</strong></td>
+                                    <td>@selectedRequest.Mcpserver.Description</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>URL:</strong></td>
+                                    <td>@selectedRequest.Mcpserver.Url</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Call:</strong></td>
+                                    <td>@selectedRequest.Mcpserver.Call</td>
+                                </tr>
+                            </tbody>
+                        </MudSimpleTable>
+                    </MudItem>
+
+                    <MudItem xs="12" md="6">
+                        <MudText Typo="Typo.subtitle2" Class="mb-2">Parameters</MudText>
+                        <MudPaper Class="pa-4" Elevation="1">
+                            <pre style="white-space: pre-wrap; word-wrap: break-word; max-height: 300px; overflow-y: auto;">@selectedRequest.Parameter</pre>
+                        </MudPaper>
+                    </MudItem>
+
+                    <MudItem xs="12" md="6">
+                        <MudText Typo="Typo.subtitle2" Class="mb-2">Result</MudText>
+                        <MudPaper Class="pa-4" Elevation="1">
+                            <pre style="white-space: pre-wrap; word-wrap: break-word; max-height: 300px; overflow-y: auto;">@selectedRequest.Result</pre>
+                        </MudPaper>
+                    </MudItem>
+                </MudGrid>
+            }
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton Color="Color.Primary" OnClick="Close">Close</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter]
+    IMudDialogInstance MudDialog { get; set; } = default!;
+
+    [Parameter]
+    public int ConversationId { get; set; }
+
+    private List<Mcpserverrequest>? requests;
+    private Mcpserverrequest? selectedRequest;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadRequests();
+    }
+
+    private async Task LoadRequests()
+    {
+        await using var db = await DbFactory.CreateDbContextAsync();
+        requests = await db.Mcpserverrequests
+            .Include(r => r.Mcpserver)
+            .Where(r => r.ConversationId == ConversationId)
+            .OrderBy(r => r.Created)
+            .AsNoTracking()
+            .ToListAsync();
+    }
+
+    private void ShowRequestDetails(Mcpserverrequest request)
+    {
+        selectedRequest = request;
+    }
+
+    private void Close()
+    {
+        MudDialog.Close();
+    }
+}

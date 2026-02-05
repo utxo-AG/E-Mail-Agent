@@ -1,0 +1,40 @@
+﻿@page "/"
+@rendermode InteractiveServer
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.Components.Authorization
+@attribute [Authorize]
+@inject AuthenticationStateProvider AuthStateProvider
+
+<PageTitle>Dashboard</PageTitle>
+
+<AuthorizeView>
+    <Authorized>
+        <MudText Typo="Typo.h3" Class="mb-4">Welcome, @context.User.Identity?.Name!</MudText>
+        <MudText Typo="Typo.h5">Admin Dashboard</MudText>
+        <MudText Class="mt-4">You are successfully logged in to the Admin Tool.</MudText>
+    </Authorized>
+    <NotAuthorized>
+        <MudText Typo="Typo.h5" Color="Color.Error">Not Authorized - Redirecting to login...</MudText>
+    </NotAuthorized>
+</AuthorizeView>
+
+@code {
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        var user = authState.User;
+
+        Console.WriteLine($"Home page loaded. IsAuthenticated: {user.Identity?.IsAuthenticated}");
+        Console.WriteLine($"User name: {user.Identity?.Name}");
+        Console.WriteLine($"Auth type: {user.Identity?.AuthenticationType}");
+
+        if (user.Identity?.IsAuthenticated == true)
+        {
+            Console.WriteLine("User IS authenticated!");
+        }
+        else
+        {
+            Console.WriteLine("User is NOT authenticated - should redirect to login");
+        }
+    }
+}

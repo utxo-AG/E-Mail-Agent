@@ -1,0 +1,73 @@
+@page "/login"
+@rendermode InteractiveServer
+@using UTXO_E_Mail_Agent_Admintool.Components.Layout
+@using Microsoft.AspNetCore.Authorization
+@attribute [AllowAnonymous]
+@layout EmptyLayout
+@inject NavigationManager NavigationManager
+
+<div class="d-flex justify-content-center align-items-center" style="min-height: 100vh;">
+    <MudPaper Class="pa-8" Elevation="3" Style="max-width: 400px; width: 100%;">
+        <MudText Typo="Typo.h4" Align="Align.Center" Class="mb-4">Admin Login</MudText>
+
+        @if (!string.IsNullOrEmpty(_errorMessage))
+        {
+            <MudAlert Severity="Severity.Error" Class="mb-4">@_errorMessage</MudAlert>
+        }
+
+        <form method="post" action="/auth/login" id="loginForm">
+            <div class="mb-3">
+                <label for="username" class="mud-input-label">Username</label>
+                <input type="text"
+                       name="username"
+                       id="username"
+                       class="mud-input-slot mud-input-root mud-input-root-outlined"
+                       required
+                       style="width: 100%; padding: 12px; border: 1px solid rgba(0,0,0,0.23); border-radius: 4px;" />
+            </div>
+
+            <div class="mb-4">
+                <label for="password" class="mud-input-label">Password</label>
+                <input type="password"
+                       name="password"
+                       id="password"
+                       class="mud-input-slot mud-input-root mud-input-root-outlined"
+                       required
+                       style="width: 100%; padding: 12px; border: 1px solid rgba(0,0,0,0.23); border-radius: 4px;" />
+            </div>
+
+            <MudButton ButtonType="ButtonType.Submit"
+                       Variant="Variant.Filled"
+                       Color="Color.Primary"
+                       FullWidth="true"
+                       Size="Size.Large"
+                       Disabled="@_isLoading">
+                @if (_isLoading)
+                {
+                    <MudProgressCircular Class="mr-2" Size="Size.Small" Indeterminate="true" />
+                    <span>Logging in...</span>
+                }
+                else
+                {
+                    <span>Login</span>
+                }
+            </MudButton>
+        </form>
+    </MudPaper>
+</div>
+
+@code {
+    private string _errorMessage = string.Empty;
+    private bool _isLoading = false;
+
+    protected override void OnInitialized()
+    {
+        // Check if there's an error message in the query string
+        var uri = new Uri(NavigationManager.Uri);
+        var query = System.Web.HttpUtility.ParseQueryString(uri.Query);
+        if (query["error"] != null)
+        {
+            _errorMessage = "Invalid username or password.";
+        }
+    }
+}

@@ -1,0 +1,170 @@
+@page "/agents/{AgentId:int}/conversations"
+@rendermode InteractiveServer
+@attribute [Authorize]
+@inject IDbContextFactory<DefaultdbContext> DbFactory
+@inject NavigationManager NavigationManager
+@inject IDialogService DialogService
+
+<PageTitle>Conversations - Agent @AgentId</PageTitle>
+
+<MudText Typo="Typo.h3" Class="mb-4">Conversations for Agent @AgentId</MudText>
+
+<MudButton Variant="Variant.Filled"
+           Color="Color.Default"
+           StartIcon="@Icons.Material.Filled.ArrowBack"
+           OnClick="GoBack"
+           Class="mb-4">
+    Back to Agents
+</MudButton>
+
+<MudTable Hover="true" Bordered="true" Striped="true" Elevation="0" RowsPerPage="25"
+          HorizontalScrollbar="true" T="Conversation" Dense="true"
+          ServerData="LoadConversationsServerData" @ref="table">
+    <ToolBarContent>
+        <MudText Typo="Typo.h6">Conversations</MudText>
+        <MudSpacer />
+        <MudTextField Variant="Variant.Outlined"
+                      DebounceInterval="500"
+                      @bind-Value="searchString"
+                      Placeholder="Search"
+                      Clearable="true"
+                      Adornment="Adornment.Start"
+                      AdornmentIcon="@Icons.Material.Filled.Search"
+                      IconSize="Size.Medium"
+                      Class="mt-5 mb-5 ml-5 mr-5"
+                      Immediate="true"
+                      OnDebounceIntervalElapsed="OnSearch" />
+    </ToolBarContent>
+    <HeaderContent>
+        <MudTh>Date</MudTh>
+        <MudTh>From</MudTh>
+        <MudTh>Subject</MudTh>
+        <MudTh>Message ID</MudTh>
+        <MudTh>Has Response</MudTh>
+        <MudTh>Actions</MudTh>
+    </HeaderContent>
+    <RowTemplate>
+        <MudTd>
+            @context.Emailreceived.ToString("dd.MM.yyyy HH:mm")
+        </MudTd>
+        <MudTd>@context.Emailfrom</MudTd>
+        <MudTd>@context.Subject</MudTd>
+        <MudTd>
+            <MudText Typo="Typo.caption">@context.Messageid</MudText>
+        </MudTd>
+        <MudTd>
+            @if (!string.IsNullOrEmpty(context.Agentresponsetext))
+            {
+                <MudChip T="string" Size="Size.Small" Color="Color.Success">Yes</MudChip>
+            }
+            else
+            {
+                <MudChip T="string" Size="Size.Small" Color="Color.Default">No</MudChip>
+            }
+        </MudTd>
+        <MudTd>
+            <MudTooltip Text="View Details">
+                <MudIconButton Icon="@Icons.Material.Filled.Info"
+                               Color="Color.Primary"
+                               Size="Size.Small"
+                               OnClick="@(() => OpenDetailsDialog(context))" />
+            </MudTooltip>
+            <MudTooltip Text="MCP Server Requests">
+                <MudIconButton Icon="@Icons.Material.Filled.Cloud"
+                               Color="Color.Info"
+                               Size="Size.Small"
+                               OnClick="@(() => OpenMcpRequestsDialog(context))" />
+            </MudTooltip>
+        </MudTd>
+    </RowTemplate>
+    <PagerContent>
+        <MudTablePager PageSizeOptions="new int[] { 25, 50, 100 }" />
+    </PagerContent>
+</MudTable>
+
+@code {
+    [Parameter]
+    public int AgentId { get; set; }
+
+    private MudTable<Conversation>? table;
+    private string searchString = "";
+
+    private async Task<TableData<Conversation>> LoadConversationsServerData(TableState state, CancellationToken cancellationToken)
+    {
+        await using var db = await DbFactory.CreateDbContextAsync(cancellationToken);
+
+        var query = db.Conversations
+            .Where(c => c.AgentId == AgentId)
+            .AsNoTracking();
+
+        // Apply search filter
+        if (!string.IsNullOrEmpty(searchString))
+        {
+            query = query.Where(c =>
+                c.Emailfrom.Contains(searchString) ||
+                c.Subject.Contains(searchString) ||
+                c.Messageid.Contains(searchString) ||
+                (c.Text != null && c.Text.Contains(searchString)) ||
+                (c.Agentresponsetext != null && c.Agentresponsetext.Contains(searchString)));
+        }
+
+        // Get total count
+        var totalItems = await query.CountAsync(cancellationToken);
+
+        // Apply sorting (newest first) and paging
+        var items = await query
+            .OrderByDescending(c => c.Emailreceived)
+            .Skip(state.Page * state.PageSize)
+            .Take(state.PageSize)
+            .ToListAsync(cancellationToken);
+
+        return new TableData<Conversation> { Items = items, TotalItems = totalItems };
+    }
+
+    private async Task OnSearch()
+    {
+        if (table != null)
+        {
+            await table.ReloadServerData();
+        }
+    }
+
+    private void GoBack()
+    {
+        NavigationManager.NavigateTo("/agents/manage");
+    }
+
+    private async Task OpenDetailsDialog(Conversation conversation)
+    {
+        var parameters = new DialogParameters<ConversationDetailsDialog>
+        {
+            { x => x.ConversationId, conversation.Id }
+        };
+
+        var options = new DialogOptions
+        {
+            CloseButton = true,
+            MaxWidth = MaxWidth.ExtraLarge,
+            FullWidth = true
+        };
+
+        await DialogService.ShowAsync<ConversationDetailsDialog>("Conversation Details", parameters, options);
+    }
+
+    private async Task OpenMcpRequestsDialog(Conversation conversation)
+    {
+        var parameters = new DialogParameters<McpRequestsDialog>
+        {
+            { x => x.ConversationId, conversation.Id }
+        };
+
+        var options = new DialogOptions
+        {
+            CloseButton = true,
+            MaxWidth = MaxWidth.Large,
+            FullWidth = true
+        };
+
+        await DialogService.ShowAsync<McpRequestsDialog>("MCP Server Requests", parameters, options);
+    }
+}

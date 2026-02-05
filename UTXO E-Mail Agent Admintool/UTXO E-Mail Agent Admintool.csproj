@@ -1,0 +1,54 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+    <PropertyGroup>
+        <TargetFramework>net9.0</TargetFramework>
+        <RootNamespace>UTXO_E_Mail_Agent_Admintool</RootNamespace>
+        <Nullable>enable</Nullable>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <UserSecretsId>aspnet-Admintool-06e05131-6584-41f8-b39a-4a534018519b</UserSecretsId>
+        <DockerDefaultTargetOS>Linux</DockerDefaultTargetOS>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <PackageReference Include="MailKit" Version="4.14.1" />
+        <PackageReference Include="Microsoft.AspNetCore.Diagnostics.EntityFrameworkCore" Version="9.0.10" />
+        <PackageReference Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" Version="9.0.10" />
+        <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="9.0.10" />
+        <PackageReference Include="Microsoft.EntityFrameworkCore.Tools" Version="9.0.12" />
+        <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" Version="9.0.*" />
+        <PackageReference Include="Pomelo.EntityFrameworkCore.MySql" Version="9.0.*" />
+        <PackageReference Include="MudBlazor" Version="8.5.1" />
+        <PackageReference Include="Newtonsoft.Json" Version="13.0.4" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <_ContentIncludedByDefault Remove="Components\Account\Pages\Manage\ChangePassword.razor" />
+      <_ContentIncludedByDefault Remove="Components\Account\Pages\Manage\DeletePersonalData.razor" />
+      <_ContentIncludedByDefault Remove="Components\Account\Pages\Manage\Disable2fa.razor" />
+      <_ContentIncludedByDefault Remove="Components\Account\Pages\Manage\Email.razor" />
+      <_ContentIncludedByDefault Remove="Components\Account\Pages\Manage\EnableAuthenticator.razor" />
+      <_ContentIncludedByDefault Remove="Components\Account\Pages\Manage\ExternalLogins.razor" />
+      <_ContentIncludedByDefault Remove="Components\Account\Pages\Manage\GenerateRecoveryCodes.razor" />
+      <_ContentIncludedByDefault Remove="Components\Account\Pages\Manage\Index.razor" />
+      <_ContentIncludedByDefault Remove="Components\Account\Pages\Manage\PersonalData.razor" />
+      <_ContentIncludedByDefault Remove="Components\Account\Pages\Manage\ResetAuthenticator.razor" />
+      <_ContentIncludedByDefault Remove="Components\Account\Pages\Manage\SetPassword.razor" />
+      <_ContentIncludedByDefault Remove="Components\Account\Pages\Manage\TwoFactorAuthentication.razor" />
+      <_ContentIncludedByDefault Remove="Components\Account\Pages\Manage\_Imports.razor" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <Folder Include="Components\Account\Shared\" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <ProjectReference Include="..\UTXO E-Mail Agent Shared\UTXO E-Mail Agent Shared.csproj" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <Content Include="..\.dockerignore">
+        <Link>.dockerignore</Link>
+      </Content>
+    </ItemGroup>
+
+</Project>

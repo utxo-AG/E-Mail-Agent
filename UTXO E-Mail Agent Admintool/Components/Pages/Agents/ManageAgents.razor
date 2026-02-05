@@ -1,0 +1,263 @@
+@page "/agents/manage"
+@rendermode InteractiveServer
+@using UTXO_E_Mail_Agent_Shared.Models
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.EntityFrameworkCore
+@attribute [Authorize]
+@inject IDbContextFactory<DefaultdbContext> DbFactory
+@inject IDialogService DialogService
+@inject NavigationManager NavigationManager
+
+<PageTitle>Manage Agents</PageTitle>
+
+<MudText Typo="Typo.h3" Class="mb-4">Manage Agents</MudText>
+
+<MudTable Hover="true" Bordered="true" Striped="true" Elevation="0" RowsPerPage="15"
+          HorizontalScrollbar="true" T="AgentWithCustomer" Dense="true"
+          ServerData="LoadAgentsServerData" @ref="table">
+    <ToolBarContent>
+        <MudText Typo="Typo.h6">Agents</MudText>
+        <MudSpacer/>
+        <MudTextField Variant="Variant.Outlined" DebounceInterval="500" @bind-Value="searchString"
+                      Placeholder="Search" Clearable="true" Adornment="Adornment.Start"
+                      AdornmentIcon="@Icons.Material.Filled.Search" IconSize="Size.Medium"
+                      Class="mt-5 mb-5 ml-5 mr-5" Immediate="true" OnDebounceIntervalElapsed="OnSearch">
+        </MudTextField>
+    </ToolBarContent>
+    <HeaderContent>
+        <MudTh>Id</MudTh>
+        <MudTh>Email Address</MudTh>
+        <MudTh>Client</MudTh>
+        <MudTh>State</MudTh>
+        <MudTh>AI Provider</MudTh>
+        <MudTh>Email Provider</MudTh>
+        <MudTh>Conversations Total / Month</MudTh>
+        <MudTh>Actions</MudTh>
+    </HeaderContent>
+
+    <RowTemplate>
+        <MudTd>@context.Agent.Id</MudTd>
+        <MudTd>@context.Agent.Emailaddress</MudTd>
+        <MudTd>
+            @if (context.Customer != null)
+            {
+                <span>@context.Customer.Firstname @context.Customer.Lastname</span>
+                @if (!string.IsNullOrEmpty(context.Customer.Companyname))
+                {
+                    <br/>
+                    <MudText Typo="Typo.caption">@context.Customer.Companyname</MudText>
+                }
+            }
+        </MudTd>
+        <MudTd>
+            @if (context.Agent.State == "active")
+            {
+                <MudChip T="string" Color="Color.Success" Size="Size.Small">Active</MudChip>
+            }
+            else
+            {
+                <MudChip T="string" Color="Color.Default" Size="Size.Small">Inactive</MudChip>
+            }
+        </MudTd>
+        <MudTd>@FormatProviderName(context.Agent.Aiprovider)</MudTd>
+        <MudTd>@FormatProviderName(context.Agent.Emailprovider)</MudTd>
+        <MudTd>
+            <MudChip T="string" Size="Size.Small" Color="Color.Info">@context.TotalConversations</MudChip>
+            <MudChip T="string" Size="Size.Small" Color="@GetConversationChipColor(context)">
+                @context.ConversationsThisMonth
+                @if (context.PackageMaxConversations.HasValue)
+                {
+                    <text> / @context.PackageMaxConversations</text>
+                }
+            </MudChip>
+        </MudTd>
+        <MudTd>
+            <MudTooltip Text="Edit Agent">
+                <MudIconButton Icon="@Icons.Material.Filled.Edit"
+                               Color="Color.Primary"
+                               Size="Size.Small"
+                               OnClick="@(() => EditAgent(context.Agent))" />
+            </MudTooltip>
+            <MudTooltip Text="Conversations">
+                <MudIconButton Icon="@Icons.Material.Filled.Chat"
+                               Color="Color.Info"
+                               Size="Size.Small"
+                               OnClick="@(() => ViewConversations(context.Agent))" />
+            </MudTooltip>
+            <MudTooltip Text="Delete Agent">
+                <MudIconButton Icon="@Icons.Material.Filled.Delete"
+                               Color="Color.Error"
+                               Size="Size.Small"
+                               OnClick="@(() => DeleteAgent(context.Agent))" />
+            </MudTooltip>
+        </MudTd>
+    </RowTemplate>
+    <PagerContent>
+        <MudTablePager PageSizeOptions="new int[] { 15, 25, 50, 100 }"/>
+    </PagerContent>
+</MudTable>
+
+@code {
+    private MudTable<AgentWithCustomer>? table;
+    private string searchString = "";
+
+    // Helper class to combine Agent with Customer and Conversation stats
+    private class AgentWithCustomer
+    {
+        public Agent Agent { get; set; } = default!;
+        public Customer? Customer { get; set; }
+        public int TotalConversations { get; set; }
+        public int ConversationsThisMonth { get; set; }
+        public int? PackageMaxConversations { get; set; }
+    }
+
+    private async Task<TableData<AgentWithCustomer>> LoadAgentsServerData(TableState state, CancellationToken cancellationToken)
+    {
+        await using var db = await DbFactory.CreateDbContextAsync(cancellationToken);
+
+        var query = db.Agents
+            .Where(a => a.State != "deleted")
+            .Include(a => a.Customer)
+                .ThenInclude(c => c.Package)
+            .AsNoTracking();
+
+        // Apply search filter
+        if (!string.IsNullOrEmpty(searchString))
+        {
+            query = query.Where(a =>
+                a.Emailaddress.Contains(searchString) ||
+                (a.Customer != null && a.Customer.Firstname.Contains(searchString)) ||
+                (a.Customer != null && a.Customer.Lastname.Contains(searchString)) ||
+                (a.Customer != null && a.Customer.Companyname != null && a.Customer.Companyname.Contains(searchString)) ||
+                a.Aiprovider.Contains(searchString) ||
+                a.Emailprovider.Contains(searchString));
+        }
+
+        // Get total count
+        var totalItems = await query.CountAsync(cancellationToken);
+
+        // Apply sorting and paging
+        var agents = await query
+            .OrderBy(a => a.Customer != null ? a.Customer.Lastname : "")
+            .ThenBy(a => a.Emailaddress)
+            .Skip(state.Page * state.PageSize)
+            .Take(state.PageSize)
+            .ToListAsync(cancellationToken);
+
+        // Get start of current month
+        var startOfMonth = new DateTime(DateTime.Now.Year, DateTime.Now.Month, 1);
+
+        // Get conversation counts for each agent
+        var agentIds = agents.Select(a => a.Id).ToList();
+        var conversationStats = await db.Conversations
+            .Where(c => agentIds.Contains(c.AgentId))
+            .GroupBy(c => c.AgentId)
+            .Select(g => new
+            {
+                AgentId = g.Key,
+                TotalCount = g.Count(),
+                ThisMonthCount = g.Count(c => c.Emailreceived >= startOfMonth)
+            })
+            .ToListAsync(cancellationToken);
+
+        // Map to AgentWithCustomer
+        var items = agents.Select(a =>
+        {
+            var stats = conversationStats.FirstOrDefault(s => s.AgentId == a.Id);
+            return new AgentWithCustomer
+            {
+                Agent = a,
+                Customer = a.Customer,
+                TotalConversations = stats?.TotalCount ?? 0,
+                ConversationsThisMonth = stats?.ThisMonthCount ?? 0,
+                PackageMaxConversations = a.Customer?.Package?.Maxconvsations
+            };
+        }).ToList();
+
+        return new TableData<AgentWithCustomer> { Items = items, TotalItems = totalItems };
+    }
+
+    private Color GetConversationChipColor(AgentWithCustomer context)
+    {
+        // If no package limit, use primary color
+        if (!context.PackageMaxConversations.HasValue || context.PackageMaxConversations.Value == 0)
+            return Color.Primary;
+
+        var maxConversations = context.PackageMaxConversations.Value;
+        var currentConversations = context.ConversationsThisMonth;
+        var usagePercentage = (double)currentConversations / maxConversations * 100;
+
+        // Green: <50% used (>50% remaining)
+        if (usagePercentage < 50)
+            return Color.Success;
+
+        // Yellow: 70-90% used (10-30% remaining)
+        if (usagePercentage < 90)
+            return Color.Warning;
+
+        // Red: >90% used (<10% remaining)
+        return Color.Error;
+    }
+
+    private async Task OnSearch()
+    {
+        if (table != null)
+        {
+            await table.ReloadServerData();
+        }
+    }
+
+    private void EditAgent(Agent agent)
+    {
+        NavigationManager.NavigateTo($"/agents/edit/{agent.CustomerId}/{agent.Id}");
+    }
+
+    private void ViewConversations(Agent agent)
+    {
+        NavigationManager.NavigateTo($"/agents/{agent.Id}/conversations");
+    }
+
+    private async Task DeleteAgent(Agent agent)
+    {
+        var result = await DialogService.ShowMessageBox(
+            "Confirm Delete",
+            $"Are you sure you want to delete agent '{agent.Emailaddress}'?",
+            yesText: "Delete",
+            cancelText: "Cancel");
+
+        if (result == true)
+        {
+            await using var db = await DbFactory.CreateDbContextAsync();
+            var agentToDelete = await db.Agents.FindAsync(agent.Id);
+            if (agentToDelete != null)
+            {
+                agentToDelete.State = "deleted";
+                await db.SaveChangesAsync();
+                if (table != null)
+                {
+                    await table.ReloadServerData();
+                }
+            }
+        }
+    }
+
+    private string FormatProviderName(string? providerName)
+    {
+        if (string.IsNullOrEmpty(providerName))
+            return "-";
+
+        return providerName.ToLowerInvariant() switch
+        {
+            "inbound" => "Inbound",
+            "imap" => "IMAP",
+            "pop3" => "POP3",
+            "exchange" => "Exchange",
+            "smtp" => "SMTP",
+            "openai" => "OpenAI",
+            "claude" => "Claude",
+            "anthropic" => "Anthropic",
+            "azure" => "Azure",
+            _ => char.ToUpper(providerName[0]) + providerName.Substring(1).ToLower() // Fallback: Capitalize first letter
+        };
+    }
+}

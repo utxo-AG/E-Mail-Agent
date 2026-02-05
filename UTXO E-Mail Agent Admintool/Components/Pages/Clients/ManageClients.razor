@@ -1,0 +1,184 @@
+@page "/clients/manage"
+@rendermode InteractiveServer
+@using UTXO_E_Mail_Agent_Shared.Models;
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.EntityFrameworkCore
+@attribute [Authorize]
+@inject IDbContextFactory<DefaultdbContext> DbFactory
+@inject IDialogService DialogService
+
+<PageTitle>Manage Clients</PageTitle>
+
+<MudText Typo="Typo.h3" Class="mb-4">Manage Clients</MudText>
+
+<MudTable Hover="true" Bordered="true" Striped="true" Elevation="0" RowsPerPage="15"
+          HorizontalScrollbar="true" T="Customer" Dense="true"
+          ServerData="LoadCustomersServerData" @ref="table">
+    <ToolBarContent>
+        <MudText Typo="Typo.h6">Clients</MudText>
+        <MudSpacer/>
+        <MudTextField Variant="Variant.Outlined" DebounceInterval="500" @bind-Value="searchString" Placeholder="Search" Clearable="true" Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search" IconSize="Size.Medium" Class="mt-5 mb-5 ml-5 mr-5" Immediate="true" OnDebounceIntervalElapsed="OnSearch"></MudTextField>
+    </ToolBarContent>
+        <HeaderContent>
+            <MudTh>Id</MudTh>
+            <MudTh>Name</MudTh>
+            <MudTh>Street</MudTh>
+            <MudTh>City</MudTh>
+            <MudTh>E-Mail</MudTh>
+            <MudTh>Actions</MudTh>
+        </HeaderContent>
+
+        <RowTemplate>
+            <MudTd>
+                @context.Id
+            </MudTd>
+            <MudTd>
+                @context.Firstname @context.Lastname
+                <br/>
+            </MudTd>
+            <MudTd>@context.Street 
+                </MudTd>
+            <MudTd>@context.Zip @context.City 
+                </MudTd>
+            <MudTd>@context.Emailaddress
+            </MudTd>
+            <MudTd>
+                <MudTooltip Text="Edit Client">
+                    <MudIconButton Icon="@Icons.Material.Filled.Edit"
+                                   Color="Color.Primary"
+                                   Size="Size.Small"
+                                   OnClick="@(() => OpenEditDialog(context))" />
+                </MudTooltip>
+                <MudTooltip Text="Agents">
+                    <MudIconButton Icon="@Icons.Material.Filled.People"
+                                   Color="Color.Info"
+                                   Size="Size.Small"
+                                   OnClick="@(() => OpenAgentsDialog(context))" />
+                </MudTooltip>
+                <MudTooltip Text="Delete Client">
+                    <MudIconButton Icon="@Icons.Material.Filled.Delete"
+                                   Color="Color.Error"
+                                   Size="Size.Small"
+                                   OnClick="@(() => DeleteClient(context))" />
+                </MudTooltip>
+            </MudTd>
+        </RowTemplate>
+    <PagerContent>
+        <MudTablePager PageSizeSelector="true"/>
+    </PagerContent>
+</MudTable>
+
+@code {
+    private MudTable<Customer>? table;
+    private string searchString = "";
+
+    private async Task<TableData<Customer>> LoadCustomersServerData(TableState state, CancellationToken cancellationToken)
+    {
+        await using var db = await DbFactory.CreateDbContextAsync(cancellationToken);
+
+        var query = db.Customers
+            .Where(c => c.State != "deleted")
+            .AsNoTracking();
+
+        // Apply search filter
+        if (!string.IsNullOrEmpty(searchString))
+        {
+            query = query.Where(c =>
+                c.Firstname.Contains(searchString) ||
+                c.Lastname.Contains(searchString) ||
+                (c.Firstname.Trim() + " " + c.Lastname.Trim()).Contains(searchString) ||
+                (c.Companyname != null && c.Companyname.Contains(searchString)) ||
+                c.Street.Contains(searchString) ||
+                c.City.Contains(searchString) ||
+                c.Emailaddress.Contains(searchString));
+        }
+
+        // Get total count
+        var totalItems = await query.CountAsync(cancellationToken);
+
+        // Apply sorting and paging
+        var items = await query
+            .OrderBy(c => c.Lastname)
+            .ThenBy(c => c.Firstname)
+            .Skip(state.Page * state.PageSize)
+            .Take(state.PageSize)
+            .ToListAsync(cancellationToken);
+
+        return new TableData<Customer> { Items = items, TotalItems = totalItems };
+    }
+
+    private async Task OnSearch()
+    {
+        if (table != null)
+        {
+            await table.ReloadServerData();
+        }
+    }
+
+    private async Task OpenEditDialog(Customer customer)
+    {
+        var parameters = new DialogParameters<EditClientDialog>
+        {
+            { x => x.Customer, customer }
+        };
+
+        var options = new DialogOptions
+        {
+            CloseButton = true,
+            MaxWidth = MaxWidth.Medium,
+            FullWidth = true
+        };
+
+        var dialog = await DialogService.ShowAsync<EditClientDialog>("Edit Client", parameters, options);
+        var result = await dialog.Result;
+
+        if (result != null && !result.Canceled)
+        {
+            if (table != null)
+            {
+                await table.ReloadServerData();
+            }
+        }
+    }
+
+    private async Task OpenAgentsDialog(Customer customer)
+    {
+        var parameters = new DialogParameters<ClientAgentsDialog>
+        {
+            { x => x.CustomerId, customer.Id }
+        };
+
+        var options = new DialogOptions
+        {
+            CloseButton = true,
+            MaxWidth = MaxWidth.Large,
+            FullWidth = true
+        };
+
+        await DialogService.ShowAsync<ClientAgentsDialog>($"Agents for {customer.Firstname} {customer.Lastname}", parameters, options);
+    }
+
+    private async Task DeleteClient(Customer customer)
+    {
+        var result = await DialogService.ShowMessageBox(
+            "Confirm Delete",
+            $"Are you sure you want to delete {customer.Firstname} {customer.Lastname}?",
+            yesText: "Delete",
+            cancelText: "Cancel");
+
+        if (result == true)
+        {
+            await using var db = await DbFactory.CreateDbContextAsync();
+            var customerToDelete = await db.Customers.FindAsync(customer.Id);
+            if (customerToDelete != null)
+            {
+                customerToDelete.State = "deleted";
+                await db.SaveChangesAsync();
+                if (table != null)
+                {
+                    await table.ReloadServerData();
+                }
+            }
+        }
+    }
+}

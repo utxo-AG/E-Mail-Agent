@@ -1,0 +1,142 @@
+@inject IDbContextFactory<DefaultdbContext> DbFactory
+@inject NavigationManager NavigationManager
+@inject IDialogService DialogService
+
+<MudDialog>
+    <DialogContent>
+        @if (agents == null)
+        {
+            <MudProgressCircular Indeterminate="true" />
+        }
+        else if (agents.Count == 0)
+        {
+            <MudAlert Severity="Severity.Info">No agents assigned to this client.</MudAlert>
+        }
+        else
+        {
+            <MudTable Items="@agents" Hover="true" Striped="true" Dense="true">
+                <HeaderContent>
+                    <MudTh>ID</MudTh>
+                    <MudTh>Email Address</MudTh>
+                    <MudTh>State</MudTh>
+                    <MudTh>Language</MudTh>
+                    <MudTh>Provider</MudTh>
+                    <MudTh>AI Model</MudTh>
+                    <MudTh>Actions</MudTh>
+                </HeaderContent>
+                <RowTemplate>
+                    <MudTd>@context.Id</MudTd>
+                    <MudTd>@context.Emailaddress</MudTd>
+                    <MudTd>
+                        <MudChip T="string" Size="Size.Small" Color="@(context.State == "active" ? Color.Success : Color.Default)">
+                            @context.State
+                        </MudChip>
+                    </MudTd>
+                    <MudTd>@context.Defaultlanguage</MudTd>
+                    <MudTd>@context.Emailprovider</MudTd>
+                    <MudTd>@context.Aimodel</MudTd>
+                    <MudTd>
+                        <MudTooltip Text="Edit Agent">
+                            <MudIconButton Icon="@Icons.Material.Filled.Edit"
+                                           Color="Color.Primary"
+                                           Size="Size.Small"
+                                           OnClick="@(() => NavigateToEdit(context.Id))" />
+                        </MudTooltip>
+                        <MudTooltip Text="Conversations">
+                            <MudIconButton Icon="@Icons.Material.Filled.Chat"
+                                           Color="Color.Info"
+                                           Size="Size.Small"
+                                           OnClick="@(() => NavigateToConversations(context.Id))" />
+                        </MudTooltip>
+                        <MudTooltip Text="Delete Agent">
+                            <MudIconButton Icon="@Icons.Material.Filled.Delete"
+                                           Color="Color.Error"
+                                           Size="Size.Small"
+                                           OnClick="@(() => DeleteAgent(context))" />
+                        </MudTooltip>
+                    </MudTd>
+                </RowTemplate>
+            </MudTable>
+        }
+
+        <MudButton Variant="Variant.Filled"
+                   Color="Color.Primary"
+                   StartIcon="@Icons.Material.Filled.Add"
+                   OnClick="NavigateToCreate"
+                   Class="mt-4">
+            Create new Agent
+        </MudButton>
+    </DialogContent>
+    <DialogActions>
+        <MudButton Color="Color.Primary" OnClick="Close">Close</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter]
+    IMudDialogInstance MudDialog { get; set; } = default!;
+
+    [Parameter]
+    public int CustomerId { get; set; }
+
+    private List<Agent>? agents;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAgents();
+    }
+
+    private async Task LoadAgents()
+    {
+        await using var db = await DbFactory.CreateDbContextAsync();
+        agents = await db.Agents
+            .Where(a => a.CustomerId == CustomerId && a.State != "deleted")
+            .AsNoTracking()
+            .OrderBy(a => a.Emailaddress)
+            .ToListAsync();
+    }
+
+    private void Close()
+    {
+        MudDialog.Close();
+    }
+
+    private void NavigateToEdit(int agentId)
+    {
+        MudDialog.Close();
+        NavigationManager.NavigateTo($"/agents/edit/{CustomerId}/{agentId}");
+    }
+
+    private void NavigateToCreate()
+    {
+        MudDialog.Close();
+        NavigationManager.NavigateTo($"/agents/create/{CustomerId}");
+    }
+
+    private void NavigateToConversations(int agentId)
+    {
+        MudDialog.Close();
+        NavigationManager.NavigateTo($"/agents/{agentId}/conversations");
+    }
+
+    private async Task DeleteAgent(Agent agent)
+    {
+        var result = await DialogService.ShowMessageBox(
+            "Confirm Delete",
+            $"Are you sure you want to delete agent {agent.Emailaddress}?",
+            yesText: "Delete",
+            cancelText: "Cancel");
+
+        if (result == true)
+        {
+            await using var db = await DbFactory.CreateDbContextAsync();
+            var agentToDelete = await db.Agents.FindAsync(agent.Id);
+            if (agentToDelete != null)
+            {
+                agentToDelete.State = "deleted";
+                await db.SaveChangesAsync();
+                await LoadAgents();
+            }
+        }
+    }
+}

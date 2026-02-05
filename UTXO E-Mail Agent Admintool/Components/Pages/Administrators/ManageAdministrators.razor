@@ -1,0 +1,166 @@
+@page "/administrators/manage"
+@rendermode InteractiveServer
+@using UTXO_E_Mail_Agent_Shared.Models
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.EntityFrameworkCore
+@attribute [Authorize]
+@inject IDbContextFactory<DefaultdbContext> DbFactory
+@inject IDialogService DialogService
+
+<PageTitle>Manage Administrators</PageTitle>
+
+<MudText Typo="Typo.h3" Class="mb-4">Manage Administrators</MudText>
+
+<MudTable Hover="true" Bordered="true" Striped="true" Elevation="0" RowsPerPage="15"
+          HorizontalScrollbar="true" T="Administrator" Dense="true"
+          ServerData="LoadAdministratorsServerData" @ref="table">
+    <ToolBarContent>
+        <MudText Typo="Typo.h6">Administrators</MudText>
+        <MudSpacer/>
+        <MudTextField Variant="Variant.Outlined" DebounceInterval="500" @bind-Value="searchString"
+                      Placeholder="Search" Clearable="true" Adornment="Adornment.Start"
+                      AdornmentIcon="@Icons.Material.Filled.Search" IconSize="Size.Medium"
+                      Class="mt-5 mb-5 ml-5 mr-5" Immediate="true" OnDebounceIntervalElapsed="OnSearch">
+        </MudTextField>
+    </ToolBarContent>
+    <HeaderContent>
+        <MudTh>Id</MudTh>
+        <MudTh>Username</MudTh>
+        <MudTh>State</MudTh>
+        <MudTh>Login Attempts</MudTh>
+        <MudTh>Actions</MudTh>
+    </HeaderContent>
+
+    <RowTemplate>
+        <MudTd>@context.Id</MudTd>
+        <MudTd>@context.Username</MudTd>
+        <MudTd>
+            @if (context.State == "active")
+            {
+                <MudChip T="string" Color="Color.Success" Size="Size.Small">Active</MudChip>
+            }
+            else
+            {
+                <MudChip T="string" Color="Color.Error" Size="Size.Small">Blocked</MudChip>
+            }
+        </MudTd>
+        <MudTd>
+            @if (context.Loginattempts > 0)
+            {
+                <MudChip T="string" Color="@(context.Loginattempts >= 3 ? Color.Error : Color.Warning)" Size="Size.Small">
+                    @context.Loginattempts / 3
+                </MudChip>
+            }
+            else
+            {
+                <MudChip T="string" Color="Color.Default" Size="Size.Small">0</MudChip>
+            }
+        </MudTd>
+        <MudTd>
+            <MudTooltip Text="Edit Administrator">
+                <MudIconButton Icon="@Icons.Material.Filled.Edit"
+                               Color="Color.Primary"
+                               Size="Size.Small"
+                               OnClick="@(() => OpenEditDialog(context))" />
+            </MudTooltip>
+            <MudTooltip Text="Delete Administrator">
+                <MudIconButton Icon="@Icons.Material.Filled.Delete"
+                               Color="Color.Error"
+                               Size="Size.Small"
+                               OnClick="@(() => DeleteAdministrator(context))" />
+            </MudTooltip>
+        </MudTd>
+    </RowTemplate>
+    <PagerContent>
+        <MudTablePager PageSizeOptions="new int[] { 15, 25, 50, 100 }"/>
+    </PagerContent>
+</MudTable>
+
+@code {
+    private MudTable<Administrator>? table;
+    private string searchString = "";
+
+    private async Task<TableData<Administrator>> LoadAdministratorsServerData(TableState state, CancellationToken cancellationToken)
+    {
+        await using var db = await DbFactory.CreateDbContextAsync(cancellationToken);
+
+        var query = db.Administrators
+            .AsNoTracking();
+
+        // Apply search filter
+        if (!string.IsNullOrEmpty(searchString))
+        {
+            query = query.Where(a => a.Username.Contains(searchString));
+        }
+
+        // Get total count
+        var totalItems = await query.CountAsync(cancellationToken);
+
+        // Apply sorting and paging
+        var items = await query
+            .OrderBy(a => a.Username)
+            .Skip(state.Page * state.PageSize)
+            .Take(state.PageSize)
+            .ToListAsync(cancellationToken);
+
+        return new TableData<Administrator> { Items = items, TotalItems = totalItems };
+    }
+
+    private async Task OnSearch()
+    {
+        if (table != null)
+        {
+            await table.ReloadServerData();
+        }
+    }
+
+    private async Task OpenEditDialog(Administrator administrator)
+    {
+        var parameters = new DialogParameters<EditAdministratorDialog>
+        {
+            { x => x.Administrator, administrator }
+        };
+
+        var options = new DialogOptions
+        {
+            CloseButton = true,
+            MaxWidth = MaxWidth.Medium,
+            FullWidth = true
+        };
+
+        var dialog = await DialogService.ShowAsync<EditAdministratorDialog>("Edit Administrator", parameters, options);
+        var result = await dialog.Result;
+
+        if (result != null && !result.Canceled)
+        {
+            if (table != null)
+            {
+                await table.ReloadServerData();
+            }
+        }
+    }
+
+    private async Task DeleteAdministrator(Administrator administrator)
+    {
+        var result = await DialogService.ShowMessageBox(
+            "Confirm Delete",
+            $"Are you sure you want to permanently delete administrator '{administrator.Username}'? This action cannot be undone!",
+            yesText: "Delete",
+            cancelText: "Cancel");
+
+        if (result == true)
+        {
+            await using var db = await DbFactory.CreateDbContextAsync();
+            var adminToDelete = await db.Administrators.FindAsync(administrator.Id);
+            if (adminToDelete != null)
+            {
+                db.Administrators.Remove(adminToDelete);
+                await db.SaveChangesAsync();
+                if (table != null)
+                {
+                    await table.ReloadServerData();
+                }
+            }
+        }
+    }
+}
