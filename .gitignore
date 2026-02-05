@@ -41,6 +41,3 @@ appsettings.Production.json
 *.p12
 credentials.json
 secrets.json
-
-## External repositories (managed separately)
-claude-agent-sdk-dotnet/

@@ -1,0 +1,3 @@
+[submodule "claude-agent-sdk-dotnet"]
+	path = claude-agent-sdk-dotnet
+	url = https://github.com/0xeb/claude-agent-sdk-dotnet.git
