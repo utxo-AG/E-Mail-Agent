@@ -1,35 +1,26 @@
-using MailKit.Net.Smtp;
-using MailKit.Security;
-using MimeKit;
+using System.Text;
+using System.Text.Json;
 
 namespace UTXO_E_Mail_Agent_Admintool.Services;
 
 public class EmailService
 {
     private readonly IConfiguration _configuration;
+    private readonly HttpClient _httpClient;
 
-    public EmailService(IConfiguration configuration)
+    public EmailService(IConfiguration configuration, IHttpClientFactory httpClientFactory)
     {
         _configuration = configuration;
+        _httpClient = httpClientFactory.CreateClient();
     }
 
     public async Task SendPasswordResetEmail(string toEmail, string toName, string username, string newPassword)
     {
-        var smtpHost = _configuration["Email:SmtpHost"] ?? "smtp.gmail.com";
-        var smtpPort = int.Parse(_configuration["Email:SmtpPort"] ?? "587");
-        var smtpUsername = _configuration["Email:SmtpUsername"] ?? "";
-        var smtpPassword = _configuration["Email:SmtpPassword"] ?? "";
-        var fromEmail = _configuration["Email:FromEmail"] ?? smtpUsername;
-        var fromName = _configuration["Email:FromName"] ?? "NMKR E-Mail Agent";
+        var inboundApiKey = _configuration["Email:InboundApiKey"] ?? throw new InvalidOperationException("Email:InboundApiKey not configured");
+        var fromEmail = _configuration["Email:FromEmail"] ?? throw new InvalidOperationException("Email:FromEmail not configured");
+        var fromName = _configuration["Email:FromName"] ?? "UTXO E-Mail Agent";
 
-        var message = new MimeMessage();
-        message.From.Add(new MailboxAddress(fromName, fromEmail));
-        message.To.Add(new MailboxAddress(toName, toEmail));
-        message.Subject = "Your New Password - NMKR E-Mail Agent";
-
-        var bodyBuilder = new BodyBuilder
-        {
-            HtmlBody = $@"
+        var htmlBody = $@"
                 <html>
                 <body style='font-family: Arial, sans-serif;'>
                     <h2>New Password Generated</h2>
@@ -39,11 +30,12 @@ public class EmailService
                     <p><strong>New Password:</strong> <code style='background: #f4f4f4; padding: 5px 10px; border-radius: 3px;'>{newPassword}</code></p>
                     <p>Please change this password after your first login.</p>
                     <br/>
-                    <p>Best regards,<br/>NMKR E-Mail Agent Team</p>
+                    <p>Best regards,<br/>UTXO E-Mail Agent Team</p>
                 </body>
                 </html>
-            ",
-            TextBody = $@"
+            ";
+
+        var textBody = $@"
 New Password Generated
 
 Hello {toName},
@@ -56,19 +48,37 @@ New Password: {newPassword}
 Please change this password after your first login.
 
 Best regards,
-NMKR E-Mail Agent Team
-            "
+UTXO E-Mail Agent Team
+            ";
+
+        var emailPayload = new
+        {
+            from = $"{fromName} <{fromEmail}>",
+            to = toEmail,
+            subject = "Your New Password - UTXO E-Mail Agent",
+            html = htmlBody,
+            text = textBody
         };
 
-        message.Body = bodyBuilder.ToMessageBody();
+        var jsonContent = JsonSerializer.Serialize(emailPayload);
+        var content = new StringContent(jsonContent, Encoding.UTF8, "application/json");
 
-        using var client = new SmtpClient();
         try
         {
-            await client.ConnectAsync(smtpHost, smtpPort, SecureSocketOptions.StartTls);
-            await client.AuthenticateAsync(smtpUsername, smtpPassword);
-            await client.SendAsync(message);
-            await client.DisconnectAsync(true);
+            var request = new HttpRequestMessage(HttpMethod.Post, "https://inbound.new/api/e2/emails");
+            request.Headers.Add("Authorization", $"Bearer {inboundApiKey}");
+            request.Content = content;
+
+            var response = await _httpClient.SendAsync(request);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                var errorContent = await response.Content.ReadAsStringAsync();
+                Console.WriteLine($"[EmailService] Error sending email via Inbound API: {response.StatusCode} - {errorContent}");
+                throw new Exception($"Failed to send email via Inbound API: {response.StatusCode}");
+            }
+
+            Console.WriteLine($"[EmailService] Email sent successfully to {toEmail}");
         }
         catch (Exception ex)
         {
