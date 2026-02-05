@@ -62,12 +62,39 @@ UTXO E-Mail Agent System/
 - **MailKit**: Email handling
 - **ASP.NET Core Identity**: Authentication and password management
 
+## 🎬 Getting Started
+
+### Clone the Repository
+
+This project uses git submodules for the Claude Agent SDK. Clone with submodules:
+
+```bash
+# Clone with submodules
+git clone --recursive https://github.com/utxo-AG/E-Mail-Agent.git
+
+# Or if you already cloned without --recursive:
+git submodule update --init --recursive
+```
+
+### Build the Solution
+
+```bash
+cd E-Mail-Agent
+dotnet restore "UTXO E-Mail Agent.sln"
+dotnet build "UTXO E-Mail Agent.sln"
+```
+
 ## 📦 Prerequisites
 
 - .NET 9.0 SDK
 - MySQL Database
+- Claude Code CLI (required for Claude Agent SDK)
+  - macOS/Linux: `brew install anthropics/claude/claude-code`
+  - Windows: `winget install Anthropic.ClaudeCode`
+  - npm: `npm install -g @anthropics/claude-code`
+  - Then authenticate: `claude-code auth login`
 - Claude API Key (for AI features)
-- SMTP Server (for password reset emails)
+- Inbound API Key (for email sending)
 
 ## ⚙️ Configuration
 
