@@ -2,6 +2,7 @@ using System.Text;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using UTXO_E_Mail_Agent_Shared.Models;
+using System.Threading.Tasks;
 
 namespace UTXO_E_Mail_Agent.McpServers;
 
@@ -23,17 +24,22 @@ public class HttpMcpServerHandler
     /// <summary>
     /// Führt einen HTTP-Call basierend auf der MCP-Server-Konfiguration aus
     /// </summary>
-    /// <param name="parameters">JSON-String mit Parametern oder null für parameterlose Calls</param>
-    private async Task<string> ExecuteAsync(int mcpserverid, int conversationid, string? parameters = null)
+    /// <param name="parametersJson">JsonElement mit Parametern</param>
+    private async Task<string> ExecuteAsync(int mcpserverid, int conversationid, JsonElement parametersJson)
     {
         try
         {
             var optionsBuilder = new DbContextOptionsBuilder<DefaultdbContext>();
             optionsBuilder.UseMySql(_connectionString, Microsoft.EntityFrameworkCore.ServerVersion.AutoDetect(_connectionString));
             await using var db = new DefaultdbContext(optionsBuilder.Options);
-            
+
             var method = _mcpConfig.Call.ToUpper();
             var url = _mcpConfig.Url;
+
+            // Convert JsonElement to string for logging and HTTP calls
+            string? parameters = parametersJson.ValueKind == JsonValueKind.Undefined || parametersJson.ValueKind == JsonValueKind.Null
+                ? null
+                : parametersJson.GetRawText();
 
             Console.WriteLine($"[MCP {_mcpConfig.Name}] ========================================");
             Console.WriteLine($"[MCP {_mcpConfig.Name}] Executing {method} to {url}");
@@ -175,11 +181,11 @@ public class HttpMcpServerHandler
 
     /// <summary>
     /// Erstellt ein MCP Tool für diesen Server
-    /// Format: Nimmt ein JSON-String als Parameter entgegen
+    /// Format: Nimmt ein JsonElement als Parameter entgegen
     /// </summary>
-    public static Func<string?, Task<string>> CreateToolHandler(Mcpserver mcpConfig, int conversationid, string connectionString)
+    public static Func<JsonElement, Task<string>> CreateToolHandler(Mcpserver mcpConfig, int conversationid, string connectionString)
     {
         var handler = new HttpMcpServerHandler(mcpConfig, connectionString);
-        return async (parameters) => await handler.ExecuteAsync(mcpConfig.Id,conversationid, parameters);
+        return async (parametersJson) => await handler.ExecuteAsync(mcpConfig.Id, conversationid, parametersJson);
     }
 }
