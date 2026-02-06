@@ -39,7 +39,14 @@ public class Program
         Console.WriteLine($"  Version: {Version} (Build: {BuildDate})");
         Console.WriteLine("═══════════════════════════════════════════════════");
         Console.WriteLine($"Polling interval: {_pollingIntervalSeconds} seconds");
-        Console.WriteLine("Press 't' during wait to run test mode");
+
+        // Test mode nur anzeigen, wenn interaktive Konsole verfügbar ist
+        var hasInteractiveConsole = !Console.IsInputRedirected && Environment.UserInteractive;
+        if (hasInteractiveConsole)
+        {
+            Console.WriteLine("Press 't' during wait to run test mode");
+        }
+
         Console.WriteLine("Starting main loop...");
 
         // Dauerschleife
@@ -54,32 +61,43 @@ public class Program
                 Console.WriteLine($"Error in main loop: {ex.Message}");
             }
 
-            Console.WriteLine($"Waiting {_pollingIntervalSeconds} seconds until next check... (Press 't' for test mode)");
+            // hasInteractiveConsole wurde bereits oben deklariert - wiederverwenden
 
-            // Warte auf Timeout oder Tastendruck
-            var waitStart = DateTime.Now;
-            var waitSeconds = _pollingIntervalSeconds;
-
-            while ((DateTime.Now - waitStart).TotalSeconds < waitSeconds)
+            if (hasInteractiveConsole)
             {
-                if (Console.KeyAvailable)
+                Console.WriteLine($"Waiting {_pollingIntervalSeconds} seconds until next check... (Press 't' for test mode)");
+
+                // Warte auf Timeout oder Tastendruck
+                var waitStart = DateTime.Now;
+                var waitSeconds = _pollingIntervalSeconds;
+
+                while ((DateTime.Now - waitStart).TotalSeconds < waitSeconds)
                 {
-                    var key = Console.ReadKey(true);
-                    if (key.KeyChar == 't' || key.KeyChar == 'T')
+                    if (Console.KeyAvailable)
                     {
-                        Console.WriteLine("\n[TEST MODE] Starting test scenario...");
-                        try
+                        var key = Console.ReadKey(true);
+                        if (key.KeyChar == 't' || key.KeyChar == 'T')
                         {
-                            await RunTestScenarioAsync();
+                            Console.WriteLine("\n[TEST MODE] Starting test scenario...");
+                            try
+                            {
+                                await RunTestScenarioAsync();
+                            }
+                            catch (Exception ex)
+                            {
+                                Console.WriteLine($"[TEST MODE] Error: {ex.Message}");
+                            }
+                            Console.WriteLine("[TEST MODE] Test completed. Resuming normal operation...");
                         }
-                        catch (Exception ex)
-                        {
-                            Console.WriteLine($"[TEST MODE] Error: {ex.Message}");
-                        }
-                        Console.WriteLine("[TEST MODE] Test completed. Resuming normal operation...");
                     }
+                    await Task.Delay(100); // Check every 100ms
                 }
-                await Task.Delay(100); // Check every 100ms
+            }
+            else
+            {
+                // Kein interaktiver Modus - einfach nur warten (z.B. als systemd Service)
+                Console.WriteLine($"Waiting {_pollingIntervalSeconds} seconds until next check...");
+                await Task.Delay(_pollingIntervalSeconds * 1000);
             }
         }
     }
