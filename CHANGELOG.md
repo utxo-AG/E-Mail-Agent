@@ -5,6 +5,29 @@ All notable changes to the UTXO E-Mail Agent will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.0] - 2026-02-06
+
+### Added
+- **JsonStringParameter wrapper class** for Claude CLI 2.1.31+ compatibility
+  - Provides structured schema that newer Claude CLI versions require
+  - Maintains flexibility for different customer API schemas
+  - Future-proof solution that works with all Claude CLI versions
+
+### Changed
+- MCP tool handler now uses `JsonStringParameter` wrapper instead of plain string
+- Tool signature: `Func<JsonStringParameter, Task<string>>`
+- Claude passes parameters as: `{"json": "{\"zip\": \"79790\", \"city\": \"Küssaberg\", ...}"}`
+
+### Required Database Update
+Update MCP server descriptions in database to use wrapper format:
+```
+Prüft Internet-Verfügbarkeit.
+WICHTIG: Übergebe ein Objekt mit dem Feld "json" das einen JSON-String enthält:
+{
+  "json": "{\"zip\": \"79790\", \"city\": \"Küssaberg\", \"street\": \"Freudenspiel 70\"}"
+}
+```
+
 ## [1.2.2] - 2026-02-06
 
 ### Fixed
