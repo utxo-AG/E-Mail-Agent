@@ -1,10 +1,30 @@
 using System.Text;
 using System.Text.Json;
+using System.ComponentModel;
 using Microsoft.EntityFrameworkCore;
 using UTXO_E_Mail_Agent_Shared.Models;
 using System.Threading.Tasks;
 
 namespace UTXO_E_Mail_Agent.McpServers;
+
+/// <summary>
+/// Parameter-Klasse für die checkavailability API
+/// Definiert explizite Felder damit der SDK ein korrektes Schema generiert
+/// </summary>
+public class CheckAvailabilityParameters
+{
+    [Description("PLZ (Postleitzahl)")]
+    public string? zip { get; set; }
+
+    [Description("Ortsname")]
+    public string? city { get; set; }
+
+    [Description("Straßenname")]
+    public string? street { get; set; }
+
+    [Description("Hausnummer")]
+    public string? address { get; set; }
+}
 
 /// <summary>
 /// Handler für HTTP-basierte MCP Server aus der Datenbank
@@ -24,14 +44,16 @@ public class HttpMcpServerHandler
     /// <summary>
     /// Führt einen HTTP-Call basierend auf der MCP-Server-Konfiguration aus
     /// </summary>
-    /// <param name="parameters">Dictionary mit den Parametern (wird zu JSON-String konvertiert)</param>
-    private async Task<string> ExecuteAsync(int mcpserverid, int conversationid, Dictionary<string, JsonElement> parameters)
+    /// <param name="mcpserverid">ID des MCP Servers in der Datenbank</param>
+    /// <param name="conversationid">ID der Konversation</param>
+    /// <param name="parameters">Parameter-Objekt mit expliziten Feldern</param>
+    private async Task<string> ExecuteAsync(int mcpserverid, int conversationid, CheckAvailabilityParameters parameters)
     {
         try
         {
-            // Convert Dictionary to JSON string for HTTP call
+            // Convert parameters object to JSON string for HTTP call
             string? parametersJson = null;
-            if (parameters != null && parameters.Count > 0)
+            if (parameters != null)
             {
                 parametersJson = JsonSerializer.Serialize(parameters);
             }
@@ -183,11 +205,11 @@ public class HttpMcpServerHandler
 
     /// <summary>
     /// Erstellt ein MCP Tool für diesen Server
-    /// Format: Nimmt ein Dictionary als Parameter entgegen, das beliebige JSON-Properties enthalten kann
-    /// Das JSON-Format wird in der Tool-Beschreibung (Description) angegeben
-    /// SDK generiert automatisch Schema mit additionalProperties für flexible Parameter
+    /// Format: Nimmt explizite Parameter entgegen (CheckAvailabilityParameters)
+    /// SDK generiert automatisch korrektes Schema mit property names und descriptions
+    /// Claude kann dann die richtigen Parameter übergeben
     /// </summary>
-    public static Func<Dictionary<string, JsonElement>, Task<string>> CreateToolHandler(Mcpserver mcpConfig, int conversationid, string connectionString)
+    public static Func<CheckAvailabilityParameters, Task<string>> CreateToolHandler(Mcpserver mcpConfig, int conversationid, string connectionString)
     {
         var handler = new HttpMcpServerHandler(mcpConfig, connectionString);
         return async (parameters) => await handler.ExecuteAsync(mcpConfig.Id, conversationid, parameters);
