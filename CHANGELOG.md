@@ -5,6 +5,23 @@ All notable changes to the UTXO E-Mail Agent will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.1] - 2026-02-06
+
+### Fixed
+- **CRITICAL**: Fixed type mismatch in MCP tool handler causing silent execution failures
+  - Root cause: `ExecuteAsync` method expected `Dictionary<string, JsonElement>` but `CreateToolHandler` returned `Func<string, Task<string>>`
+  - Type mismatch caused SDK to silently fail when dispatching tool calls
+  - Tools appeared in Claude's logs (ToolUseBlock) but handler never executed
+  - Fixed by making both signatures consistent: `Func<Dictionary<string, JsonElement>, Task<string>>`
+  - Handler now properly converts Dictionary to JSON string for HTTP API calls
+  - This fix ensures MCP tools actually execute when Claude calls them
+
+### Technical Details
+- The inconsistent type signatures prevented the SDK from properly dispatching calls
+- Dictionary<string, JsonElement> provides flexibility for different customer API schemas
+- SDK generates schema with `additionalProperties` allowing arbitrary JSON structures
+- Each customer can define their own JSON format in the MCP server description
+
 ## [1.2.0] - 2026-02-05
 
 ### Added
