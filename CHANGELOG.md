@@ -5,6 +5,31 @@ All notable changes to the UTXO E-Mail Agent will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.2] - 2026-02-06
+
+### Fixed
+- **MCP Tool Parameter Handling**: Reverted to simple string parameter for maximum flexibility
+  - Each customer can define their own API schema in the database Description field
+  - Claude learns the parameter format from the tool description
+  - No need for hardcoded parameter classes
+  - Tool signature: `Func<string, Task<string>>`
+
+### Technical Details
+- The key insight: Claude can handle string parameters if the tool description explicitly explains the JSON format
+- Example description format:
+  ```
+  Prüft Internet-Verfügbarkeit. Erstelle einen STRING, welcher im JSON
+  Format mit folgender Struktur aufgebaut ist:
+  {
+    "zip": "79798",
+    "city": "Jestetten",
+    "street": "Birkenstrasse 8"
+  }
+  Wichtig ist, Du musst dies als String Parameter an den MCP Server übergeben.
+  ```
+- This approach allows different customers to have completely different API schemas
+- Each MCP server configuration in the database defines its own parameter structure
+
 ## [1.2.1] - 2026-02-06
 
 ### Fixed
