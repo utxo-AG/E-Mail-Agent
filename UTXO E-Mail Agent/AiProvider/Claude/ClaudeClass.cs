@@ -28,9 +28,8 @@ public class ClaudeClass : IAiProvider
             .SystemPrompt(systemPrompt)
             .Model(agent.Aimodel ?? "claude-sonnet-4-5-20250929")
             .AllowAllTools() // Alle Tools erlauben (MCP Servers, etc.)
-            .AcceptEdits() // Automatisch Dateien schreiben (für Anhänge)
-            .BypassPermissions()
-            .MaxTurns(40); // Erhöht auf 40 für komplexe Tool-Chains (z.B. PDF-Erstellung)
+            .AcceptEdits()   // Automatisch Dateien schreiben (für Anhänge)
+            .MaxTurns(40);    // Erhöht auf 40 für komplexe Tool-Chains (z.B. PDF-Erstellung)
 
         // MCP Server hinzufügen
         optionsBuilder.McpServers(m =>
