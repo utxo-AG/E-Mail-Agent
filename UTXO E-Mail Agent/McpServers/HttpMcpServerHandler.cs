@@ -7,24 +7,6 @@ using System.Threading.Tasks;
 
 namespace UTXO_E_Mail_Agent.McpServers;
 
-/// <summary>
-/// Parameter-Klasse für die checkavailability API
-/// Definiert explizite Felder damit der SDK ein korrektes Schema generiert
-/// </summary>
-public class CheckAvailabilityParameters
-{
-    [Description("PLZ (Postleitzahl)")]
-    public string? zip { get; set; }
-
-    [Description("Ortsname")]
-    public string? city { get; set; }
-
-    [Description("Straßenname")]
-    public string? street { get; set; }
-
-    [Description("Hausnummer")]
-    public string? address { get; set; }
-}
 
 /// <summary>
 /// Handler für HTTP-basierte MCP Server aus der Datenbank
@@ -47,17 +29,10 @@ public class HttpMcpServerHandler
     /// <param name="mcpserverid">ID des MCP Servers in der Datenbank</param>
     /// <param name="conversationid">ID der Konversation</param>
     /// <param name="parameters">Parameter-Objekt mit expliziten Feldern</param>
-    private async Task<string> ExecuteAsync(int mcpserverid, int conversationid, CheckAvailabilityParameters parameters)
+    private async Task<string> ExecuteAsync(int mcpserverid, int conversationid, string jsonString)
     {
         try
         {
-            // Convert parameters object to JSON string for HTTP call
-            string? parametersJson = null;
-            if (parameters != null)
-            {
-                parametersJson = JsonSerializer.Serialize(parameters);
-            }
-
             var optionsBuilder = new DbContextOptionsBuilder<DefaultdbContext>();
             optionsBuilder.UseMySql(_connectionString, Microsoft.EntityFrameworkCore.ServerVersion.AutoDetect(_connectionString));
             await using var db = new DefaultdbContext(optionsBuilder.Options);
@@ -67,9 +42,9 @@ public class HttpMcpServerHandler
 
             Console.WriteLine($"[MCP {_mcpConfig.Name}] ========================================");
             Console.WriteLine($"[MCP {_mcpConfig.Name}] Executing {method} to {url}");
-            Console.WriteLine($"[MCP {_mcpConfig.Name}] Raw Parameters: {parametersJson ?? "(none)"}");
+            Console.WriteLine($"[MCP {_mcpConfig.Name}] Raw Parameters: {jsonString ?? "(none)"}");
 
-            Mcpserverrequest mrequest = new Mcpserverrequest(){McpserverId = mcpserverid, ConversationId =  conversationid, Parameter =  parametersJson ?? "(none)", Created =  DateTime.Now};
+            Mcpserverrequest mrequest = new Mcpserverrequest(){McpserverId = mcpserverid, ConversationId =  conversationid, Parameter =  jsonString, Created =  DateTime.Now};
             
             
             HttpResponseMessage response;
@@ -77,19 +52,19 @@ public class HttpMcpServerHandler
             switch (method)
             {
                 case "GET":
-                    response = await ExecuteGetAsync(url, parametersJson);
+                    response = await ExecuteGetAsync(url, jsonString);
                     break;
 
                 case "POST":
-                    response = await ExecutePostAsync(url, parametersJson);
+                    response = await ExecutePostAsync(url, jsonString);
                     break;
 
                 case "PUT":
-                    response = await ExecutePutAsync(url, parametersJson);
+                    response = await ExecutePutAsync(url, jsonString);
                     break;
 
                 case "DELETE":
-                    response = await ExecuteDeleteAsync(url, parametersJson);
+                    response = await ExecuteDeleteAsync(url, jsonString);
                     break;
 
                 default:
@@ -209,7 +184,7 @@ public class HttpMcpServerHandler
     /// SDK generiert automatisch korrektes Schema mit property names und descriptions
     /// Claude kann dann die richtigen Parameter übergeben
     /// </summary>
-    public static Func<CheckAvailabilityParameters, Task<string>> CreateToolHandler(Mcpserver mcpConfig, int conversationid, string connectionString)
+    public static Func<string, Task<string>> CreateToolHandler(Mcpserver mcpConfig, int conversationid, string connectionString)
     {
         var handler = new HttpMcpServerHandler(mcpConfig, connectionString);
         return async (parameters) => await handler.ExecuteAsync(mcpConfig.Id, conversationid, parameters);
