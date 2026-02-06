@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.2.0] - 2026-02-05
 
+### Added
+- **Interactive Test Mode**: Press 't' during wait period to test AI responses without sending emails
+  - Uses predefined test email content for quick testing
+  - Executes full AI processing including MCP tool calls
+  - Shows AI response without actually sending emails
+  - Perfect for debugging MCP servers and AI responses
+
 ### Fixed
 - **CRITICAL**: MCP tools now execute correctly when called by Claude
   - Changed tool handler signature from `Func<JsonElement, Task<string>>` to `Func<Dictionary<string, JsonElement>, Task<string>>`

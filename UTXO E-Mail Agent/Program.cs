@@ -39,6 +39,7 @@ public class Program
         Console.WriteLine($"  Version: {Version} (Build: {BuildDate})");
         Console.WriteLine("═══════════════════════════════════════════════════");
         Console.WriteLine($"Polling interval: {_pollingIntervalSeconds} seconds");
+        Console.WriteLine("Press 't' during wait to run test mode");
         Console.WriteLine("Starting main loop...");
 
         // Dauerschleife
@@ -53,8 +54,33 @@ public class Program
                 Console.WriteLine($"Error in main loop: {ex.Message}");
             }
 
-            Console.WriteLine($"Waiting {_pollingIntervalSeconds} seconds until next check...");
-            await Task.Delay(_pollingIntervalSeconds * 1000);
+            Console.WriteLine($"Waiting {_pollingIntervalSeconds} seconds until next check... (Press 't' for test mode)");
+
+            // Warte auf Timeout oder Tastendruck
+            var waitStart = DateTime.Now;
+            var waitSeconds = _pollingIntervalSeconds;
+
+            while ((DateTime.Now - waitStart).TotalSeconds < waitSeconds)
+            {
+                if (Console.KeyAvailable)
+                {
+                    var key = Console.ReadKey(true);
+                    if (key.KeyChar == 't' || key.KeyChar == 'T')
+                    {
+                        Console.WriteLine("\n[TEST MODE] Starting test scenario...");
+                        try
+                        {
+                            await RunTestScenarioAsync();
+                        }
+                        catch (Exception ex)
+                        {
+                            Console.WriteLine($"[TEST MODE] Error: {ex.Message}");
+                        }
+                        Console.WriteLine("[TEST MODE] Test completed. Resuming normal operation...");
+                    }
+                }
+                await Task.Delay(100); // Check every 100ms
+            }
         }
     }
 
@@ -130,5 +156,74 @@ public class Program
                 Console.WriteLine($"Error processing agent {agent.Id}: {ex.Message}");
             }
         }
+    }
+
+    private static async Task RunTestScenarioAsync()
+    {
+        var optionsBuilder = new DbContextOptionsBuilder<DefaultdbContext>();
+        optionsBuilder.UseMySql(_connectionString, ServerVersion.AutoDetect(_connectionString));
+
+        await using var db = new DefaultdbContext(optionsBuilder.Options);
+
+        // Lade den ersten aktiven Agent
+        var agent = await db.Agents
+            .Where(a => a.State == "active")
+            .FirstOrDefaultAsync();
+
+        if (agent == null)
+        {
+            Console.WriteLine("[TEST MODE] No active agent found for testing.");
+            return;
+        }
+
+        Console.WriteLine($"[TEST MODE] Using agent {agent.Id} ({agent.Emailaddress})");
+
+        // Erstelle eine Test-Mail
+        var testMail = new MailClass
+        {
+            Id = "TEST-" + Guid.NewGuid().ToString(),
+            Type = "email",
+            From = "test@example.com",
+            To = new[] { agent.Emailaddress },
+            Subject = "internetverfügbarkeit",
+            Status = "unread",
+            CreatedAt = DateTime.Now.ToString("o"),
+            Text = @"Sehr geehrte Damen und Herren,
+
+ich würde gerne wissen, ob sie auch Internet in Küssaberg, im Freudenspiel 70 anbieten.
+
+Viele Grüße
+Reimund Schilder",
+            Html = @"<p>Sehr geehrte Damen und Herren,</p>
+<p>ich würde gerne wissen, ob sie auch Internet in Küssaberg, im Freudenspiel 70 anbieten.</p>
+<p>Viele Grüße<br>Reimund Schilder</p>",
+            Cc = Array.Empty<string>(),
+            Bcc = Array.Empty<string>(),
+            ReplyTo = Array.Empty<string>(),
+            Attachments = Array.Empty<object>()
+        };
+
+        Console.WriteLine($"[TEST MODE] Test email from: {testMail.From}");
+        Console.WriteLine($"[TEST MODE] Subject: {testMail.Subject}");
+        Console.WriteLine($"[TEST MODE] Content preview: {testMail.Text?.Substring(0, Math.Min(100, testMail.Text.Length))}...");
+
+        // Verarbeite die Test-Mail mit AI
+        var processor = new ProcessMailsClass(db, _connectionString);
+        var aiResponse = await processor.ProcessMailAsync(testMail, agent);
+
+        Console.WriteLine("[TEST MODE] ========================================");
+        Console.WriteLine("[TEST MODE] AI Response:");
+        Console.WriteLine(aiResponse.EmailResponseText);
+        Console.WriteLine("[TEST MODE] ========================================");
+
+        if (!string.IsNullOrEmpty(aiResponse.AiExplanation))
+        {
+            Console.WriteLine("[TEST MODE] AI Explanation:");
+            Console.WriteLine(aiResponse.AiExplanation);
+            Console.WriteLine("[TEST MODE] ========================================");
+        }
+
+        Console.WriteLine("[TEST MODE] Email would be sent to: " + testMail.From);
+        Console.WriteLine("[TEST MODE] (Not actually sending in test mode)");
     }
 }
