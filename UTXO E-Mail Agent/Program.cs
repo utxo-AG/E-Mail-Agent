@@ -93,6 +93,7 @@ public class Program
 
         // Alle aktiven Agents laden
         var agents = await db.Agents
+            .Include(a=>a.Mcpservers)
             .Where(a => a.State == "active" && a.Emailprovidertype=="polling")
             .ToListAsync();
 
@@ -167,6 +168,7 @@ public class Program
 
         // Lade den ersten aktiven Agent
         var agent = await db.Agents
+            .Include(a=>a.Mcpservers)
             .Where(a => a.State == "active")
             .FirstOrDefaultAsync();
 

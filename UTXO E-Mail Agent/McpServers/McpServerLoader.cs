@@ -38,6 +38,9 @@ public static class McpServerLoader
                 foreach (var mcpConfig in mcpServers)
                 {
                     Console.WriteLine($"[MCP] Registering tool: {mcpConfig.Name}");
+                    Console.WriteLine($"[MCP]   Description: {mcpConfig.Description?.Substring(0, Math.Min(100, mcpConfig.Description?.Length ?? 0))}...");
+                    Console.WriteLine($"[MCP]   URL: {mcpConfig.Url}");
+                    Console.WriteLine($"[MCP]   Method: {mcpConfig.Call}");
 
                     // Erstelle den Handler für diesen MCP Server
                     var toolHandler = HttpMcpServerHandler.CreateToolHandler(mcpConfig, conversationid, connectionString);
@@ -48,6 +51,8 @@ public static class McpServerLoader
                         toolHandler,
                         mcpConfig.Description
                     );
+
+                    Console.WriteLine($"[MCP] Tool '{mcpConfig.Name}' registered successfully");
                 }
             });
         };

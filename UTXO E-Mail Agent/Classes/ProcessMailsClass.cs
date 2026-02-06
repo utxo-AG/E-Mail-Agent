@@ -29,6 +29,7 @@ public class ProcessMailsClass(DefaultdbContext db, string connectionString)
         // Prompt für den AI Provider aufbauen
         var prompt = BuildPrompt(mail, agent);
         var systemPrompt = BuildSystemPrompt(mail, agent);
+        systemPrompt += GetMcpServerInformations(agent);
         
         var conversation=new Conversation
         {
@@ -61,6 +62,25 @@ public class ProcessMailsClass(DefaultdbContext db, string connectionString)
         await _db.SaveChangesAsync();
         
         return response;
+    }
+
+    private string GetMcpServerInformations(Agent agent)
+    {
+        if (!agent.Mcpservers.Any())
+            return string.Empty;
+
+        string s = Environment.NewLine+"WICHTIG - VERFÜGBARE TOOLS:"+Environment.NewLine;
+        s += "Du hast direkten Zugriff auf folgende Tools. Rufe sie DIREKT auf (NICHT über Bash oder andere Kommandos):"+Environment.NewLine+Environment.NewLine;
+
+        foreach (var agentMcpserver in agent.Mcpservers.OrEmptyIfNull())
+        {
+            s += $"Tool-Name: {agentMcpserver.Name}"+Environment.NewLine;
+            s += $"Beschreibung: {agentMcpserver.Description}"+Environment.NewLine;
+            s += $"VERWENDE DIESES TOOL wenn die Beschreibung auf die Kundenanfrage passt."+Environment.NewLine;
+            s += Environment.NewLine;
+        }
+
+        return s;
     }
 
     private string BuildSystemPrompt(MailClass mailClass, Agent agent)

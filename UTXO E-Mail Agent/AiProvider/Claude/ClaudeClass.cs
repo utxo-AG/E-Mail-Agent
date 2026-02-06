@@ -1,4 +1,5 @@
 using System.Text;
+using Claude.AgentSdk;
 using Newtonsoft.Json;
 using UTXO_E_Mail_Agent.Classes;
 using UTXO_E_Mail_Agent.Interfaces;
@@ -23,14 +24,19 @@ public class ClaudeClass : IAiProvider
         var dbMcpServers = await McpServerLoader.LoadMcpServersForAgentAsync(agent.Id, conversation.Id, _connectionString);
 
         // Claude Agent SDK Optionen konfigurieren mit MCP Server
-        // TODO: Prüfen ob .NET SDK AppendSystemPrompt unterstützt (Python SDK hat das)
-        // Aktuell verwenden wir SystemPrompt - sollte aber erweitert werden um Base System Prompt zu behalten
         var optionsBuilder = ClaudeSDK.Options()
             .SystemPrompt(systemPrompt)
             .Model(agent.Aimodel ?? "claude-sonnet-4-5-20250929")
-            .AllowAllTools()  // Alle Tools erlauben (MCP Servers, etc.)
-            .AcceptEdits()   // Automatisch Dateien schreiben (für Anhänge)
-            .MaxTurns(40);    // Erhöht auf 40 für komplexe Tool-Chains (z.B. PDF-Erstellung)
+            .AllowAllTools() // Alle Tools erlauben (MCP Servers, etc.)
+            .AcceptEdits() // Automatisch Dateien schreiben (für Anhänge)
+            .BypassPermissions()
+            .MaxTurns(40) // Erhöht auf 40 für komplexe Tool-Chains (z.B. PDF-Erstellung)
+            .CanUseTool(async (toolName, input, context, ct) =>
+            {
+                if (toolName == "Bash" && input.GetProperty("command").GetString()?.Contains("rm") == true)
+                    return new PermissionResultDeny("Destructive commands not allowed");
+                return new PermissionResultAllow();
+            });
 
         // MCP Server hinzufügen
         optionsBuilder.McpServers(m =>
@@ -41,9 +47,8 @@ public class ClaudeClass : IAiProvider
                 dbMcpServers(m);
             }
         });
-
+       
         var options = optionsBuilder
-            .AllowAllTools()
             .OnStderr(stderr => Console.Error.WriteLine($"[Claude CLI stderr]: {stderr}"))
             .Build();
 
