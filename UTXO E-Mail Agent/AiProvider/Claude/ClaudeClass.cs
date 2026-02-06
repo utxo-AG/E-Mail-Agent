@@ -30,13 +30,7 @@ public class ClaudeClass : IAiProvider
             .AllowAllTools() // Alle Tools erlauben (MCP Servers, etc.)
             .AcceptEdits() // Automatisch Dateien schreiben (für Anhänge)
             .BypassPermissions()
-            .MaxTurns(40) // Erhöht auf 40 für komplexe Tool-Chains (z.B. PDF-Erstellung)
-            .CanUseTool(async (toolName, input, context, ct) =>
-            {
-                if (toolName == "Bash" && input.GetProperty("command").GetString()?.Contains("rm") == true)
-                    return new PermissionResultDeny("Destructive commands not allowed");
-                return new PermissionResultAllow();
-            });
+            .MaxTurns(40); // Erhöht auf 40 für komplexe Tool-Chains (z.B. PDF-Erstellung)
 
         // MCP Server hinzufügen
         optionsBuilder.McpServers(m =>

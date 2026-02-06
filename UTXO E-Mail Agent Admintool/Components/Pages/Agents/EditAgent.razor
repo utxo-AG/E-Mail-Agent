@@ -10,7 +10,7 @@
 
 <MudText Typo="Typo.h3" Class="mb-4">@(AgentId.HasValue ? "Edit Agent" : "Create New Agent")</MudText>
 
-@if (agent == null && AgentId.HasValue)
+@if (isLoading)
 {
     <MudProgressCircular Indeterminate="true" />
 }
@@ -40,7 +40,7 @@ else
                                   Required="true"
                                   Placeholder="e.g., en, de, fr" />
                 </MudItem>
-              
+
                 <MudItem xs="12" md="6">
                     <MudSelect Label="Email Provider" @bind-Value="agent.Emailprovider" Required="true">
                         <MudSelectItem Value="@("inbound")">Inbound</MudSelectItem>
@@ -231,6 +231,7 @@ else
     private MudForm? form;
     private bool success;
     private List<Mcpserver>? mcpServers;
+    private bool isLoading = true;
 
     protected override async Task OnInitializedAsync()
     {
@@ -253,6 +254,7 @@ else
                 Aimodel = "claude-3-sonnet"
             };
         }
+        isLoading = false;
     }
 
     private async Task LoadAgent()
@@ -293,7 +295,7 @@ else
                 existingAgent.Emailaddress = agent.Emailaddress;
                 existingAgent.State = agent.State;
                 existingAgent.Defaultlanguage = agent.Defaultlanguage;
-                existingAgent.Emailprovider = agent.Emailprovider;
+                existingAgent.Emailprovider = agent.Emailprovider??"inbound";
                 existingAgent.Emailprovidertype = agent.Emailprovidertype;
                 existingAgent.Emailusername = agent.Emailusername;
                 existingAgent.Emailpassword = agent.Emailpassword;

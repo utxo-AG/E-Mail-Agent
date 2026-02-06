@@ -6,6 +6,8 @@
         <RootNamespace>UTXO_E_Mail_Agent</RootNamespace>
         <ImplicitUsings>enable</ImplicitUsings>
         <Nullable>enable</Nullable>
+        <!-- Suppress warnings for auto-generated EF Core models and common null-safety warnings -->
+        <NoWarn>CS8618;CS8625;CS8601</NoWarn>
     </PropertyGroup>
 
     <ItemGroup>

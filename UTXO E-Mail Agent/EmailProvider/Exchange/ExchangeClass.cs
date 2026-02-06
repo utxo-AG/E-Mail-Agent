@@ -14,17 +14,17 @@ public class ExchangeClass : IEmailProvider
         _config = config;
     }
 
-    public async Task<ListNewEmailsClass[]?> GetEmailsAsync(Agent agent)
+    public Task<ListNewEmailsClass[]?> GetEmailsAsync(Agent agent)
     {
         throw new NotImplementedException();
     }
 
-    public async Task<MailClass?> GetMail(ListNewEmailsClass email, Agent agent)
+    public Task<MailClass?> GetMail(ListNewEmailsClass email, Agent agent)
     {
         throw new NotImplementedException();
     }
 
-    public async Task SendReplyResponseEmail(AiResponseClass emailResponse, MailClass mail, Agent agent)
+    public Task SendReplyResponseEmail(AiResponseClass emailResponse, MailClass mail, Agent agent)
     {
         throw new NotImplementedException();
     }
