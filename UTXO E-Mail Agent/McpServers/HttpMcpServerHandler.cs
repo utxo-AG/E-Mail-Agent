@@ -3,28 +3,8 @@ using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using UTXO_E_Mail_Agent_Shared.Models;
 using System.Threading.Tasks;
-using System.ComponentModel;
 
 namespace UTXO_E_Mail_Agent.McpServers;
-
-/// <summary>
-/// Parameter-Klasse für MCP Tool Calls - SDK generiert daraus automatisch ein Schema
-/// </summary>
-[Description("Parameters for MCP tool calls")]
-public class McpToolParameters
-{
-    [Description("ZIP code / Postleitzahl")]
-    public string? zip { get; set; }
-
-    [Description("City name / Ort")]
-    public string? city { get; set; }
-
-    [Description("Street with house number / Straße mit Hausnummer")]
-    public string? street { get; set; }
-
-    [Description("Additional address information / Zusätzliche Adressangaben")]
-    public string? address { get; set; }
-}
 
 /// <summary>
 /// Handler für HTTP-basierte MCP Server aus der Datenbank
@@ -44,8 +24,8 @@ public class HttpMcpServerHandler
     /// <summary>
     /// Führt einen HTTP-Call basierend auf der MCP-Server-Konfiguration aus
     /// </summary>
-    /// <param name="parameters">McpToolParameters Objekt mit strukturierten Parametern</param>
-    private async Task<string> ExecuteAsync(int mcpserverid, int conversationid, McpToolParameters parameters)
+    /// <param name="parametersJson">JSON-String mit den Parametern für den API-Call</param>
+    private async Task<string> ExecuteAsync(int mcpserverid, int conversationid, string parametersJson)
     {
         try
         {
@@ -55,11 +35,6 @@ public class HttpMcpServerHandler
 
             var method = _mcpConfig.Call.ToUpper();
             var url = _mcpConfig.Url;
-
-            // Convert McpToolParameters to JSON string for logging and HTTP calls
-            string? parametersJson = parameters == null
-                ? null
-                : JsonSerializer.Serialize(parameters);
 
             Console.WriteLine($"[MCP {_mcpConfig.Name}] ========================================");
             Console.WriteLine($"[MCP {_mcpConfig.Name}] Executing {method} to {url}");
@@ -201,11 +176,12 @@ public class HttpMcpServerHandler
 
     /// <summary>
     /// Erstellt ein MCP Tool für diesen Server
-    /// Format: Nimmt McpToolParameters als Parameter entgegen - SDK generiert daraus automatisch ein Schema
+    /// Format: Nimmt einen JSON-String als Parameter entgegen
+    /// Das JSON-Format wird in der Tool-Beschreibung (Description) angegeben
     /// </summary>
-    public static Func<McpToolParameters, Task<string>> CreateToolHandler(Mcpserver mcpConfig, int conversationid, string connectionString)
+    public static Func<string, Task<string>> CreateToolHandler(Mcpserver mcpConfig, int conversationid, string connectionString)
     {
         var handler = new HttpMcpServerHandler(mcpConfig, connectionString);
-        return async (parameters) => await handler.ExecuteAsync(mcpConfig.Id, conversationid, parameters);
+        return async (parametersJson) => await handler.ExecuteAsync(mcpConfig.Id, conversationid, parametersJson);
     }
 }
