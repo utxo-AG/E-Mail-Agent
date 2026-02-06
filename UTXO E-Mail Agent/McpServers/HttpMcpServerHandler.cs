@@ -24,11 +24,18 @@ public class HttpMcpServerHandler
     /// <summary>
     /// Führt einen HTTP-Call basierend auf der MCP-Server-Konfiguration aus
     /// </summary>
-    /// <param name="parametersJson">JSON-String mit den Parametern für den API-Call</param>
-    private async Task<string> ExecuteAsync(int mcpserverid, int conversationid, string parametersJson)
+    /// <param name="parameters">Dictionary mit den Parametern (wird zu JSON-String konvertiert)</param>
+    private async Task<string> ExecuteAsync(int mcpserverid, int conversationid, Dictionary<string, JsonElement> parameters)
     {
         try
         {
+            // Convert Dictionary to JSON string for HTTP call
+            string? parametersJson = null;
+            if (parameters != null && parameters.Count > 0)
+            {
+                parametersJson = JsonSerializer.Serialize(parameters);
+            }
+
             var optionsBuilder = new DbContextOptionsBuilder<DefaultdbContext>();
             optionsBuilder.UseMySql(_connectionString, Microsoft.EntityFrameworkCore.ServerVersion.AutoDetect(_connectionString));
             await using var db = new DefaultdbContext(optionsBuilder.Options);
@@ -176,12 +183,13 @@ public class HttpMcpServerHandler
 
     /// <summary>
     /// Erstellt ein MCP Tool für diesen Server
-    /// Format: Nimmt einen JSON-String als Parameter entgegen
+    /// Format: Nimmt ein Dictionary als Parameter entgegen, das beliebige JSON-Properties enthalten kann
     /// Das JSON-Format wird in der Tool-Beschreibung (Description) angegeben
+    /// SDK generiert automatisch Schema mit additionalProperties für flexible Parameter
     /// </summary>
-    public static Func<string, Task<string>> CreateToolHandler(Mcpserver mcpConfig, int conversationid, string connectionString)
+    public static Func<Dictionary<string, JsonElement>, Task<string>> CreateToolHandler(Mcpserver mcpConfig, int conversationid, string connectionString)
     {
         var handler = new HttpMcpServerHandler(mcpConfig, connectionString);
-        return async (parametersJson) => await handler.ExecuteAsync(mcpConfig.Id, conversationid, parametersJson);
+        return async (parameters) => await handler.ExecuteAsync(mcpConfig.Id, conversationid, parameters);
     }
 }
