@@ -200,7 +200,7 @@ Reimund Schilder",
             Cc = Array.Empty<string>(),
             Bcc = Array.Empty<string>(),
             ReplyTo = Array.Empty<string>(),
-            Attachments = Array.Empty<object>()
+            Attachments = Array.Empty<string>()
         };
 
         Console.WriteLine($"[TEST MODE] Test email from: {testMail.From}");
