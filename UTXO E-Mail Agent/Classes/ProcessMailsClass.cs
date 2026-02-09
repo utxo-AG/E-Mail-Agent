@@ -69,14 +69,24 @@ public class ProcessMailsClass(DefaultdbContext db, string connectionString)
         if (!agent.Mcpservers.Any())
             return string.Empty;
 
-        string s = Environment.NewLine+"WICHTIG - VERFÜGBARE TOOLS:"+Environment.NewLine;
-        s += "Du hast direkten Zugriff auf folgende Tools. Rufe sie DIREKT auf (NICHT über Bash oder andere Kommandos):"+Environment.NewLine+Environment.NewLine;
+        string s = Environment.NewLine+"WICHTIG - VERFÜGBARE API-AUFRUFE:"+Environment.NewLine;
+        s += "Du kannst folgende APIs mit Bash/curl aufrufen:"+Environment.NewLine+Environment.NewLine;
 
         foreach (var agentMcpserver in agent.Mcpservers.OrEmptyIfNull())
         {
-            s += $"Tool-Name: {agentMcpserver.Name}"+Environment.NewLine;
+            s += $"API-Name: {agentMcpserver.Name}"+Environment.NewLine;
             s += $"Beschreibung: {agentMcpserver.Description}"+Environment.NewLine;
-            s += $"VERWENDE DIESES TOOL wenn die Beschreibung auf die Kundenanfrage passt."+Environment.NewLine;
+
+            // Generiere curl-Beispiel basierend auf Konfiguration
+            if (!string.IsNullOrEmpty(agentMcpserver.Url))
+            {
+                s += $"Aufruf mit Bash:"+Environment.NewLine;
+                s += $"curl -X {agentMcpserver.Call.ToUpper()} {agentMcpserver.Url} \\"+Environment.NewLine;
+                s += $"  -H \"Content-Type: application/json\" \\"+Environment.NewLine;
+                s += $"  -d '{{\"parameter\": \"wert\"}}' --silent --show-error"+Environment.NewLine;
+            }
+
+            s += $"VERWENDE DIESE API wenn die Beschreibung auf die Kundenanfrage passt."+Environment.NewLine;
             s += Environment.NewLine;
         }
 

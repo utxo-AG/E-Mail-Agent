@@ -20,26 +20,28 @@ public class ClaudeClass : IAiProvider
 
     public async Task<AiResponseClass> GenerateResponse(string systemPrompt, string prompt, MailClass mailClass, Agent agent, Conversation conversation)
     {
-        // MCP Server aus Datenbank laden
-        var dbMcpServers = await McpServerLoader.LoadMcpServersForAgentAsync(agent.Id, conversation.Id, _connectionString);
+        // Option A: Mit MCP Server (kompliziert, funktioniert nur mit Claude CLI 2.0.22)
+        // var dbMcpServers = await McpServerLoader.LoadMcpServersForAgentAsync(agent.Id, conversation.Id, _connectionString);
 
-        // Claude Agent SDK Optionen konfigurieren mit MCP Server
+        // Option B: Ohne MCP Server - Claude nutzt direkt Bash/curl (funktioniert mit allen Versionen!)
+        // Die API-Informationen kommen über den System-Prompt
+
+        // Claude Agent SDK Optionen konfigurieren OHNE MCP Server
         var optionsBuilder = ClaudeSDK.Options()
             .SystemPrompt(systemPrompt)
             .Model(agent.Aimodel ?? "claude-sonnet-4-5-20250929")
-            .AllowAllTools() // Alle Tools erlauben (MCP Servers, etc.)
+            .AllowAllTools() // Alle Tools erlauben (inkl. Bash für curl-Aufrufe)
             .AcceptEdits()   // Automatisch Dateien schreiben (für Anhänge)
-            .MaxTurns(40);    // Erhöht auf 40 für komplexe Tool-Chains (z.B. PDF-Erstellung)
+            .MaxTurns(40);   // Erhöht auf 40 für komplexe Tool-Chains
 
-        // MCP Server hinzufügen
-        optionsBuilder.McpServers(m =>
-        {
-           // Dynamische MCP Server aus Datenbank
-            if (dbMcpServers != null)
-            {
-                dbMcpServers(m);
-            }
-        });
+        // MCP Server DEAKTIVIERT - wir nutzen Bash/curl direkt
+        // optionsBuilder.McpServers(m =>
+        // {
+        //    if (dbMcpServers != null)
+        //    {
+        //        dbMcpServers(m);
+        //    }
+        // });
        
         var options = optionsBuilder
             .OnStderr(stderr => Console.Error.WriteLine($"[Claude CLI stderr]: {stderr}"))
