@@ -1,5 +1,4 @@
 using UTXO_E_Mail_Agent_Shared.Models;
-using Claude.AgentSdk.Mcp;
 using Microsoft.EntityFrameworkCore;
 
 namespace UTXO_E_Mail_Agent.McpServers;

@@ -6,12 +6,6 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "UTXO E-Mail Agent Admintool
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "UTXO E-Mail Agent Shared", "UTXO E-Mail Agent Shared\UTXO E-Mail Agent Shared.csproj", "{EE3226AE-C860-46B0-BC98-1F6C31D3D65B}"
 EndProject
-Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "claude-agent-sdk-dotnet", "claude-agent-sdk-dotnet", "{6C499B43-6596-FCDA-0E06-940F6C520C37}"
-EndProject
-Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "src", "src", "{B1FE5877-D5EC-D762-7B05-FBA9408A723F}"
-EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Claude.AgentSdk", "claude-agent-sdk-dotnet\src\Claude.AgentSdk\Claude.AgentSdk.csproj", "{21A1CAD1-9122-4C4F-81CD-145ACF142191}"
-EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -58,24 +52,10 @@ Global
 		{EE3226AE-C860-46B0-BC98-1F6C31D3D65B}.Release|x64.Build.0 = Release|Any CPU
 		{EE3226AE-C860-46B0-BC98-1F6C31D3D65B}.Release|x86.ActiveCfg = Release|Any CPU
 		{EE3226AE-C860-46B0-BC98-1F6C31D3D65B}.Release|x86.Build.0 = Release|Any CPU
-		{21A1CAD1-9122-4C4F-81CD-145ACF142191}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{21A1CAD1-9122-4C4F-81CD-145ACF142191}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{21A1CAD1-9122-4C4F-81CD-145ACF142191}.Debug|x64.ActiveCfg = Debug|Any CPU
-		{21A1CAD1-9122-4C4F-81CD-145ACF142191}.Debug|x64.Build.0 = Debug|Any CPU
-		{21A1CAD1-9122-4C4F-81CD-145ACF142191}.Debug|x86.ActiveCfg = Debug|Any CPU
-		{21A1CAD1-9122-4C4F-81CD-145ACF142191}.Debug|x86.Build.0 = Debug|Any CPU
-		{21A1CAD1-9122-4C4F-81CD-145ACF142191}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{21A1CAD1-9122-4C4F-81CD-145ACF142191}.Release|Any CPU.Build.0 = Release|Any CPU
-		{21A1CAD1-9122-4C4F-81CD-145ACF142191}.Release|x64.ActiveCfg = Release|Any CPU
-		{21A1CAD1-9122-4C4F-81CD-145ACF142191}.Release|x64.Build.0 = Release|Any CPU
-		{21A1CAD1-9122-4C4F-81CD-145ACF142191}.Release|x86.ActiveCfg = Release|Any CPU
-		{21A1CAD1-9122-4C4F-81CD-145ACF142191}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
 	EndGlobalSection
 	GlobalSection(NestedProjects) = preSolution
-		{B1FE5877-D5EC-D762-7B05-FBA9408A723F} = {6C499B43-6596-FCDA-0E06-940F6C520C37}
-		{21A1CAD1-9122-4C4F-81CD-145ACF142191} = {B1FE5877-D5EC-D762-7B05-FBA9408A723F}
 	EndGlobalSection
 EndGlobal

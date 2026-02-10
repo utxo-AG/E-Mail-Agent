@@ -1,291 +1,364 @@
-using System.Text;
-using Claude.AgentSdk;
+using System.Text.Json;
+using System.Text.Json.Nodes;
+using System.Text.Json.Serialization;
+using System.Text.RegularExpressions;
+using Anthropic.SDK;
+using Anthropic.SDK.Common;
+using Anthropic.SDK.Constants;
+using Anthropic.SDK.Extensions;
+using Anthropic.SDK.Messaging;
 using Newtonsoft.Json;
-using UTXO_E_Mail_Agent.Classes;
-using UTXO_E_Mail_Agent.Interfaces;
 using UTXO_E_Mail_Agent_Shared.Models;
+using UTXO_E_Mail_Agent.Classes;
+using UTXO_E_Mail_Agent.EmailProvider.Inbound.Classes;
+using UTXO_E_Mail_Agent.Interfaces;
 using UTXO_E_Mail_Agent.McpServers;
-using ClaudeSDK = Claude.AgentSdk.Claude;
 
 namespace UTXO_E_Mail_Agent.AiProvider.Claude;
 
 public class ClaudeClass : IAiProvider
 {
+    private readonly string _apikey;
     private readonly string _connectionString;
 
-    public ClaudeClass(string connectionString)
+    public ClaudeClass(string apikey, string connectionString)
     {
+        _apikey = apikey;
         _connectionString = connectionString;
     }
 
     public async Task<AiResponseClass> GenerateResponse(string systemPrompt, string prompt, MailClass mailClass, Agent agent, Conversation conversation)
     {
-        // Option A: Mit MCP Server (kompliziert, funktioniert nur mit Claude CLI 2.0.22)
-        // var dbMcpServers = await McpServerLoader.LoadMcpServersForAgentAsync(agent.Id, conversation.Id, _connectionString);
-
-        // Option B: Ohne MCP Server - Claude nutzt direkt Bash/curl (funktioniert mit allen Versionen!)
-        // Die API-Informationen kommen über den System-Prompt
-
-        // Claude Agent SDK Optionen konfigurieren OHNE MCP Server
-        var optionsBuilder = ClaudeSDK.Options()
-            .SystemPrompt(systemPrompt)
-            .Model(agent.Aimodel ?? "claude-sonnet-4-5-20250929")
-            .AllowAllTools() // Alle Tools erlauben (inkl. Bash für curl-Aufrufe)
-            .AcceptEdits()   // Automatisch Dateien schreiben (für Anhänge)
-            .MaxTurns(40);   // Erhöht auf 40 für komplexe Tool-Chains
-
-        // MCP Server DEAKTIVIERT - wir nutzen Bash/curl direkt
-        // optionsBuilder.McpServers(m =>
-        // {
-        //    if (dbMcpServers != null)
-        //    {
-        //        dbMcpServers(m);
-        //    }
-        // });
-       
-        var options = optionsBuilder
-            .OnStderr(stderr => Console.Error.WriteLine($"[Claude CLI stderr]: {stderr}"))
-            .Build();
-
-        // Response von Claude holen
-        // Sammle alle Messages, um die letzte Text-Antwort nach Tool-Uses zu erhalten
-        var messages = new List<global::Claude.AgentSdk.Message>();
-        int turnCount = 0;
-
-        await foreach (var message in ClaudeSDK.QueryAsync(prompt, options))
+        var httpClient = new HttpClient
         {
-            messages.Add(message);
+            Timeout = TimeSpan.FromMinutes(10)
+        };
 
-            // Debug-Ausgabe für Entwicklung
-            if (message is global::Claude.AgentSdk.AssistantMessage am)
+        var client = new AnthropicClient(_apikey, httpClient);
+
+        var container = new Container
+        {
+            Skills = new List<Skill>
             {
-                turnCount++;
-                Console.WriteLine($"[Claude Turn {turnCount}] AssistantMessage mit {am.Content.Count} Content-Blocks");
-                foreach (var block in am.Content)
+                new Skill { Type = "anthropic", SkillId = "pdf", Version = "latest" },
+                new Skill { Type = "anthropic", SkillId = "pptx", Version = "latest" },
+                new Skill { Type = "anthropic", SkillId = "xlsx", Version = "latest" },
+                new Skill { Type = "anthropic", SkillId = "docx", Version = "latest" },
+            }
+        };
+
+        // Built-in Tools
+        var tools = new List<Anthropic.SDK.Common.Tool>
+        {
+            new Function("code_execution", "code_execution_20250825",
+                new Dictionary<string, object> { { "name", "code_execution" } }),
+            ServerTools.GetWebSearchTool(5, null, null,
+                new UserLocation() { City = "Berlin", Country = "DE" }),
+            new Function("bash", "bash_20250124",
+                new Dictionary<string, object> { { "name", "bash" } })
+        };
+
+        // MCP-Tools aus Agent.Mcpservers dynamisch registrieren
+        var mcpToolHandlers = new Dictionary<string, Func<JsonStringParameter, Task<string>>>();
+
+        foreach (var mcpServer in agent.Mcpservers.OrEmptyIfNull())
+        {
+            var toolName = SanitizeToolName(mcpServer.Name);
+
+            var inputSchema = new InputSchema()
+            {
+                Type = "object",
+                Properties = new Dictionary<string, Property>()
                 {
-                    if (block is global::Claude.AgentSdk.TextBlock tb)
-                        Console.WriteLine($"  - TextBlock: {tb.Text.Substring(0, Math.Min(100, tb.Text.Length))}...");
-                    else if (block is global::Claude.AgentSdk.ToolUseBlock tub)
-                        Console.WriteLine($"  - ToolUseBlock: {tub.Name}");
-                    else if (block is global::Claude.AgentSdk.ToolResultBlock trb)
-                        Console.WriteLine($"  - ToolResultBlock");
-                }
-            }
-            else if (message is global::Claude.AgentSdk.ResultMessage rm)
+                    { "json", new Property() { Type = "string", Description = mcpServer.Description } }
+                },
+                Required = new List<string>() { "json" }
+            };
+
+            var jsonOpts = new JsonSerializerOptions
             {
-                Console.WriteLine($"[Claude Finished] Conversation beendet nach {turnCount} Turns");
-                // ResultMessage Properties können je nach SDK-Version variieren
-                Console.WriteLine($"  - ResultMessage empfangen");
-            }
+                DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
+            };
+            string schemaJson = System.Text.Json.JsonSerializer.Serialize(inputSchema, jsonOpts);
+
+            var function = new Function(
+                toolName,
+                $"{mcpServer.Description} (HTTP {mcpServer.Call.ToUpper()} {mcpServer.Url})",
+                JsonNode.Parse(schemaJson));
+
+            tools.Add(function);
+
+            var handler = HttpMcpServerHandler.CreateToolHandler(mcpServer, conversation.Id, _connectionString);
+            mcpToolHandlers[toolName] = handler;
+
+            Console.WriteLine($"[MCP] Registered tool: {toolName} -> {mcpServer.Call.ToUpper()} {mcpServer.Url}");
         }
 
-        Console.WriteLine($"[Claude] Alle Turns abgeschlossen. Insgesamt {messages.Count} Messages empfangen.");
-
-        // Suche die letzte AssistantMessage mit TextBlock (nach allen Tool-Uses)
-        string fullResponse = string.Empty;
-
-        for (int i = messages.Count - 1; i >= 0; i--)
+        var messages = new List<Message>
         {
-            if (messages[i] is global::Claude.AgentSdk.AssistantMessage am)
+            new Message(RoleType.User,
+                $"E-Mail Subject: {mailClass.Subject} {Environment.NewLine} E-Mail Text:{mailClass.Text} {Environment.NewLine} E-Mail Text (HTML) {mailClass.Html}")
+        };
+
+        var parameters = new MessageParameters
+        {
+            Model = AnthropicModels.Claude4Sonnet,
+            MaxTokens = 4000,
+            System = new List<SystemMessage>() { new SystemMessage(systemPrompt) },
+            Messages = messages,
+            Container = container,
+            Tools = tools
+        };
+
+        // Tool-Use-Loop
+        const int maxIterations = 20;
+        MessageResponse response = null;
+
+        for (int iteration = 0; iteration < maxIterations; iteration++)
+        {
+            response = await client.Messages.GetClaudeMessageAsync(parameters);
+
+            // Nur unsere MCP-Tools behandeln (built-in Tools wie code_execution/bash/web_search werden serverseitig verarbeitet)
+            var mcpToolCalls = response.Content
+                .OfType<ToolUseContent>()
+                .Where(tc => mcpToolHandlers.ContainsKey(tc.Name))
+                .ToList();
+
+            if (!mcpToolCalls.Any())
+                break;
+
+            // Claude-Antwort (mit Tool-Use) als Assistant-Message hinzufügen
+            messages.Add(response.Message);
+
+            // Jeden MCP-Tool-Call ausführen und Ergebnis zurücksenden
+            foreach (var toolUse in mcpToolCalls)
             {
-                var textBuilder = new StringBuilder();
-                foreach (var block in am.Content)
+                Console.WriteLine($"[MCP Tool Call] {toolUse.Name} - Input: {toolUse.Input}");
+
+                try
                 {
-                    if (block is global::Claude.AgentSdk.TextBlock tb)
+                    var jsonParam = new JsonStringParameter();
+                    if (toolUse.Input != null && toolUse.Input.AsObject().ContainsKey("json"))
                     {
-                        textBuilder.Append(tb.Text);
+                        jsonParam.json = toolUse.Input["json"]?.ToString() ?? "{}";
                     }
-                }
-
-                if (textBuilder.Length > 0)
-                {
-                    fullResponse = textBuilder.ToString();
-                    Console.WriteLine($"[Claude] Verwende letzte AssistantMessage (Index {i}) mit {textBuilder.Length} Zeichen");
-                    break;
-                }
-            }
-        }
-
-        // Fallback: Falls keine AssistantMessage mit Text gefunden wurde, sammle alle Texte
-        if (string.IsNullOrEmpty(fullResponse))
-        {
-            var responseBuilder = new StringBuilder();
-            foreach (var message in messages)
-            {
-                if (message is global::Claude.AgentSdk.AssistantMessage am)
-                {
-                    foreach (var block in am.Content)
+                    else if (toolUse.Input != null)
                     {
-                        if (block is global::Claude.AgentSdk.TextBlock tb)
+                        jsonParam.json = toolUse.Input.ToJsonString();
+                    }
+
+                    var result = await mcpToolHandlers[toolUse.Name](jsonParam);
+
+                    messages.Add(new Message()
+                    {
+                        Role = RoleType.User,
+                        Content = new List<ContentBase>()
                         {
-                            responseBuilder.Append(tb.Text);
+                            new ToolResultContent()
+                            {
+                                ToolUseId = toolUse.Id,
+                                Content = new List<ContentBase>()
+                                {
+                                    new TextContent() { Text = result }
+                                }
+                            }
                         }
+                    });
+                }
+                catch (Exception ex)
+                {
+                    Console.Error.WriteLine($"[MCP Tool Error] {toolUse.Name}: {ex.Message}");
+
+                    messages.Add(new Message()
+                    {
+                        Role = RoleType.User,
+                        Content = new List<ContentBase>()
+                        {
+                            new ToolResultContent()
+                            {
+                                ToolUseId = toolUse.Id,
+                                IsError = true,
+                                Content = new List<ContentBase>()
+                                {
+                                    new TextContent() { Text = $"ERROR: {ex.Message}" }
+                                }
+                            }
+                        }
+                    });
+                }
+            }
+        }
+
+        // Skill-Dateien herunterladen
+        var outputDirectory = Path.Combine(Directory.GetCurrentDirectory(), "SkillOutput");
+        Directory.CreateDirectory(outputDirectory);
+
+        var downloadedFiles = await response.DownloadFilesAsync(client, outputDirectory);
+
+        if (downloadedFiles.Any())
+        {
+            Console.WriteLine("----------------------------------------------");
+            Console.WriteLine("Downloaded Files:");
+            Console.WriteLine("----------------------------------------------");
+            foreach (var filePath in downloadedFiles)
+            {
+                Console.WriteLine($"  {filePath}");
+            }
+            Console.WriteLine();
+        }
+
+        // Text-Content extrahieren
+        var fullText = "";
+        Console.WriteLine("----------------------------------------------");
+        Console.WriteLine("All Content:");
+        Console.WriteLine("----------------------------------------------");
+        foreach (var content in response.Content)
+        {
+            Console.WriteLine($"Type: {content.GetType().Name}");
+
+            if (content is TextContent textContent)
+            {
+                Console.WriteLine($"{textContent.Text}");
+                fullText += textContent.Text + "\n";
+            }
+            else if (content is WebSearchToolResultContent webSearchContent)
+            {
+                Console.WriteLine($"Web Search Tool Result with {webSearchContent.Content.Count} items");
+            }
+            else if (content is ToolUseContent toolUse)
+            {
+                Console.WriteLine($"Tool Use: {toolUse.Name}");
+            }
+        }
+
+        // JSON aus der Antwort extrahieren (Claude kann Text vor dem JSON schreiben)
+        var responseClass = ParseAiResponse(fullText);
+
+        // Heruntergeladene Skill-Dateien als Attachments hinzufügen
+        if (downloadedFiles.Any())
+        {
+            var existingAttachments = responseClass.Attachments?.ToList() ?? new List<Attachment>();
+
+            foreach (var filePath in downloadedFiles)
+            {
+                try
+                {
+                    var fileBytes = await File.ReadAllBytesAsync(filePath);
+                    var base64Content = Convert.ToBase64String(fileBytes);
+                    string fileName = System.IO.Path.GetFileName(filePath) ?? filePath;
+                    string contentType = GetContentTypeFromExtension(filePath);
+
+                    existingAttachments.Add(new Attachment
+                    {
+                        Filename = fileName,
+                        Content = base64Content,
+                        ContentType = contentType,
+                        Path = filePath
+                    });
+
+                    Console.WriteLine("[Attachment] Added skill file: " + fileName + " (" + contentType + ")");
+                }
+                catch (Exception ex)
+                {
+                    Console.Error.WriteLine("[Attachment Error] Could not read file " + filePath + ": " + ex.Message);
+                }
+            }
+
+            responseClass.Attachments = existingAttachments.ToArray();
+        }
+
+        // Attachments die nur einen Path haben: Datei lesen und base64-encoden
+        if (responseClass.Attachments != null)
+        {
+            foreach (var att in responseClass.Attachments)
+            {
+                if (!string.IsNullOrEmpty(att.Path) && string.IsNullOrEmpty(att.Content) && File.Exists(att.Path))
+                {
+                    try
+                    {
+                        var fileBytes = await File.ReadAllBytesAsync(att.Path);
+                        att.Content = Convert.ToBase64String(fileBytes);
+                        if (string.IsNullOrEmpty(att.ContentType))
+                            att.ContentType = GetContentTypeFromExtension(att.Path);
+                        if (string.IsNullOrEmpty(att.Filename))
+                            att.Filename = System.IO.Path.GetFileName(att.Path) ?? att.Path;
+
+                        Console.WriteLine("[Attachment] Loaded from path: " + att.Filename);
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.Error.WriteLine("[Attachment Error] Could not read " + att.Path + ": " + ex.Message);
                     }
                 }
             }
-            fullResponse = responseBuilder.ToString();
-            Console.WriteLine($"[Claude] Fallback: Verwende alle TextBlocks zusammen ({fullResponse.Length} Zeichen)");
         }
 
-        // JSON aus der Response extrahieren (könnte in ```json ... ``` eingebettet sein)
-        var result = ExtractJsonFromResponse(fullResponse);
-
-        return result;
+        return responseClass;
     }
 
-    private AiResponseClass ExtractJsonFromResponse(string response)
+    private static string SanitizeToolName(string name)
     {
-        string? explanation = null;
-        string jsonContent;
+        // Anthropic Tool-Namen: ^[a-zA-Z0-9_-]{1,64}$
+        var sanitized = Regex.Replace(name.Replace(" ", "_"), "[^a-zA-Z0-9_-]", "");
+        return sanitized.Length > 64 ? sanitized[..64] : sanitized;
+    }
 
-        Console.WriteLine($"[Claude] Extrahiere JSON aus Response ({response.Length} Zeichen)");
-
-        // Suche nach JSON in Markdown Code-Blöcken
-        var jsonBlockMatch = System.Text.RegularExpressions.Regex.Match(
-            response,
-            @"```json\s*\n(.*?)\n```",
-            System.Text.RegularExpressions.RegexOptions.Singleline
-        );
-
+    /// <summary>
+    /// Extrahiert das JSON aus Claudes Antwort. Claude kann Text vor dem JSON schreiben.
+    /// </summary>
+    private static AiResponseClass ParseAiResponse(string fullText)
+    {
+        // Versuche zuerst einen ```json Block zu finden
+        var jsonBlockMatch = Regex.Match(fullText, @"```json\s*([\s\S]*?)\s*```");
         if (jsonBlockMatch.Success)
         {
-            // JSON gefunden in Code-Block
-            jsonContent = jsonBlockMatch.Groups[1].Value.Trim();
-            Console.WriteLine($"[Claude] JSON in Code-Block gefunden ({jsonContent.Length} Zeichen)");
-
-            // Text vor dem JSON als Explanation speichern
-            var textBeforeJson = response.Substring(0, jsonBlockMatch.Index).Trim();
-            if (!string.IsNullOrWhiteSpace(textBeforeJson))
+            var parsed = JsonConvert.DeserializeObject<AiResponseClass>(jsonBlockMatch.Groups[1].Value);
+            if (parsed != null)
             {
-                explanation = textBeforeJson;
-                Console.WriteLine($"[Claude] Explanation gefunden: {textBeforeJson.Substring(0, Math.Min(100, textBeforeJson.Length))}...");
-            }
-        }
-        else
-        {
-            // Kein Code-Block gefunden, versuche JSON-ähnlichen Content zu finden
-            Console.WriteLine("[Claude] WARNUNG: Kein JSON Code-Block gefunden");
-
-            // Suche nach JSON-Objekt im Text (beginnt mit { und endet mit })
-            var jsonMatch = System.Text.RegularExpressions.Regex.Match(
-                response,
-                @"\{[\s\S]*?\}",
-                System.Text.RegularExpressions.RegexOptions.Singleline
-            );
-
-            if (jsonMatch.Success)
-            {
-                jsonContent = jsonMatch.Value.Trim();
-                Console.WriteLine($"[Claude] JSON-Objekt im Text gefunden ({jsonContent.Length} Zeichen)");
-
-                // Text vor dem JSON als Explanation
-                var textBeforeJson = response.Substring(0, jsonMatch.Index).Trim();
-                if (!string.IsNullOrWhiteSpace(textBeforeJson))
-                {
-                    explanation = textBeforeJson;
-                }
-            }
-            else
-            {
-                // Letzter Versuch: gesamte Response als JSON
-                jsonContent = response.Trim();
-                Console.WriteLine("[Claude] Kein JSON gefunden, versuche gesamte Response zu parsen");
+                // Text vor dem JSON als AiExplanation speichern
+                var beforeJson = fullText[..fullText.IndexOf("```json", StringComparison.Ordinal)].Trim();
+                if (!string.IsNullOrEmpty(beforeJson))
+                    parsed.AiExplanation = beforeJson;
+                return parsed;
             }
         }
 
-        try
+        // Fallback: Letztes vollständiges JSON-Objekt finden (von hinten suchen)
+        var lastBrace = fullText.LastIndexOf('}');
+        if (lastBrace >= 0)
         {
-            var result = JsonConvert.DeserializeObject<AiResponseClass>(jsonContent);
-
-            if (result == null)
+            // Passende öffnende Klammer finden
+            var depth = 0;
+            for (int i = lastBrace; i >= 0; i--)
             {
-                throw new InvalidOperationException(
-                    $"AI Response konnte nicht geparst werden (Deserialization returned null).\n" +
-                    $"Vollständige Response:\n{response}"
-                );
-            }
+                if (fullText[i] == '}') depth++;
+                else if (fullText[i] == '{') depth--;
 
-            // Explanation hinzufügen falls vorhanden
-            if (explanation != null)
-            {
-                result.AiExplanation = explanation;
-            }
-
-            Console.WriteLine("[Claude] JSON erfolgreich extrahiert und geparst");
-
-            // Attachments verarbeiten: Dateien einlesen und in Base64 konvertieren
-            if (result.Attachments != null && result.Attachments.Length > 0)
-            {
-                Console.WriteLine($"[Claude] Verarbeite {result.Attachments.Length} Attachment(s)");
-
-                for (int i = 0; i < result.Attachments.Length; i++)
+                if (depth == 0)
                 {
-                    var attachment = result.Attachments[i];
-
-                    // Wenn path gesetzt ist, aber content leer, dann Datei einlesen
-                    if (!string.IsNullOrEmpty(attachment.Path) && string.IsNullOrEmpty(attachment.Content))
+                    var jsonCandidate = fullText[i..(lastBrace + 1)];
+                    try
                     {
-                        try
+                        var parsed = JsonConvert.DeserializeObject<AiResponseClass>(jsonCandidate);
+                        if (parsed != null && !string.IsNullOrEmpty(parsed.EmailResponseText))
                         {
-                            Console.WriteLine($"[Claude] Lese Attachment {i + 1}: {attachment.Path}");
-
-                            // Prüfe ob Datei existiert
-                            if (!System.IO.File.Exists(attachment.Path))
-                            {
-                                Console.WriteLine($"[Claude] WARNUNG: Datei nicht gefunden: {attachment.Path}");
-                                continue;
-                            }
-
-                            // Datei einlesen und in Base64 konvertieren
-                            byte[] fileBytes = System.IO.File.ReadAllBytes(attachment.Path);
-                            attachment.Content = Convert.ToBase64String(fileBytes);
-
-                            Console.WriteLine($"[Claude] Attachment {i + 1} konvertiert: {fileBytes.Length} Bytes -> {attachment.Content.Length} Base64 Zeichen");
-
-                            // Filename setzen falls nicht vorhanden
-                            if (string.IsNullOrEmpty(attachment.Filename))
-                            {
-                                attachment.Filename = System.IO.Path.GetFileName(attachment.Path);
-                            }
-
-                            // Content-Type auto-erkennen falls nicht gesetzt
-                            if (string.IsNullOrEmpty(attachment.ContentType))
-                            {
-                                attachment.ContentType = GetContentTypeFromExtension(attachment.Path);
-                                Console.WriteLine($"[Claude] Content-Type auto-erkannt: {attachment.ContentType}");
-                            }
-                        }
-                        catch (Exception ex)
-                        {
-                            Console.WriteLine($"[Claude] FEHLER beim Lesen von Attachment {i + 1}: {ex.Message}");
-                            // Attachment bleibt mit leerem Content (wird später ignoriert oder führt zu Fehler)
+                            var beforeJson = fullText[..i].Trim();
+                            if (!string.IsNullOrEmpty(beforeJson))
+                                parsed.AiExplanation = beforeJson;
+                            return parsed;
                         }
                     }
+                    catch { /* Kein valides JSON, weiter suchen */ }
                 }
             }
-
-            return result;
         }
-        catch (JsonException ex)
-        {
-            var errorMessage = new StringBuilder();
-            errorMessage.AppendLine("Fehler beim Parsen der AI Response als JSON.");
-            errorMessage.AppendLine();
-            errorMessage.AppendLine("JSON Content (erste 1000 Zeichen):");
-            errorMessage.AppendLine(jsonContent.Substring(0, Math.Min(1000, jsonContent.Length)));
-            errorMessage.AppendLine();
-            errorMessage.AppendLine("Vollständige Response:");
-            errorMessage.AppendLine(response);
-            errorMessage.AppendLine();
-            errorMessage.AppendLine($"JSON Fehler: {ex.Message}");
 
-            Console.Error.WriteLine(errorMessage.ToString());
-
-            throw new InvalidOperationException(errorMessage.ToString(), ex);
-        }
+        // Letzter Fallback: Gesamttext als JSON parsen
+        return JsonConvert.DeserializeObject<AiResponseClass>(fullText.Trim())
+               ?? new AiResponseClass { EmailResponseText = fullText.Trim() };
     }
 
-    private string GetContentTypeFromExtension(string filePath)
+    private static string GetContentTypeFromExtension(string filePath)
     {
         var extension = System.IO.Path.GetExtension(filePath).ToLowerInvariant();
 
@@ -299,14 +372,12 @@ public class ClaudeClass : IAiProvider
             ".ppt" => "application/vnd.ms-powerpoint",
             ".pptx" => "application/vnd.openxmlformats-officedocument.presentationml.presentation",
             ".txt" => "text/plain",
-            ".html" => "text/html",
-            ".htm" => "text/html",
+            ".html" or ".htm" => "text/html",
             ".csv" => "text/csv",
             ".xml" => "text/xml",
             ".json" => "application/json",
             ".zip" => "application/zip",
-            ".jpg" => "image/jpeg",
-            ".jpeg" => "image/jpeg",
+            ".jpg" or ".jpeg" => "image/jpeg",
             ".png" => "image/png",
             ".gif" => "image/gif",
             ".bmp" => "image/bmp",
@@ -315,7 +386,7 @@ public class ClaudeClass : IAiProvider
             ".wav" => "audio/wav",
             ".mp4" => "video/mp4",
             ".avi" => "video/x-msvideo",
-            _ => "application/octet-stream" // Fallback
+            _ => "application/octet-stream"
         };
     }
 }

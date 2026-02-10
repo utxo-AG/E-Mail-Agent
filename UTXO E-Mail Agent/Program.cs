@@ -1,5 +1,4 @@
-﻿using Claude.AgentSdk;
-using Microsoft.EntityFrameworkCore;
+﻿using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using UTXO_E_Mail_Agent.Classes;
 using UTXO_E_Mail_Agent.Factory;
@@ -15,8 +14,8 @@ namespace UTXO_E_Mail_Agent;
 public class Program
 {
     // Version information - update this with each release
-    private const string Version = "1.3.0";
-    private const string BuildDate = "2026-02-06";
+    private const string Version = "1.4.0";
+    private const string BuildDate = "2026-02-10";
 
     private static IConfiguration _configuration = null!;
     private static int _pollingIntervalSeconds;
@@ -154,7 +153,7 @@ public class Program
                             Console.WriteLine($"  - Email content preview: {preview}");
 
                             // Mail mit AI verarbeiten
-                            var processor = new ProcessMailsClass(db, _connectionString);
+                            var processor = new ProcessMailsClass(db, _configuration);
                             var aiResponse = await processor.ProcessMailAsync(mail, agent);
 
                             Console.WriteLine("  - AI Response:");
@@ -228,7 +227,7 @@ Reimund Schilder",
         Console.WriteLine($"[TEST MODE] Content preview: {testMail.Text?.Substring(0, Math.Min(100, testMail.Text.Length))}...");
 
         // Verarbeite die Test-Mail mit AI
-        var processor = new ProcessMailsClass(db, _connectionString);
+        var processor = new ProcessMailsClass(db, _configuration);
         var aiResponse = await processor.ProcessMailAsync(testMail, agent);
 
         Console.WriteLine("[TEST MODE] ========================================");
