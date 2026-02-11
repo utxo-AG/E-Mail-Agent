@@ -193,7 +193,9 @@ public class ClaudeClass : IAiProvider
         var outputDirectory = "/tmp";
         Directory.CreateDirectory(outputDirectory);
 
+        Console.WriteLine($"[Skill Download] Downloading skill files to: {outputDirectory}");
         var downloadedFiles = await response.DownloadFilesAsync(client, outputDirectory);
+        Console.WriteLine($"[Skill Download] Downloaded {downloadedFiles.Count()} files");
 
         if (downloadedFiles.Any())
         {
@@ -233,6 +235,20 @@ public class ClaudeClass : IAiProvider
 
         // JSON aus der Antwort extrahieren (Claude kann Text vor dem JSON schreiben)
         var responseClass = ParseAiResponse(fullText);
+
+        // Debug: Log parsed attachments from JSON
+        if (responseClass.Attachments != null && responseClass.Attachments.Length > 0)
+        {
+            Console.WriteLine($"[JSON Attachments] Found {responseClass.Attachments.Length} attachments in JSON:");
+            foreach (var att in responseClass.Attachments)
+            {
+                Console.WriteLine($"  - Filename: {att.Filename}, Path: {att.Path}, HasContent: {!string.IsNullOrEmpty(att.Content)}");
+            }
+        }
+        else
+        {
+            Console.WriteLine("[JSON Attachments] No attachments in JSON response");
+        }
 
         // Heruntergeladene Skill-Dateien als Attachments hinzufügen
         if (downloadedFiles.Any())
