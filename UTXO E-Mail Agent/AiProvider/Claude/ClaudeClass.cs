@@ -194,6 +194,23 @@ public class ClaudeClass : IAiProvider
         Directory.CreateDirectory(outputDirectory);
 
         Console.WriteLine($"[Skill Download] Downloading skill files to: {outputDirectory}");
+
+        // Check for file IDs first
+        var fileIds = response.GetFileIds();
+        Console.WriteLine($"[Skill Download] Found {fileIds.Count()} file IDs in response");
+        foreach (var fileId in fileIds)
+        {
+            try
+            {
+                var metadata = await client.Files.GetFileMetadataAsync(fileId);
+                Console.WriteLine($"[Skill Download] File ID: {fileId} -> {metadata.Filename} ({metadata.SizeBytes} bytes)");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[Skill Download] Error getting metadata for {fileId}: {ex.Message}");
+            }
+        }
+
         var downloadedFiles = await response.DownloadFilesAsync(client, outputDirectory);
         Console.WriteLine($"[Skill Download] Downloaded {downloadedFiles.Count()} files");
 
