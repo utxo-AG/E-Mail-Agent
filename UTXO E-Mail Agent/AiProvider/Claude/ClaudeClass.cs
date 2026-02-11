@@ -189,8 +189,8 @@ public class ClaudeClass : IAiProvider
             }
         }
 
-        // Skill-Dateien herunterladen
-        var outputDirectory = Path.Combine(Directory.GetCurrentDirectory(), "SkillOutput");
+        // Skill-Dateien herunterladen (in /tmp/ damit Claude's Pfadangaben stimmen)
+        var outputDirectory = "/tmp";
         Directory.CreateDirectory(outputDirectory);
 
         var downloadedFiles = await response.DownloadFilesAsync(client, outputDirectory);
