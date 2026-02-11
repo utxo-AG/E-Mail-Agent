@@ -19,8 +19,8 @@ public class ProcessMailsClass(DefaultdbContext db, IConfiguration configuration
     /// <returns>Die generierte Antwort vom AI Provider</returns>
     public async Task<AiResponseClass> ProcessMailAsync(MailClass mail, Agent agent)
     {
-        // AI Provider anhand des Typs auswählen
-        var aiProvider = AiProviderFactory.GetProvider(agent.Aiprovider, _configuration);
+        // AI Provider anhand des Agents auswählen
+        var aiProvider = AiProviderFactory.GetProvider(agent, _configuration);
 
         if (aiProvider == null)
         {

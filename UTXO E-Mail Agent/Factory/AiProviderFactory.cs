@@ -1,14 +1,15 @@
 using Microsoft.Extensions.Configuration;
 using UTXO_E_Mail_Agent.AiProvider.Claude;
 using UTXO_E_Mail_Agent.Interfaces;
+using UTXO_E_Mail_Agent_Shared.Models;
 
 namespace UTXO_E_Mail_Agent.Factory;
 
 public static class AiProviderFactory
 {
-    public static IAiProvider? GetProvider(string providerType, IConfiguration configuration)
+    public static IAiProvider? GetProvider(Agent agent, IConfiguration configuration)
     {
-        return providerType.ToLower() switch
+        return agent.Aiprovider?.ToLower() switch
         {
             "claude" => new ClaudeClass(
                 configuration["Claude:ApiKey"]
