@@ -70,15 +70,20 @@ public class ProcessMailsClass(DefaultdbContext db, IConfiguration configuration
         if (!agent.Mcpservers.Any())
             return string.Empty;
 
-        var s = Environment.NewLine + "VERFÜGBARE API-TOOLS:" + Environment.NewLine;
-        s += "Dir stehen folgende API-Tools zur Verfügung, die du direkt als Tools aufrufen kannst:" + Environment.NewLine;
+        var s = Environment.NewLine + "🔧 WICHTIG - VERFÜGBARE SPEZIAL-TOOLS:" + Environment.NewLine;
+        s += "Du MUSST diese spezialisierten Tools verwenden, wenn sie zur Anfrage passen:" + Environment.NewLine;
+        s += "VERWENDE DIESE TOOLS ANSTATT bash/curl für die folgenden Aufgaben:" + Environment.NewLine + Environment.NewLine;
 
         foreach (var agentMcpserver in agent.Mcpservers.OrEmptyIfNull())
         {
-            s += $"- {agentMcpserver.Name}: {agentMcpserver.Description}" + Environment.NewLine;
+            s += $"📌 **{agentMcpserver.Name}**" + Environment.NewLine;
+            s += $"   Beschreibung: {agentMcpserver.Description}" + Environment.NewLine;
+            s += $"   Endpoint: {agentMcpserver.Call} {agentMcpserver.Url}" + Environment.NewLine;
+            s += Environment.NewLine;
         }
 
-        s += "Nutze diese Tools wenn die Beschreibung auf die Kundenanfrage passt." + Environment.NewLine;
+        s += "WICHTIG: Wenn eine Kundenanfrage zu einem dieser Tools passt, verwende das Tool DIREKT." + Environment.NewLine;
+        s += "Verwende NICHT bash oder curl für diese Aufgaben!" + Environment.NewLine;
         return s;
     }
 

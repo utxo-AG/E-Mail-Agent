@@ -308,54 +308,90 @@ public class ClaudeClass : IAiProvider
     /// </summary>
     private static AiResponseClass ParseAiResponse(string fullText)
     {
-        // Versuche zuerst einen ```json Block zu finden
-        var jsonBlockMatch = Regex.Match(fullText, @"```json\s*([\s\S]*?)\s*```");
-        if (jsonBlockMatch.Success)
+        Console.WriteLine($"[ParseAiResponse] Attempting to parse response ({fullText?.Length ?? 0} characters)");
+
+        // Check for empty or null response
+        if (string.IsNullOrWhiteSpace(fullText))
         {
-            var parsed = JsonConvert.DeserializeObject<AiResponseClass>(jsonBlockMatch.Groups[1].Value);
-            if (parsed != null)
+            Console.WriteLine("[ParseAiResponse] WARNING: Empty response from Claude!");
+            return new AiResponseClass
             {
-                // Text vor dem JSON als AiExplanation speichern
-                var beforeJson = fullText[..fullText.IndexOf("```json", StringComparison.Ordinal)].Trim();
-                if (!string.IsNullOrEmpty(beforeJson))
-                    parsed.AiExplanation = beforeJson;
-                return parsed;
-            }
+                EmailResponseText = "Ich konnte keine passende Antwort generieren. Bitte versuchen Sie es erneut.",
+                EmailResponseSubject = "RE: Ihre Anfrage",
+                EmailResponseHtml = "<p>Ich konnte keine passende Antwort generieren. Bitte versuchen Sie es erneut.</p>",
+                Attachments = Array.Empty<Attachment>()
+            };
         }
 
-        // Fallback: Letztes vollständiges JSON-Objekt finden (von hinten suchen)
-        var lastBrace = fullText.LastIndexOf('}');
-        if (lastBrace >= 0)
+        try
         {
-            // Passende öffnende Klammer finden
-            var depth = 0;
-            for (int i = lastBrace; i >= 0; i--)
+            // Versuche zuerst einen ```json Block zu finden
+            var jsonBlockMatch = Regex.Match(fullText, @"```json\s*([\s\S]*?)\s*```");
+            if (jsonBlockMatch.Success)
             {
-                if (fullText[i] == '}') depth++;
-                else if (fullText[i] == '{') depth--;
-
-                if (depth == 0)
+                Console.WriteLine("[ParseAiResponse] Found JSON block in markdown");
+                var parsed = JsonConvert.DeserializeObject<AiResponseClass>(jsonBlockMatch.Groups[1].Value);
+                if (parsed != null)
                 {
-                    var jsonCandidate = fullText[i..(lastBrace + 1)];
-                    try
-                    {
-                        var parsed = JsonConvert.DeserializeObject<AiResponseClass>(jsonCandidate);
-                        if (parsed != null && !string.IsNullOrEmpty(parsed.EmailResponseText))
-                        {
-                            var beforeJson = fullText[..i].Trim();
-                            if (!string.IsNullOrEmpty(beforeJson))
-                                parsed.AiExplanation = beforeJson;
-                            return parsed;
-                        }
-                    }
-                    catch { /* Kein valides JSON, weiter suchen */ }
+                    // Text vor dem JSON als AiExplanation speichern
+                    var beforeJson = fullText[..fullText.IndexOf("```json", StringComparison.Ordinal)].Trim();
+                    if (!string.IsNullOrEmpty(beforeJson))
+                        parsed.AiExplanation = beforeJson;
+                    return parsed;
                 }
             }
-        }
 
-        // Letzter Fallback: Gesamttext als JSON parsen
-        return JsonConvert.DeserializeObject<AiResponseClass>(fullText.Trim())
-               ?? new AiResponseClass { EmailResponseText = fullText.Trim() };
+            // Fallback: Letztes vollständiges JSON-Objekt finden (von hinten suchen)
+            var lastBrace = fullText.LastIndexOf('}');
+            if (lastBrace >= 0)
+            {
+                // Passende öffnende Klammer finden
+                var depth = 0;
+                for (int i = lastBrace; i >= 0; i--)
+                {
+                    if (fullText[i] == '}') depth++;
+                    else if (fullText[i] == '{') depth--;
+
+                    if (depth == 0)
+                    {
+                        var jsonCandidate = fullText[i..(lastBrace + 1)];
+                        try
+                        {
+                            var parsed = JsonConvert.DeserializeObject<AiResponseClass>(jsonCandidate);
+                            if (parsed != null && !string.IsNullOrEmpty(parsed.EmailResponseText))
+                            {
+                                Console.WriteLine("[ParseAiResponse] Found valid JSON object");
+                                var beforeJson = fullText[..i].Trim();
+                                if (!string.IsNullOrEmpty(beforeJson))
+                                    parsed.AiExplanation = beforeJson;
+                                return parsed;
+                            }
+                        }
+                        catch { /* Kein valides JSON, weiter suchen */ }
+                    }
+                }
+            }
+
+            // Letzter Fallback: Gesamttext als JSON parsen
+            Console.WriteLine("[ParseAiResponse] Attempting to parse entire text as JSON");
+            return JsonConvert.DeserializeObject<AiResponseClass>(fullText.Trim())
+                   ?? new AiResponseClass { EmailResponseText = fullText.Trim() };
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[ParseAiResponse] ERROR: Failed to parse response: {ex.Message}");
+            Console.WriteLine($"[ParseAiResponse] Response content: {fullText.Substring(0, Math.Min(500, fullText.Length))}...");
+
+            // Return a default response on error
+            return new AiResponseClass
+            {
+                EmailResponseText = fullText.Trim(),
+                EmailResponseSubject = "RE: Ihre Anfrage",
+                EmailResponseHtml = $"<p>{System.Web.HttpUtility.HtmlEncode(fullText.Trim())}</p>",
+                Attachments = Array.Empty<Attachment>(),
+                AiExplanation = $"Parse error: {ex.Message}"
+            };
+        }
     }
 
     private static string GetContentTypeFromExtension(string filePath)
