@@ -56,7 +56,43 @@ public class ProcessMailsClass(DefaultdbContext db, IConfiguration configuration
 
         foreach (var attachment in response.Attachments.OrEmptyIfNull())
         {
-            ConversationAttachment at = new ConversationAttachment() { ConversationId = conversation.Id, Filename = attachment.Filename, ContentType = attachment.ContentType, Content = attachment.Content, Path = attachment.Path };
+            // If content is empty but path is provided, read the file content
+            var content = attachment.Content;
+            if (string.IsNullOrEmpty(content) && !string.IsNullOrEmpty(attachment.Path))
+            {
+                if (!File.Exists(attachment.Path))
+                {
+                    Console.WriteLine($"[API] Warning: Attachment file not found: {attachment.Path}");
+                }
+                else
+                {
+                    try
+                    {
+                        var fileBytes = await File.ReadAllBytesAsync(attachment.Path);
+                        content = Convert.ToBase64String(fileBytes);
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"[API] Warning: Could not read attachment file {attachment.Path}: {ex.Message}");
+                    }
+                }
+            }
+
+            // Skip attachments with no content
+            if (string.IsNullOrEmpty(content))
+            {
+                Console.WriteLine($"[API] Warning: Skipping attachment {attachment.Filename} - no content available");
+                continue;
+            }
+
+            ConversationAttachment at = new ConversationAttachment()
+            {
+                ConversationId = conversation.Id,
+                Filename = attachment.Filename ?? "attachment",
+                ContentType = attachment.ContentType ?? "application/octet-stream",
+                Content = content,
+                Path = attachment.Path
+            };
             _db.ConversationAttachments.Add(at);
         }
 
@@ -113,6 +149,28 @@ public class ProcessMailsClass(DefaultdbContext db, IConfiguration configuration
         promptBuilder.AppendLine($"Von: {mailClass.From}");
         promptBuilder.AppendLine($"Betreff: {mailClass.Subject}");
         promptBuilder.AppendLine($"Datum: {mailClass.CreatedAt}");
+
+        promptBuilder.AppendLine();
+        promptBuilder.AppendLine("KRITISCH - AUTO-REPLY ERKENNUNG:");
+        promptBuilder.AppendLine("Prüfe ZUERST ob die E-Mail eine automatische Antwort ist!");
+        promptBuilder.AppendLine("Automatische Antworten NIEMALS beantworten. Erkennungsmerkmale:");
+        promptBuilder.AppendLine("- Out of Office / Abwesenheitsnotiz / Absence Message");
+        promptBuilder.AppendLine("- Auto-Reply / Automatic Reply / Automatische Antwort");
+        promptBuilder.AppendLine("- Vacation / Urlaub / Holiday Message");
+        promptBuilder.AppendLine("- Currently unavailable / Derzeit nicht erreichbar");
+        promptBuilder.AppendLine("- Will return / Bin zurück am");
+        promptBuilder.AppendLine("- Headers: Auto-Submitted, X-Auto-Response-Suppress, Precedence: bulk/auto_reply");
+        promptBuilder.AppendLine();
+        promptBuilder.AppendLine("Falls es eine automatische Antwort ist, gib NUR zurück:");
+        promptBuilder.AppendLine("```json");
+        promptBuilder.AppendLine("{");
+        promptBuilder.AppendLine("  \"EmailResponseText\": null,");
+        promptBuilder.AppendLine("  \"EmailResponseSubject\": null,");
+        promptBuilder.AppendLine("  \"EmailResponseHtml\": null,");
+        promptBuilder.AppendLine("  \"AiExplanation\": \"Automatische Antwort erkannt - keine Aktion erforderlich\",");
+        promptBuilder.AppendLine("  \"attachments\": []");
+        promptBuilder.AppendLine("}");
+        promptBuilder.AppendLine("```");
 
         promptBuilder.AppendLine();
         promptBuilder.AppendLine("KRITISCH - ANTWORTFORMAT:");
