@@ -231,6 +231,11 @@ public class ClaudeClass : IAiProvider
             {
                 Console.WriteLine($"Tool Use: {toolUse.Name}");
             }
+            else
+            {
+                // Log unknown content types for debugging
+                Console.WriteLine($"[DEBUG] Content properties: {System.Text.Json.JsonSerializer.Serialize(content)}");
+            }
         }
 
         // JSON aus der Antwort extrahieren (Claude kann Text vor dem JSON schreiben)
