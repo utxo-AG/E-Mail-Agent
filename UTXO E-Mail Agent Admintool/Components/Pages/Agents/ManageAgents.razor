@@ -84,6 +84,12 @@
                                Size="Size.Small"
                                OnClick="@(() => ViewConversations(context.Agent))" />
             </MudTooltip>
+            <MudTooltip Text="Chat with Agent">
+                <MudIconButton Icon="@Icons.Material.Filled.SmartToy"
+                               Color="Color.Success"
+                               Size="Size.Small"
+                               OnClick="@(() => OpenChatDialog(context.Agent))" />
+            </MudTooltip>
             <MudTooltip Text="Delete Agent">
                 <MudIconButton Icon="@Icons.Material.Filled.Delete"
                                Color="Color.Error"
@@ -215,6 +221,23 @@
     private void ViewConversations(Agent agent)
     {
         NavigationManager.NavigateTo($"/agents/{agent.Id}/conversations");
+    }
+
+    private async Task OpenChatDialog(Agent agent)
+    {
+        var parameters = new DialogParameters<ChatWithAgentDialog>
+        {
+            { x => x.AgentId, agent.Id }
+        };
+
+        var options = new DialogOptions
+        {
+            CloseButton = true,
+            MaxWidth = MaxWidth.Large,
+            FullWidth = true
+        };
+
+        await DialogService.ShowAsync<ChatWithAgentDialog>("Chat with Agent", parameters, options);
     }
 
     private async Task DeleteAgent(Agent agent)

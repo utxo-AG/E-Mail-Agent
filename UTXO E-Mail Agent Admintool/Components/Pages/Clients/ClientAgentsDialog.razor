@@ -48,6 +48,12 @@
                                            Size="Size.Small"
                                            OnClick="@(() => NavigateToConversations(context.Id))" />
                         </MudTooltip>
+                        <MudTooltip Text="Chat with Agent">
+                            <MudIconButton Icon="@Icons.Material.Filled.SmartToy"
+                                           Color="Color.Success"
+                                           Size="Size.Small"
+                                           OnClick="@(() => OpenChatDialog(context))" />
+                        </MudTooltip>
                         <MudTooltip Text="Delete Agent">
                             <MudIconButton Icon="@Icons.Material.Filled.Delete"
                                            Color="Color.Error"
@@ -117,6 +123,23 @@
     {
         MudDialog.Close();
         NavigationManager.NavigateTo($"/agents/{agentId}/conversations");
+    }
+
+    private async Task OpenChatDialog(Agent agent)
+    {
+        var parameters = new DialogParameters<UTXO_E_Mail_Agent_Admintool.Components.Pages.Agents.ChatWithAgentDialog>
+        {
+            { x => x.AgentId, agent.Id }
+        };
+
+        var options = new DialogOptions
+        {
+            CloseButton = true,
+            MaxWidth = MaxWidth.Large,
+            FullWidth = true
+        };
+
+        await DialogService.ShowAsync<UTXO_E_Mail_Agent_Admintool.Components.Pages.Agents.ChatWithAgentDialog>("Chat with Agent", parameters, options);
     }
 
     private async Task DeleteAgent(Agent agent)

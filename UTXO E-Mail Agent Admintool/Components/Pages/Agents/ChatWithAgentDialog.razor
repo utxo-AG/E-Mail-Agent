@@ -1,0 +1,299 @@
+@using UTXO_E_Mail_Agent_Admintool.Services
+@using UTXO_E_Mail_Agent_Admintool.Models
+@using UTXO_E_Mail_Agent_Shared.Models
+@using Microsoft.EntityFrameworkCore
+@inject AgentApiService AgentApiService
+@inject IDbContextFactory<DefaultdbContext> DbFactory
+@inject IJSRuntime JSRuntime
+
+<MudDialog>
+    <TitleContent>
+        <MudText Typo="Typo.h6">
+            <MudIcon Icon="@Icons.Material.Filled.SmartToy" Class="mr-2" />
+            Chat with Agent: @(agent?.Emailaddress ?? "Loading...")
+        </MudText>
+    </TitleContent>
+    <DialogContent>
+        @if (agent == null)
+        {
+            <MudProgressCircular Indeterminate="true" />
+        }
+        else
+        {
+            <MudGrid>
+                @* Agent Info *@
+                <MudItem xs="12">
+                    <MudAlert Severity="Severity.Info" Dense="true" Class="mb-2">
+                        <MudText Typo="Typo.caption">
+                            AI Model: @agent.Aimodel | Language: @agent.Defaultlanguage | State: @agent.State
+                        </MudText>
+                    </MudAlert>
+                </MudItem>
+
+                @* Input Area *@
+                <MudItem xs="12">
+                    <MudTextField @bind-Value="messageText"
+                                  Label="Enter your message"
+                                  Placeholder="Type a message to send to the agent..."
+                                  Variant="Variant.Outlined"
+                                  Lines="5"
+                                  FullWidth="true"
+                                  Disabled="@isProcessing"
+                                  OnKeyDown="HandleKeyDown" />
+                </MudItem>
+
+                <MudItem xs="12" Class="d-flex justify-end gap-2">
+                    <MudButton Variant="Variant.Filled"
+                               Color="Color.Primary"
+                               StartIcon="@Icons.Material.Filled.Send"
+                               OnClick="SendMessage"
+                               Disabled="@(isProcessing || string.IsNullOrWhiteSpace(messageText))">
+                        @if (isProcessing)
+                        {
+                            <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+                            <text>Processing...</text>
+                        }
+                        else
+                        {
+                            <text>Send</text>
+                        }
+                    </MudButton>
+                    <MudButton Variant="Variant.Outlined"
+                               Color="Color.Default"
+                               OnClick="ClearResponse"
+                               Disabled="@(response == null)">
+                        Clear Response
+                    </MudButton>
+                </MudItem>
+
+                @* Error Display *@
+                @if (!string.IsNullOrEmpty(errorMessage))
+                {
+                    <MudItem xs="12">
+                        <MudAlert Severity="Severity.Error" Dense="true" Variant="Variant.Filled">
+                            @errorMessage
+                        </MudAlert>
+                    </MudItem>
+                }
+
+                @* Response Section *@
+                @if (response != null && response.Success)
+                {
+                    @* AI Explanation *@
+                    @if (!string.IsNullOrEmpty(response.AiExplanation))
+                    {
+                        <MudItem xs="12">
+                            <MudExpansionPanels>
+                                <MudExpansionPanel Text="AI Explanation" Icon="@Icons.Material.Filled.Psychology">
+                                    <MudPaper Class="pa-4" Elevation="0" Style="background-color: #f5f5f5;">
+                                        <pre style="white-space: pre-wrap; word-wrap: break-word; margin: 0;">@response.AiExplanation</pre>
+                                    </MudPaper>
+                                </MudExpansionPanel>
+                            </MudExpansionPanels>
+                        </MudItem>
+                    }
+
+                    @* Response Subject *@
+                    @if (!string.IsNullOrEmpty(response.EmailResponseSubject))
+                    {
+                        <MudItem xs="12">
+                            <MudTextField Label="Response Subject"
+                                          Value="@response.EmailResponseSubject"
+                                          ReadOnly="true"
+                                          Variant="Variant.Filled" />
+                        </MudItem>
+                    }
+
+                    @* Response Content Tabs *@
+                    <MudItem xs="12">
+                        <MudText Typo="Typo.h6" Class="mb-2">Agent Response</MudText>
+                        <MudTabs Elevation="2" Rounded="true" ApplyEffectsToContainer="true" PanelClass="pa-4">
+                            <MudTabPanel Text="Text Response" Icon="@Icons.Material.Filled.TextFields">
+                                <MudPaper Class="pa-4" Elevation="0">
+                                    @if (!string.IsNullOrEmpty(response.EmailResponseText))
+                                    {
+                                        <pre style="white-space: pre-wrap; word-wrap: break-word; margin: 0;">@response.EmailResponseText</pre>
+                                    }
+                                    else
+                                    {
+                                        <MudText Color="Color.Secondary">No text response</MudText>
+                                    }
+                                </MudPaper>
+                            </MudTabPanel>
+                            @if (!string.IsNullOrEmpty(response.EmailResponseHtml))
+                            {
+                                <MudTabPanel Text="HTML Response" Icon="@Icons.Material.Filled.Code">
+                                    <MudPaper Class="pa-4" Elevation="0">
+                                        <div style="max-height: 400px; overflow-y: auto;">
+                                            @((MarkupString)response.EmailResponseHtml)
+                                        </div>
+                                    </MudPaper>
+                                </MudTabPanel>
+                            }
+                        </MudTabs>
+                    </MudItem>
+
+                    @* Attachments *@
+                    @if (response.Attachments != null && response.Attachments.Any())
+                    {
+                        <MudItem xs="12">
+                            <MudDivider Class="my-4" />
+                            <MudText Typo="Typo.h6" Class="mb-2">
+                                <MudIcon Icon="@Icons.Material.Filled.AttachFile" Class="mr-2" />
+                                Attachments (@response.Attachments.Count)
+                            </MudText>
+                            <MudPaper Class="pa-4" Elevation="1">
+                                @foreach (var attachment in response.Attachments)
+                                {
+                                    <MudPaper Class="pa-3 mb-2" Elevation="0" Style="border: 1px solid #e0e0e0;">
+                                        <MudGrid>
+                                            <MudItem xs="10">
+                                                <MudText>
+                                                    <MudIcon Icon="@GetAttachmentIcon(attachment.ContentType)"
+                                                             Size="Size.Small" Class="mr-2" />
+                                                    @attachment.Filename
+                                                </MudText>
+                                                <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                                    @attachment.ContentType
+                                                    @if (!string.IsNullOrEmpty(attachment.Content))
+                                                    {
+                                                        <text> (@GetFileSizeDisplay(attachment.Content))</text>
+                                                    }
+                                                </MudText>
+                                            </MudItem>
+                                            <MudItem xs="2" Class="d-flex align-end justify-end">
+                                                <MudIconButton Icon="@Icons.Material.Filled.Download"
+                                                               Color="Color.Primary"
+                                                               Size="Size.Small"
+                                                               OnClick="@(() => DownloadAttachment(attachment))" />
+                                            </MudItem>
+                                        </MudGrid>
+                                    </MudPaper>
+                                }
+                            </MudPaper>
+                        </MudItem>
+                    }
+                }
+            </MudGrid>
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton Color="Color.Primary" OnClick="Close">Close</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter]
+    IMudDialogInstance MudDialog { get; set; } = default!;
+
+    [Parameter]
+    public int AgentId { get; set; }
+
+    private Agent? agent;
+    private string messageText = "";
+    private bool isProcessing = false;
+    private string? errorMessage;
+    private ChatWithAgentResponse? response;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAgent();
+    }
+
+    private async Task LoadAgent()
+    {
+        await using var db = await DbFactory.CreateDbContextAsync();
+        agent = await db.Agents
+            .AsNoTracking()
+            .FirstOrDefaultAsync(a => a.Id == AgentId);
+    }
+
+    private async Task SendMessage()
+    {
+        if (string.IsNullOrWhiteSpace(messageText) || agent == null)
+            return;
+
+        isProcessing = true;
+        errorMessage = null;
+        response = null;
+        StateHasChanged();
+
+        try
+        {
+            response = await AgentApiService.SendMessageAsync(AgentId, messageText);
+
+            if (!response.Success)
+            {
+                errorMessage = response.Error ?? "Unknown error occurred";
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Error: {ex.Message}";
+        }
+        finally
+        {
+            isProcessing = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task HandleKeyDown(KeyboardEventArgs e)
+    {
+        // Ctrl+Enter to send
+        if (e.Key == "Enter" && e.CtrlKey)
+        {
+            await SendMessage();
+        }
+    }
+
+    private void ClearResponse()
+    {
+        response = null;
+        errorMessage = null;
+        messageText = "";
+    }
+
+    private void Close()
+    {
+        MudDialog.Close();
+    }
+
+    private string GetAttachmentIcon(string? contentType)
+    {
+        return contentType?.ToLowerInvariant() switch
+        {
+            var ct when ct?.StartsWith("image/") == true => Icons.Material.Filled.Image,
+            "application/pdf" => Icons.Material.Filled.PictureAsPdf,
+            var ct when ct?.Contains("spreadsheet") == true || ct?.Contains("excel") == true => Icons.Material.Filled.TableChart,
+            var ct when ct?.Contains("document") == true || ct?.Contains("word") == true => Icons.Material.Filled.Description,
+            _ => Icons.Material.Filled.AttachFile
+        };
+    }
+
+    private string GetFileSizeDisplay(string base64Content)
+    {
+        var bytes = base64Content.Length * 3 / 4; // Approximate size
+        if (bytes < 1024)
+            return $"{bytes} B";
+        if (bytes < 1024 * 1024)
+            return $"{bytes / 1024.0:F1} KB";
+        return $"{bytes / (1024.0 * 1024.0):F1} MB";
+    }
+
+    private async Task DownloadAttachment(ChatAttachment attachment)
+    {
+        if (string.IsNullOrEmpty(attachment.Content) || string.IsNullOrEmpty(attachment.Filename))
+            return;
+
+        try
+        {
+            var dataUrl = $"data:{attachment.ContentType ?? "application/octet-stream"};base64,{attachment.Content}";
+            await JSRuntime.InvokeVoidAsync("downloadFromDataUrl", dataUrl, attachment.Filename);
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Failed to download attachment: {ex.Message}";
+        }
+    }
+}

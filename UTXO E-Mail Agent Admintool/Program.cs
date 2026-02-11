@@ -69,6 +69,7 @@ builder.Services.AddScoped<AuthenticationStateProvider>(provider =>
 builder.Services.AddScoped<AuthService>();
 builder.Services.AddScoped<PasswordService>();
 builder.Services.AddScoped<EmailService>();
+builder.Services.AddScoped<AgentApiService>();
 
 builder.Services.AddAuthorization();
 
