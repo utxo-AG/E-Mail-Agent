@@ -124,6 +124,16 @@ public class ClaudeClass : IAiProvider
             // Download skill files after EACH iteration (before response gets overwritten)
             try
             {
+                // Debug: Log container info
+                if (response.Container != null)
+                {
+                    Console.WriteLine($"[Skill Download] Iteration {iteration}: Container ID = {response.Container.Id}");
+                }
+
+                // Try to get file IDs from this response
+                var fileIds = response.GetFileIds();
+                Console.WriteLine($"[Skill Download] Iteration {iteration}: Found {fileIds.Count()} file IDs");
+
                 var iterationFiles = await response.DownloadFilesAsync(client, outputDirectory);
                 if (iterationFiles.Any())
                 {
@@ -135,10 +145,14 @@ public class ClaudeClass : IAiProvider
                             allDownloadedFiles.Add(f);
                     }
                 }
+                else
+                {
+                    Console.WriteLine($"[Skill Download] Iteration {iteration}: No files downloaded");
+                }
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"[Skill Download] Iteration {iteration}: Error downloading files: {ex.Message}");
+                Console.WriteLine($"[Skill Download] Iteration {iteration}: Error: {ex.Message}");
             }
 
             // Nur unsere MCP-Tools behandeln (built-in Tools wie code_execution/bash/web_search werden serverseitig verarbeitet)
