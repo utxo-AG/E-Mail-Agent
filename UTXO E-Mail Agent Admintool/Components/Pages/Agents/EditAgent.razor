@@ -116,10 +116,12 @@ else
                 </MudItem>
 
                 <MudItem xs="12" md="6">
-                    <MudTextField Label="AI Model"
-                                  @bind-Value="agent.Aimodel"
-                                  Required="true"
-                                  Placeholder="e.g., gpt-4, claude-3" />
+                    <MudSelect T="string" Label="AI Model" @bind-Value="agent.Aimodel" Required="true">
+                        <MudSelectItem Value="@("claude-sonnet-4-20250514")">Claude Sonnet 4 (Latest)</MudSelectItem>
+                        <MudSelectItem Value="@("claude-sonnet-4-5-20250929")">Claude Sonnet 4.5</MudSelectItem>
+                        <MudSelectItem Value="@("claude-opus-4-5-20251101")">Claude Opus 4.5</MudSelectItem>
+                        <MudSelectItem Value="@("claude-haiku-3-5")">Claude Haiku 3.5</MudSelectItem>
+                    </MudSelect>
                 </MudItem>
 
                 <MudItem xs="12">
@@ -250,8 +252,8 @@ else
                 Defaultlanguage = "en",
                 Emailprovider = "smtp",
                 Emailprovidertype = "imap",
-                Aiprovider = "anthropic",
-                Aimodel = "claude-3-sonnet"
+                Aiprovider = "claude",
+                Aimodel = "claude-sonnet-4-20250514"
             };
         }
         isLoading = false;
