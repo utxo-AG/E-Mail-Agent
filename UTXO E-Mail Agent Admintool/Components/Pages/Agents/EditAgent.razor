@@ -35,10 +35,10 @@ else
                 </MudItem>
 
                 <MudItem xs="12" md="6">
-                    <MudTextField Label="Default Language"
-                                  @bind-Value="agent.Defaultlanguage"
-                                  Required="true"
-                                  Placeholder="e.g., en, de, fr" />
+                    <MudSelect Label="Default Language" @bind-Value="agent.Defaultlanguage" Required="true">
+                        <MudSelectItem Value="@("de")">Deutsch</MudSelectItem>
+                        <MudSelectItem Value="@("en")">English</MudSelectItem>
+                    </MudSelect>
                 </MudItem>
 
                 <MudItem xs="12" md="6">
@@ -108,10 +108,8 @@ else
                 }
 
                 <MudItem xs="12" md="6">
-                    <MudSelect Label="AI Provider" @bind-Value="agent.Aiprovider" Required="true">
-                        <MudSelectItem Value="@("openai")">OpenAI</MudSelectItem>
-                        <MudSelectItem Value="@("claude")">Anthropic</MudSelectItem>
-                        <MudSelectItem Value="@("azure")">Azure</MudSelectItem>
+                    <MudSelect Label="AI Provider" @bind-Value="agent.Aiprovider" Required="true" Disabled="true">
+                        <MudSelectItem Value="@("claude")">Anthropic Claude</MudSelectItem>
                     </MudSelect>
                 </MudItem>
 
@@ -250,8 +248,8 @@ else
                 CustomerId = CustomerId,
                 State = "active",
                 Defaultlanguage = "en",
-                Emailprovider = "smtp",
-                Emailprovidertype = "imap",
+                Emailprovider = "inbound",
+                Emailprovidertype = "polling",
                 Aiprovider = "claude",
                 Aimodel = "claude-sonnet-4-20250514"
             };
