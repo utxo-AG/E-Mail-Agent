@@ -7,6 +7,7 @@ using Anthropic.SDK.Common;
 using Anthropic.SDK.Constants;
 using Anthropic.SDK.Extensions;
 using Anthropic.SDK.Messaging;
+using Microsoft.Extensions.Configuration;
 using Newtonsoft.Json;
 using UTXO_E_Mail_Agent_Shared.Models;
 using UTXO_E_Mail_Agent.Classes;
@@ -20,11 +21,13 @@ public class ClaudeClass : IAiProvider
 {
     private readonly string _apikey;
     private readonly string _connectionString;
+    private readonly IConfiguration _configuration;
 
-    public ClaudeClass(string apikey, string connectionString)
+    public ClaudeClass(string apikey, string connectionString, IConfiguration configuration)
     {
         _apikey = apikey;
         _connectionString = connectionString;
+        _configuration = configuration;
     }
 
     public async Task<AiResponseClass> GenerateResponse(string systemPrompt, string prompt, MailClass mailClass, Agent agent, Conversation conversation)
@@ -57,6 +60,40 @@ public class ClaudeClass : IAiProvider
             new Function("bash", "bash_20250124",
                 new Dictionary<string, object> { { "name", "bash" } })
         };
+
+        // Send Email Tool - always available for forwarding/sending emails
+        SendEmailMcpServer? sendEmailServer = null;
+        try
+        {
+            sendEmailServer = new SendEmailMcpServer(_configuration, agent.Emailaddress);
+
+            var sendEmailSchema = new InputSchema()
+            {
+                Type = "object",
+                Properties = new Dictionary<string, Property>()
+                {
+                    { "to", new Property() { Type = "string", Description = "Recipient email address" } },
+                    { "subject", new Property() { Type = "string", Description = "Email subject" } },
+                    { "text", new Property() { Type = "string", Description = "Plain text content of the email" } },
+                    { "html", new Property() { Type = "string", Description = "HTML content of the email (optional)" } }
+                },
+                Required = new List<string>() { "to", "subject", "text" }
+            };
+
+            var jsonOpts = new JsonSerializerOptions { DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull };
+            string sendEmailSchemaJson = System.Text.Json.JsonSerializer.Serialize(sendEmailSchema, jsonOpts);
+
+            tools.Add(new Function(
+                "send_email",
+                $"Send an email to a recipient. Use this to forward emails or send new emails. The sender address is always {agent.Emailaddress}.",
+                JsonNode.Parse(sendEmailSchemaJson)));
+
+            Console.WriteLine($"[MCP] Registered built-in tool: send_email (from: {agent.Emailaddress})");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[MCP] Warning: Could not register send_email tool: {ex.Message}");
+        }
 
         // Dynamically register MCP tools from Agent.Mcpservers
         var mcpToolHandlers = new Dictionary<string, Func<JsonStringParameter, Task<string>>>();
@@ -156,36 +193,57 @@ public class ClaudeClass : IAiProvider
                 Console.WriteLine($"[Skill Download] Iteration {iteration}: Error: {ex.Message}");
             }
 
-            // Only handle our MCP tools (built-in tools like code_execution/bash/web_search are processed server-side)
-            var mcpToolCalls = response.Content
+            // Handle our custom tools (MCP tools + send_email)
+            // Built-in tools like code_execution/bash/web_search are processed server-side
+            var customToolCalls = response.Content
                 .OfType<ToolUseContent>()
-                .Where(tc => mcpToolHandlers.ContainsKey(tc.Name))
+                .Where(tc => mcpToolHandlers.ContainsKey(tc.Name) || tc.Name == "send_email")
                 .ToList();
 
-            if (!mcpToolCalls.Any())
+            if (!customToolCalls.Any())
                 break;
 
             // Add Claude response (with tool use) as assistant message
             messages.Add(response.Message);
 
-            // Execute each MCP tool call and send result back
-            foreach (var toolUse in mcpToolCalls)
+            // Execute each tool call and send result back
+            foreach (var toolUse in customToolCalls)
             {
                 Console.WriteLine($"[MCP Tool Call] {toolUse.Name} - Input: {toolUse.Input}");
 
                 try
                 {
-                    var jsonParam = new JsonStringParameter();
-                    if (toolUse.Input != null && toolUse.Input.AsObject().ContainsKey("json"))
-                    {
-                        jsonParam.json = toolUse.Input["json"]?.ToString() ?? "{}";
-                    }
-                    else if (toolUse.Input != null)
-                    {
-                        jsonParam.json = toolUse.Input.ToJsonString();
-                    }
+                    string result;
 
-                    var result = await mcpToolHandlers[toolUse.Name](jsonParam);
+                    if (toolUse.Name == "send_email" && sendEmailServer != null)
+                    {
+                        // Handle send_email tool
+                        var to = toolUse.Input?["to"]?.ToString() ?? "";
+                        var subject = toolUse.Input?["subject"]?.ToString() ?? "";
+                        var text = toolUse.Input?["text"]?.ToString() ?? "";
+                        var html = toolUse.Input?["html"]?.ToString();
+
+                        result = await sendEmailServer.SendEmailAsync(to, subject, text, html);
+                    }
+                    else if (mcpToolHandlers.ContainsKey(toolUse.Name))
+                    {
+                        // Handle MCP tools
+                        var jsonParam = new JsonStringParameter();
+                        if (toolUse.Input != null && toolUse.Input.AsObject().ContainsKey("json"))
+                        {
+                            jsonParam.json = toolUse.Input["json"]?.ToString() ?? "{}";
+                        }
+                        else if (toolUse.Input != null)
+                        {
+                            jsonParam.json = toolUse.Input.ToJsonString();
+                        }
+
+                        result = await mcpToolHandlers[toolUse.Name](jsonParam);
+                    }
+                    else
+                    {
+                        result = $"ERROR: Unknown tool {toolUse.Name}";
+                    }
 
                     messages.Add(new Message()
                     {

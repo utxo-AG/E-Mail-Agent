@@ -103,23 +103,34 @@ public class ProcessMailsClass(DefaultdbContext db, IConfiguration configuration
 
     private string GetMcpServerInformations(Agent agent)
     {
-        if (!agent.Mcpservers.Any())
-            return string.Empty;
+        var s = Environment.NewLine + "🔧 VERFÜGBARE TOOLS:" + Environment.NewLine + Environment.NewLine;
 
-        var s = Environment.NewLine + "🔧 WICHTIG - VERFÜGBARE SPEZIAL-TOOLS:" + Environment.NewLine;
-        s += "Du MUSST diese spezialisierten Tools verwenden, wenn sie zur Anfrage passen:" + Environment.NewLine;
-        s += "VERWENDE DIESE TOOLS ANSTATT bash/curl für die folgenden Aufgaben:" + Environment.NewLine + Environment.NewLine;
+        // Built-in send_email tool - always available
+        s += "📧 **send_email** (IMMER VERFÜGBAR)" + Environment.NewLine;
+        s += "   Verwende dieses Tool um E-Mails weiterzuleiten oder neue E-Mails zu senden." + Environment.NewLine;
+        s += "   Parameter:" + Environment.NewLine;
+        s += "   - to: Empfänger E-Mail-Adresse (erforderlich)" + Environment.NewLine;
+        s += "   - subject: Betreff (erforderlich)" + Environment.NewLine;
+        s += "   - text: Inhalt als Plain-Text (erforderlich)" + Environment.NewLine;
+        s += "   - html: Inhalt als HTML (optional)" + Environment.NewLine;
+        s += $"   Die Absenderadresse ist immer: {agent.Emailaddress}" + Environment.NewLine;
+        s += Environment.NewLine;
 
-        foreach (var agentMcpserver in agent.Mcpservers.OrEmptyIfNull())
+        // Agent-specific MCP servers
+        if (agent.Mcpservers.Any())
         {
-            s += $"📌 **{agentMcpserver.Name}**" + Environment.NewLine;
-            s += $"   Beschreibung: {agentMcpserver.Description}" + Environment.NewLine;
-            s += $"   Endpoint: {agentMcpserver.Call} {agentMcpserver.Url}" + Environment.NewLine;
-            s += Environment.NewLine;
+            s += "📌 WEITERE SPEZIAL-TOOLS:" + Environment.NewLine;
+            foreach (var agentMcpserver in agent.Mcpservers.OrEmptyIfNull())
+            {
+                s += $"   **{agentMcpserver.Name}**" + Environment.NewLine;
+                s += $"   Beschreibung: {agentMcpserver.Description}" + Environment.NewLine;
+                s += $"   Endpoint: {agentMcpserver.Call} {agentMcpserver.Url}" + Environment.NewLine;
+                s += Environment.NewLine;
+            }
         }
 
-        s += "WICHTIG: Wenn eine Kundenanfrage zu einem dieser Tools passt, verwende das Tool DIREKT." + Environment.NewLine;
-        s += "Verwende NICHT bash oder curl für diese Aufgaben!" + Environment.NewLine;
+        s += "WICHTIG: Wenn eine Anfrage erfordert eine E-Mail weiterzuleiten oder zu senden, verwende send_email." + Environment.NewLine;
+        s += "Verwende NICHT bash oder curl für E-Mail-Versand!" + Environment.NewLine;
         return s;
     }
 

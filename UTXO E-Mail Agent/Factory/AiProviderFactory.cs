@@ -15,7 +15,8 @@ public static class AiProviderFactory
                 configuration["Claude:ApiKey"]
                     ?? throw new InvalidOperationException("Claude:ApiKey not configured in appsettings.json."),
                 configuration.GetConnectionString("DefaultConnection")
-                    ?? throw new InvalidOperationException("Connection string 'DefaultConnection' not found in appsettings.json.")),
+                    ?? throw new InvalidOperationException("Connection string 'DefaultConnection' not found in appsettings.json."),
+                configuration),
             _ => null
         };
     }
