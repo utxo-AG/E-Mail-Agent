@@ -24,14 +24,26 @@ All providers implement `IEmailProvider` interface with methods:
 
 #### AI Providers (`AiProvider/`)
 AI integration for response generation:
-- **Claude** (`ClaudeClass.cs`): Anthropic Claude AI integration
+
+- **Claude** (`ClaudeClass.cs`): Main Anthropic Claude AI integration
   - Multi-turn conversation support
-  - Tool usage with MCP servers
-  - File creation and Base64 conversion
-  - Configurable max turns (currently 40)
+  - MCP server tool usage for API calls
+  - Handles email response generation
+  - Maximum 20 iterations for tool calls
+
+- **ClaudeGenerateDocumentsClass** (`ClaudeGenerateDocumentsClass.cs`): Document generation agent
+  - Isolated agent for creating PDF, DOCX, XLSX, PPTX documents
+  - Uses Anthropic Skills API (no MCP tools)
+  - Called automatically when `MustCreateAttachment=true`
+  - Downloads generated files via Skills API
+
+**Two-Agent Architecture:**
+Due to conflicts between MCP tools and Anthropic Skills, document generation is handled by a separate agent:
+1. **Agent 1 (ClaudeClass)**: Processes email, calls APIs via MCP tools, prepares response
+2. **Agent 2 (ClaudeGenerateDocumentsClass)**: Creates requested documents using Skills
 
 Implements `IAiProvider` interface:
-- `GetReplyAsync()`: Generate AI response for email
+- `GenerateResponse()`: Generate AI response for email
 
 #### Factories (`Factory/`)
 - `EmailProviderFactory.cs`: Creates email provider instances
@@ -157,32 +169,67 @@ The AI must respond in strict JSON format:
 
 ```json
 {
-  "response": "The email text response",
-  "attachments": [
-    {
-      "filename": "document.pdf",
-      "contentType": "application/pdf",
-      "content": "base64-encoded-content-or-null",
-      "path": "/absolute/path/to/file"
-    }
-  ]
+  "EmailResponseText": "Plain text email response",
+  "EmailResponseSubject": "RE: Original Subject",
+  "EmailResponseHtml": "<html>HTML formatted response</html>",
+  "AiExplanation": "Brief explanation of what was done",
+  "attachments": [],
+  "MustCreateAttachment": false,
+  "AttachmentType": null,
+  "AttachmentData": null,
+  "AttachmentFilename": null
+}
+```
+
+### Document Generation Fields
+
+When the customer requests a document (PDF, Word, etc.), the AI should NOT create it directly. Instead:
+
+| Field | Description |
+|-------|-------------|
+| `MustCreateAttachment` | Set to `true` if a document should be generated |
+| `AttachmentType` | Document type: `pdf`, `docx`, `xlsx`, `pptx` |
+| `AttachmentData` | Structured text data to include in the document |
+| `AttachmentFilename` | Suggested filename (e.g., `Angebot_Murg.pdf`) |
+
+The system will automatically call a second agent to generate the document using Anthropic Skills.
+
+**Example for PDF generation:**
+```json
+{
+  "EmailResponseText": "...",
+  "MustCreateAttachment": true,
+  "AttachmentType": "pdf",
+  "AttachmentData": "INTERNET-ANGEBOT\n\nKunde: Max Mustermann\nAdresse: Musterstraße 1\n\nVerfügbare Tarife:\n1. Basic - 25 Mbit/s - 24,90€",
+  "AttachmentFilename": "Angebot_Mustermann.pdf"
 }
 ```
 
 ## 🔍 Logging
 
 Extensive console logging for debugging:
-- `[Claude Turn X]`: AI turn tracking
-- `[EmailProvider]`: Email operations
-- `[ProcessMails]`: Processing flow
-- `[McpServer]`: Tool usage
+- `[EmailPollingService]`: Email polling status
+- `[MCP]`: MCP tool registration
+- `[MCP Tool Call]`: MCP tool execution
+- `[MCP toolname]`: Specific MCP tool details
+- `[Skill Download]`: Anthropic Skills file downloads
+- `[DocumentGenerator]`: Second agent for document generation
+- `[ParseAiResponse]`: JSON parsing from AI response
+- `[JSON Attachments]`: Parsed attachment information
+- `[API]`: API endpoint processing
 
 ## ⚠️ Error Handling
 
-- Invalid email formats: Logged and skipped
-- AI errors: Logged, no response sent
-- Email send failures: Logged with details
-- MCP tool failures: Handled gracefully
+- **Invalid email formats**: Logged and skipped
+- **AI errors**: Logged, no response sent
+- **Email send failures**: Logged with details
+- **MCP tool failures**: Handled gracefully, error message returned to AI
+- **Document generation failures**:
+  - Email is still sent without attachment
+  - Note added to `AiExplanation` informing about the issue
+  - All information is included in email text as fallback
+- **Attachment file not found**: Logged with warning, attachment skipped
+- **API timeouts**: Document generation has 10-minute timeout
 
 ## 🧪 Testing
 
@@ -197,78 +244,69 @@ Test MCP servers individually via Admintool's MCP Request feature.
 
 ## 📦 Dependencies
 
-### Claude Agent SDK
+### Anthropic.SDK
 
-The application uses the **Claude Agent SDK** for .NET to interact with Claude AI. This SDK provides a powerful interface for:
+The application uses the **Anthropic.SDK** (unofficial) for .NET to interact with Claude AI. This SDK provides:
 
-- Multi-turn conversations with Claude
-- Model Context Protocol (MCP) server integration
-- Tool usage and function calling
-- Prompt caching for efficiency
-- Built-in query helpers
+- Direct Claude API access
+- Skills support (PDF, DOCX, XLSX, PPTX generation)
+- Code execution capabilities
+- Web search integration
+- File download handling
 
-#### What is Claude Code?
+#### Configuration
 
-**Claude Code** is Anthropic's official CLI tool for building AI-powered applications. The Claude Agent SDK allows your .NET applications to programmatically interact with Claude Code's capabilities.
+Add your Anthropic API key to `appsettings.json`:
 
-#### Installation Requirements
-
-1. **Install Claude Code CLI** (required for the SDK to work):
-
-   **macOS/Linux:**
-   ```bash
-   brew install anthropics/claude/claude-code
-   ```
-
-   **Windows:**
-   ```bash
-   winget install Anthropic.ClaudeCode
-   ```
-
-   **npm (all platforms):**
-   ```bash
-   npm install -g @anthropics/claude-code
-   ```
-
-2. **Authenticate Claude Code:**
-   ```bash
-   claude-code auth login
-   ```
-   Follow the prompts to authenticate with your Anthropic account.
-
-3. **The SDK is already included** in this project via NuGet package reference in the `.csproj` file.
+```json
+{
+  "Claude": {
+    "ApiKey": "sk-ant-api03-..."
+  }
+}
+```
 
 #### How It's Used in This Project
 
-The agent uses the SDK in `AiProvider/Claude/ClaudeClass.cs`:
-
+**Main Agent (ClaudeClass.cs):**
 ```csharp
-using Claude.AgentSdk;
+var client = new AnthropicClient(apiKey, httpClient);
 
-// Initialize the Claude client
-var client = new ClaudeClient();
+var container = new Container
+{
+    Skills = new List<Skill>
+    {
+        new Skill { Type = "anthropic", SkillId = "pdf", Version = "latest" }
+    }
+};
 
-// Make a query with MCP servers
-var response = await client.QueryAsync(prompt, options);
+var parameters = new MessageParameters
+{
+    Model = AnthropicModels.Claude4Sonnet,
+    MaxTokens = 8000,
+    Container = container,
+    Tools = tools  // MCP tools + built-in tools
+};
+
+var response = await client.Messages.GetClaudeMessageAsync(parameters);
 ```
 
-**Key Features Used:**
-- **QueryAsync**: Simple API for single queries
-- **QueryOptions**: Configure max turns, MCP servers, and model settings
-- **MCP Server Integration**: Dynamic tool registration per agent
-- **Multi-turn Support**: Handles complex workflows requiring multiple AI turns
+**Document Generator (ClaudeGenerateDocumentsClass.cs):**
+```csharp
+// Isolated agent with Skills only (no MCP tools)
+var downloadedFiles = await response.DownloadFilesAsync(client, outputDirectory);
+```
 
 #### SDK Documentation
 
-For more information about the Claude Agent SDK:
-- [Claude Agent SDK GitHub](https://github.com/0xeb/claude-agent-sdk-dotnet)
-- [Claude Code Documentation](https://docs.claude.com/claude-code)
-- [MCP Protocol Specification](https://modelcontextprotocol.io)
+- [Anthropic.SDK on NuGet](https://www.nuget.org/packages/Anthropic.SDK)
+- [Anthropic.SDK GitHub](https://github.com/tghamm/Anthropic.SDK)
+- [Anthropic API Documentation](https://docs.anthropic.com)
 
 ### Other Dependencies
 
 Key packages:
-- `Claude.AgentSdk`: Claude AI integration (see above)
+- `Anthropic.SDK`: Claude AI integration (v5.9.0+)
 - `Microsoft.EntityFrameworkCore`: Database access
 - `Pomelo.EntityFrameworkCore.MySql`: MySQL provider
 - `Newtonsoft.Json`: JSON processing

@@ -282,25 +282,43 @@ public class ClaudeClass : IAiProvider
             Console.WriteLine($"[DocumentGenerator] MustCreateAttachment=true, Type={responseClass.AttachmentType}");
             Console.WriteLine($"[DocumentGenerator] Starting second agent for document generation...");
 
-            var documentGenerator = new ClaudeGenerateDocumentsClass(_apikey);
-            var generatedAttachment = await documentGenerator.GenerateDocumentAsync(
-                responseClass.AttachmentType,
-                responseClass.AttachmentData,
-                responseClass.AttachmentFilename
-            );
-
-            if (generatedAttachment != null)
+            try
             {
-                Console.WriteLine($"[DocumentGenerator] Successfully generated: {generatedAttachment.Filename}");
+                var documentGenerator = new ClaudeGenerateDocumentsClass(_apikey);
+                var generatedAttachment = await documentGenerator.GenerateDocumentAsync(
+                    responseClass.AttachmentType,
+                    responseClass.AttachmentData,
+                    responseClass.AttachmentFilename
+                );
 
-                // Add the generated attachment to the response
-                var attachmentsList = responseClass.Attachments?.ToList() ?? new List<Attachment>();
-                attachmentsList.Add(generatedAttachment);
-                responseClass.Attachments = attachmentsList.ToArray();
+                if (generatedAttachment != null)
+                {
+                    Console.WriteLine($"[DocumentGenerator] Successfully generated: {generatedAttachment.Filename}");
+
+                    // Add the generated attachment to the response
+                    var attachmentsList = responseClass.Attachments?.ToList() ?? new List<Attachment>();
+                    attachmentsList.Add(generatedAttachment);
+                    responseClass.Attachments = attachmentsList.ToArray();
+                }
+                else
+                {
+                    Console.WriteLine("[DocumentGenerator] Document generation failed - no attachment created");
+
+                    // Add note to explanation that attachment could not be generated
+                    var note = "\n\n[Hinweis: Das angeforderte Dokument konnte leider nicht erstellt werden. Die Informationen sind jedoch im E-Mail-Text enthalten.]";
+                    responseClass.AiExplanation = (responseClass.AiExplanation ?? "") + note;
+                }
             }
-            else
+            catch (Exception ex)
             {
-                Console.WriteLine("[DocumentGenerator] Document generation failed - no attachment created");
+                Console.WriteLine($"[DocumentGenerator] Error during document generation: {ex.Message}");
+                Console.WriteLine($"[DocumentGenerator] Stack trace: {ex.StackTrace}");
+
+                // Add note to explanation that attachment could not be generated
+                var note = "\n\n[Hinweis: Das angeforderte Dokument konnte aufgrund eines technischen Fehlers nicht erstellt werden. Die Informationen sind jedoch im E-Mail-Text enthalten.]";
+                responseClass.AiExplanation = (responseClass.AiExplanation ?? "") + note;
+
+                // Email will still be sent without the attachment
             }
         }
 

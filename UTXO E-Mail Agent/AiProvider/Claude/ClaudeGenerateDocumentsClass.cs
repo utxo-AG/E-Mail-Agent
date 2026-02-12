@@ -145,20 +145,43 @@ Antworte NUR mit dem erstellten Dokument, keine zusätzlichen Erklärungen.";
             }
             else
             {
-                Console.WriteLine("[DocumentGenerator] No files downloaded from skill");
+                Console.WriteLine("[DocumentGenerator] WARNING: No files downloaded from skill");
+                Console.WriteLine("[DocumentGenerator] This may indicate a problem with the Skills API or the generated content");
 
                 // Log response content for debugging
+                Console.WriteLine("[DocumentGenerator] Response content types:");
                 foreach (var content in response.Content)
                 {
-                    Console.WriteLine($"[DocumentGenerator] Content type: {content.GetType().Name}");
+                    Console.WriteLine($"  - {content.GetType().Name}");
+                    if (content is TextContent textContent)
+                    {
+                        // Log first 500 chars of text content for debugging
+                        var preview = textContent.Text?.Length > 500
+                            ? textContent.Text.Substring(0, 500) + "..."
+                            : textContent.Text;
+                        Console.WriteLine($"    Text preview: {preview}");
+                    }
                 }
 
                 return null;
             }
         }
+        catch (HttpRequestException ex)
+        {
+            Console.WriteLine($"[DocumentGenerator] HTTP Error: {ex.Message}");
+            Console.WriteLine($"[DocumentGenerator] This may indicate network issues or API unavailability");
+            return null;
+        }
+        catch (TaskCanceledException ex)
+        {
+            Console.WriteLine($"[DocumentGenerator] Timeout Error: {ex.Message}");
+            Console.WriteLine($"[DocumentGenerator] Document generation took too long (>10 minutes)");
+            return null;
+        }
         catch (Exception ex)
         {
-            Console.WriteLine($"[DocumentGenerator] Error: {ex.Message}");
+            Console.WriteLine($"[DocumentGenerator] Unexpected Error: {ex.Message}");
+            Console.WriteLine($"[DocumentGenerator] Stack trace: {ex.StackTrace}");
             return null;
         }
     }
