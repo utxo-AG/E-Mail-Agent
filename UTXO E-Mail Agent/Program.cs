@@ -1,7 +1,13 @@
-﻿using Microsoft.EntityFrameworkCore;
+﻿using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Http;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 using UTXO_E_Mail_Agent.Classes;
 using UTXO_E_Mail_Agent.Factory;
+using UTXO_E_Mail_Agent.Models;
+using UTXO_E_Mail_Agent.Services;
 using UTXO_E_Mail_Agent_Shared.Models;
 
 // To update models from database:
@@ -23,226 +29,167 @@ public class Program
 
     public static async Task Main(string[] args)
     {
-        // Configuration laden
-        _configuration = new ConfigurationBuilder()
-            .SetBasePath(Directory.GetCurrentDirectory())
-            .AddJsonFile("appsettings.json", optional: false, reloadOnChange: true)
-            .Build();
-
-        _pollingIntervalSeconds = int.Parse(_configuration["AppSettings:PollingIntervalSeconds"] ?? "60");
-        _connectionString = _configuration.GetConnectionString("DefaultConnection")
-            ?? throw new InvalidOperationException("Connection string 'DefaultConnection' not found.");
-
         Console.WriteLine("═══════════════════════════════════════════════════");
         Console.WriteLine("  UTXO E-Mail Agent");
         Console.WriteLine($"  Version: {Version} (Build: {BuildDate})");
         Console.WriteLine("═══════════════════════════════════════════════════");
-        Console.WriteLine($"Polling interval: {_pollingIntervalSeconds} seconds");
 
-        // Test mode nur anzeigen, wenn interaktive Konsole verfügbar ist
-        var hasInteractiveConsole = !Console.IsInputRedirected && Environment.UserInteractive;
-        if (hasInteractiveConsole)
+        var builder = WebApplication.CreateBuilder(args);
+
+        // Configuration
+        _configuration = builder.Configuration;
+        _pollingIntervalSeconds = int.Parse(_configuration["AppSettings:PollingIntervalSeconds"] ?? "60");
+        _connectionString = _configuration.GetConnectionString("DefaultConnection")
+            ?? throw new InvalidOperationException("Connection string 'DefaultConnection' not found.");
+
+        // Add services
+        builder.Services.AddDbContext<DefaultdbContext>(options =>
+            options.UseMySql(_connectionString, ServerVersion.AutoDetect(_connectionString)));
+
+        // Add CORS for Admintool access
+        builder.Services.AddCors(options =>
         {
-            Console.WriteLine("Press 't' during wait to run test mode");
-        }
+            options.AddPolicy("AllowAll",
+                builder => builder
+                    .AllowAnyOrigin()
+                    .AllowAnyMethod()
+                    .AllowAnyHeader());
+        });
 
-        Console.WriteLine("Starting main loop...");
+        // Add background service for email polling
+        builder.Services.AddSingleton<IConfiguration>(_configuration);
+        builder.Services.AddHostedService<EmailPollingService>();
 
-        // Dauerschleife
-        while (true)
+        // Register HttpClient for API calls
+        builder.Services.AddHttpClient();
+
+        // Add Swagger/OpenAPI support
+        builder.Services.AddEndpointsApiExplorer();
+        builder.Services.AddSwaggerGen();
+
+        var app = builder.Build();
+
+        // Configure middleware
+        app.UseCors("AllowAll");
+
+        // Enable Swagger middleware
+        app.UseSwagger();
+        app.UseSwaggerUI(options =>
         {
-            try
-            {
-                await ProcessAgentsAsync();
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"Error in main loop: {ex.Message}");
-            }
+            options.SwaggerEndpoint("/swagger/v1/swagger.json", "UTXO E-Mail Agent API v1");
+            options.RoutePrefix = "swagger"; // Swagger will be available at /swagger
+        });
 
-            // hasInteractiveConsole wurde bereits oben deklariert - wiederverwenden
-
-            if (hasInteractiveConsole)
-            {
-                Console.WriteLine($"Waiting {_pollingIntervalSeconds} seconds until next check... (Press 't' for test mode)");
-
-                // Warte auf Timeout oder Tastendruck
-                var waitStart = DateTime.Now;
-                var waitSeconds = _pollingIntervalSeconds;
-
-                while ((DateTime.Now - waitStart).TotalSeconds < waitSeconds)
-                {
-                    if (Console.KeyAvailable)
-                    {
-                        var key = Console.ReadKey(true);
-                        if (key.KeyChar == 't' || key.KeyChar == 'T')
-                        {
-                            Console.WriteLine("\n[TEST MODE] Starting test scenario...");
-                            try
-                            {
-                                await RunTestScenarioAsync();
-                            }
-                            catch (Exception ex)
-                            {
-                                Console.WriteLine($"[TEST MODE] Error: {ex.Message}");
-                            }
-                            Console.WriteLine("[TEST MODE] Test completed. Resuming normal operation...");
-                        }
-                    }
-                    await Task.Delay(100); // Check every 100ms
-                }
-            }
-            else
-            {
-                // Kein interaktiver Modus - einfach nur warten (z.B. als systemd Service)
-                Console.WriteLine($"Waiting {_pollingIntervalSeconds} seconds until next check...");
-                await Task.Delay(_pollingIntervalSeconds * 1000);
-            }
-        }
-    }
-
-    private static async Task ProcessAgentsAsync()
-    {
-        var optionsBuilder = new DbContextOptionsBuilder<DefaultdbContext>();
-        optionsBuilder.UseMySql(_connectionString, ServerVersion.AutoDetect(_connectionString));
-
-        await using var db = new DefaultdbContext(optionsBuilder.Options);
-
-        // Alle aktiven Agents laden
-        var agents = await db.Agents
-            .Include(a=>a.Mcpservers)
-            .Where(a => a.State == "active" && a.Emailprovidertype=="polling")
-            .ToListAsync();
-
-        Console.WriteLine($"Found {agents.Count} active agent(s)");
-
-        foreach (var agent in agents)
+        // API endpoint for processing emails
+        app.MapPost("/api/processtext", async (ProcessTextRequestClass request, DefaultdbContext db) =>
         {
             try
             {
-                Console.WriteLine($"Processing agent {agent.Id} ({agent.Emailaddress}) with provider: {agent.Emailprovider}");
-
-                // EmailProvider anhand des Typs auswählen
-                var provider = EmailProviderFactory.GetProvider(agent.Emailprovider, _configuration, db);
-
-                if (provider == null)
+                // Get agent (default to first active agent if not specified)
+                Agent? agent;
+                if (request.AgentId.HasValue)
                 {
-                    Console.WriteLine($"Unknown email provider: {agent.Emailprovider}");
-                    continue;
-                }
-
-
-                var emails = await provider.GetEmailsAsync(agent);
-
-                if (emails != null && emails.Length > 0)
-                {
-                    Console.WriteLine($"Found {emails.Length} new email(s) for agent {agent.Id}");
-
-                   
-                    foreach (var email in emails)
-                    {
-                        Console.WriteLine($"  - Email from: {email.From}, Subject: {email.Subject}");
-                        var mail = await provider.GetMail(email, agent);
-
-                        if (mail != null)
-                        {
-                            // Zeige Vorschau des E-Mail-Inhalts
-                            var preview = mail.Text?.Length > 100
-                                ? mail.Text.Substring(0, 100) + "..."
-                                : mail.Text ?? "[Kein Text-Inhalt]";
-                            Console.WriteLine($"  - Email content preview: {preview}");
-
-                            // Mail mit AI verarbeiten
-                            var processor = new ProcessMailsClass(db, _configuration);
-                            var aiResponse = await processor.ProcessMailAsync(mail, agent);
-
-                            Console.WriteLine("  - AI Response:");
-                            Console.WriteLine($"    {aiResponse.EmailResponseText}");
-                            
-                            await provider.SendReplyResponseEmail(aiResponse,mail, agent);
-                            
-                        }
-                    }
+                    agent = await db.Agents
+                        .Include(a => a.Mcpservers)
+                        .Where(a => a.Id == request.AgentId.Value && a.State == "active")
+                        .FirstOrDefaultAsync();
                 }
                 else
                 {
-                    Console.WriteLine($"No new emails for agent {agent.Id}");
+                    agent = await db.Agents
+                        .Include(a => a.Mcpservers)
+                        .Where(a => a.State == "active")
+                        .FirstOrDefaultAsync();
                 }
+
+                if (agent == null)
+                {
+                    return Results.BadRequest(new ProcessEmailResponse
+                    {
+                        Success = false,
+                        Error = "No active agent found"
+                    });
+                }
+
+                // Create mail object from request
+                var mail = new MailClass
+                {
+                    Id = "API-" + Guid.NewGuid().ToString(),
+                    Type = "email",
+                    From = "api@example.com",
+                    To = new[] { agent.Emailaddress },
+                    Subject = "API Request",
+                    Status = "unread",
+                    CreatedAt = DateTime.Now.ToString("o"),
+                    Text = request.TextContent,
+                    Html = string.Empty,
+                    Cc = Array.Empty<string>(),
+                    Bcc = Array.Empty<string>(),
+                    ReplyTo = Array.Empty<string>(),
+                    Attachments = Array.Empty<string>()
+                };
+
+                // Process with AI
+                var processor = new ProcessMailsClass(db, _configuration);
+                var aiResponse = await processor.ProcessMailAsync(mail, agent);
+
+                // Build response
+                var response = new ProcessEmailResponse
+                {
+                    Success = true,
+                    EmailResponseText = aiResponse.EmailResponseText,
+                    EmailResponseSubject = aiResponse.EmailResponseSubject,
+                    EmailResponseHtml = aiResponse.EmailResponseHtml,
+                    AiExplanation = aiResponse.AiExplanation
+                };
+
+                // Add attachments to response
+                if (aiResponse.Attachments != null)
+                {
+                    foreach (var att in aiResponse.Attachments)
+                    {
+                        response.Attachments.Add(new AttachmentResponse
+                        {
+                            Filename = att.Filename,
+                            ContentType = att.ContentType,
+                            Content = att.Content
+                        });
+                    }
+                }
+
+                return Results.Ok(response);
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error processing agent {agent.Id}: {ex.Message}");
+                Console.WriteLine($"[API] Error processing email: {ex.Message}");
+                return Results.BadRequest(new ProcessEmailResponse
+                {
+                    Success = false,
+                    Error = ex.Message
+                });
             }
-        }
+        })
+        .WithName("ProcessText")
+        .WithSummary("Process text with AI")
+        .Produces<ProcessEmailResponse>(StatusCodes.Status200OK)
+        .Produces<ProcessEmailResponse>(StatusCodes.Status400BadRequest);
+
+        // Health check endpoint
+        app.MapGet("/api/health", () => Results.Ok(new { status = "healthy", version = Version }))
+            .WithName("HealthCheck")
+            .WithSummary("Health check")
+            .Produces(StatusCodes.Status200OK);
+
+        Console.WriteLine($"Polling interval: {_pollingIntervalSeconds} seconds");
+        Console.WriteLine("API running on: http://localhost:5051");
+        Console.WriteLine("Endpoints:");
+        Console.WriteLine("  POST /api/processtext - Process text with AI");
+        Console.WriteLine("  GET /api/health - Health check");
+        Console.WriteLine("");
+        Console.WriteLine("Swagger UI available at: http://localhost:5051/swagger");
+
+        // Run the web application
+        await app.RunAsync("http://0.0.0.0:5051");
     }
-
-    private static async Task RunTestScenarioAsync()
-    {
-        var optionsBuilder = new DbContextOptionsBuilder<DefaultdbContext>();
-        optionsBuilder.UseMySql(_connectionString, ServerVersion.AutoDetect(_connectionString));
-
-        await using var db = new DefaultdbContext(optionsBuilder.Options);
-
-        // Lade den ersten aktiven Agent
-        var agent = await db.Agents
-            .Include(a=>a.Mcpservers)
-            .Where(a => a.State == "active")
-            .FirstOrDefaultAsync();
-
-        if (agent == null)
-        {
-            Console.WriteLine("[TEST MODE] No active agent found for testing.");
-            return;
-        }
-
-        Console.WriteLine($"[TEST MODE] Using agent {agent.Id} ({agent.Emailaddress})");
-
-        // Erstelle eine Test-Mail
-        var testMail = new MailClass
-        {
-            Id = "TEST-" + Guid.NewGuid().ToString(),
-            Type = "email",
-            From = "test@example.com",
-            To = new[] { agent.Emailaddress },
-            Subject = "internetverfügbarkeit",
-            Status = "unread",
-            CreatedAt = DateTime.Now.ToString("o"),
-            Text = @"Sehr geehrte Damen und Herren,
-
-ich würde gerne wissen, ob sie auch Internet in Küssaberg, im Freudenspiel 70 anbieten.
-
-Viele Grüße
-Reimund Schilder",
-            Html = @"<p>Sehr geehrte Damen und Herren,</p>
-<p>ich würde gerne wissen, ob sie auch Internet in Küssaberg, im Freudenspiel 70 anbieten.</p>
-<p>Viele Grüße<br>Reimund Schilder</p>",
-            Cc = Array.Empty<string>(),
-            Bcc = Array.Empty<string>(),
-            ReplyTo = Array.Empty<string>(),
-            Attachments = Array.Empty<string>()
-        };
-
-        Console.WriteLine($"[TEST MODE] Test email from: {testMail.From}");
-        Console.WriteLine($"[TEST MODE] Subject: {testMail.Subject}");
-        Console.WriteLine($"[TEST MODE] Content preview: {testMail.Text?.Substring(0, Math.Min(100, testMail.Text.Length))}...");
-
-        // Verarbeite die Test-Mail mit AI
-        var processor = new ProcessMailsClass(db, _configuration);
-        var aiResponse = await processor.ProcessMailAsync(testMail, agent);
-
-        Console.WriteLine("[TEST MODE] ========================================");
-        Console.WriteLine("[TEST MODE] AI Response:");
-        Console.WriteLine(aiResponse.EmailResponseText);
-        Console.WriteLine("[TEST MODE] ========================================");
-
-        if (!string.IsNullOrEmpty(aiResponse.AiExplanation))
-        {
-            Console.WriteLine("[TEST MODE] AI Explanation:");
-            Console.WriteLine(aiResponse.AiExplanation);
-            Console.WriteLine("[TEST MODE] ========================================");
-        }
-
-        Console.WriteLine("[TEST MODE] Email would be sent to: " + testMail.From);
-        Console.WriteLine("[TEST MODE] (Not actually sending in test mode)");
-    }
+    
 }

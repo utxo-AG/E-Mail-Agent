@@ -113,10 +113,33 @@ public class ClaudeClass : IAiProvider
         // Tool-Use-Loop
         const int maxIterations = 20;
         MessageResponse response = null;
+        var allDownloadedFiles = new List<string>(); // Collect files from all iterations
+        var outputDirectory = Path.Combine(Directory.GetCurrentDirectory(), "SkillOutput");
+        Directory.CreateDirectory(outputDirectory);
 
         for (int iteration = 0; iteration < maxIterations; iteration++)
         {
             response = await client.Messages.GetClaudeMessageAsync(parameters);
+
+            // Download skill files after EACH iteration (before response gets overwritten)
+            try
+            {
+                var iterationFiles = await response.DownloadFilesAsync(client, outputDirectory);
+                if (iterationFiles.Any())
+                {
+                    Console.WriteLine($"[Skill Download] Iteration {iteration}: Downloaded {iterationFiles.Count()} files");
+                    foreach (var f in iterationFiles)
+                    {
+                        Console.WriteLine($"  -> {f}");
+                        if (!allDownloadedFiles.Contains(f))
+                            allDownloadedFiles.Add(f);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[Skill Download] Iteration {iteration}: Error downloading files: {ex.Message}");
+            }
 
             // Nur unsere MCP-Tools behandeln (built-in Tools wie code_execution/bash/web_search werden serverseitig verarbeitet)
             var mcpToolCalls = response.Content
@@ -189,37 +212,15 @@ public class ClaudeClass : IAiProvider
             }
         }
 
-        // Skill-Dateien herunterladen (in /tmp/ damit Claude's Pfadangaben stimmen)
-        var outputDirectory = "/tmp";
-        Directory.CreateDirectory(outputDirectory);
+        // Use files collected from all iterations
+        Console.WriteLine($"[Skill Download] Total downloaded files: {allDownloadedFiles.Count}");
 
-        Console.WriteLine($"[Skill Download] Downloading skill files to: {outputDirectory}");
-
-        // Check for file IDs first
-        var fileIds = response.GetFileIds();
-        Console.WriteLine($"[Skill Download] Found {fileIds.Count()} file IDs in response");
-        foreach (var fileId in fileIds)
-        {
-            try
-            {
-                var metadata = await client.Files.GetFileMetadataAsync(fileId);
-                Console.WriteLine($"[Skill Download] File ID: {fileId} -> {metadata.Filename} ({metadata.SizeBytes} bytes)");
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"[Skill Download] Error getting metadata for {fileId}: {ex.Message}");
-            }
-        }
-
-        var downloadedFiles = await response.DownloadFilesAsync(client, outputDirectory);
-        Console.WriteLine($"[Skill Download] Downloaded {downloadedFiles.Count()} files");
-
-        if (downloadedFiles.Any())
+        if (allDownloadedFiles.Any())
         {
             Console.WriteLine("----------------------------------------------");
             Console.WriteLine("Downloaded Files:");
             Console.WriteLine("----------------------------------------------");
-            foreach (var filePath in downloadedFiles)
+            foreach (var filePath in allDownloadedFiles)
             {
                 Console.WriteLine($"  {filePath}");
             }
@@ -273,11 +274,11 @@ public class ClaudeClass : IAiProvider
         }
 
         // Heruntergeladene Skill-Dateien als Attachments hinzufügen
-        if (downloadedFiles.Any())
+        if (allDownloadedFiles.Any())
         {
             var existingAttachments = responseClass.Attachments?.ToList() ?? new List<Attachment>();
 
-            foreach (var filePath in downloadedFiles)
+            foreach (var filePath in allDownloadedFiles)
             {
                 try
                 {
