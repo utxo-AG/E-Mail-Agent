@@ -103,7 +103,7 @@ public class ClaudeClass : IAiProvider
         var parameters = new MessageParameters
         {
             Model = AnthropicModels.Claude4Sonnet,
-            MaxTokens = 4000,
+            MaxTokens = 8000,
             System = new List<SystemMessage>() { new SystemMessage(systemPrompt) },
             Messages = messages,
             Container = container,
@@ -119,6 +119,7 @@ public class ClaudeClass : IAiProvider
 
         for (int iteration = 0; iteration < maxIterations; iteration++)
         {
+            Console.WriteLine($"[Skill Download] Iteration {iteration}: Starting download");
             response = await client.Messages.GetClaudeMessageAsync(parameters);
 
             // Download skill files after EACH iteration (before response gets overwritten)
@@ -272,6 +273,36 @@ public class ClaudeClass : IAiProvider
 
         // JSON aus der Antwort extrahieren (Claude kann Text vor dem JSON schreiben)
         var responseClass = ParseAiResponse(fullText);
+
+        // Check if we need to generate a document with a second agent
+        if (responseClass.MustCreateAttachment &&
+            !string.IsNullOrEmpty(responseClass.AttachmentType) &&
+            !string.IsNullOrEmpty(responseClass.AttachmentData))
+        {
+            Console.WriteLine($"[DocumentGenerator] MustCreateAttachment=true, Type={responseClass.AttachmentType}");
+            Console.WriteLine($"[DocumentGenerator] Starting second agent for document generation...");
+
+            var documentGenerator = new ClaudeGenerateDocumentsClass(_apikey);
+            var generatedAttachment = await documentGenerator.GenerateDocumentAsync(
+                responseClass.AttachmentType,
+                responseClass.AttachmentData,
+                responseClass.AttachmentFilename
+            );
+
+            if (generatedAttachment != null)
+            {
+                Console.WriteLine($"[DocumentGenerator] Successfully generated: {generatedAttachment.Filename}");
+
+                // Add the generated attachment to the response
+                var attachmentsList = responseClass.Attachments?.ToList() ?? new List<Attachment>();
+                attachmentsList.Add(generatedAttachment);
+                responseClass.Attachments = attachmentsList.ToArray();
+            }
+            else
+            {
+                Console.WriteLine("[DocumentGenerator] Document generation failed - no attachment created");
+            }
+        }
 
         // Debug: Log parsed attachments from JSON
         if (responseClass.Attachments != null && responseClass.Attachments.Length > 0)
