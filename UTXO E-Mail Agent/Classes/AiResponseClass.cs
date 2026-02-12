@@ -7,7 +7,7 @@ public class AiResponseClass
     public string EmailResponseText { get; set; } = string.Empty;
     public string EmailResponseHtml { get; set; } = string.Empty;
     public string EmailResponseSubject { get; set; } = string.Empty;
-    public string? AiExplanation { get; set; }  // Text vor dem JSON (optional)
+    public string? AiExplanation { get; set; }  // Text before the JSON (optional)
     public Attachment[] Attachments { get; set; }
 
     // Document generation fields - if true, a second agent will create the document

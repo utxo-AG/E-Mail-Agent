@@ -82,13 +82,13 @@ public class InboundClass : IEmailProvider
         using var request = new HttpRequestMessage(new HttpMethod("POST"), _apiUrl + $"emails/{mail.Id}/reply");
         request.Headers.TryAddWithoutValidation("Authorization", $"Bearer {_bearerToken}");
 
-        // Attachments vorbereiten: Path-Feld entfernen (nur für lokale Verwendung)
+        // Prepare attachments: Remove path field (only for local use)
         var attachmentsForApi = emailResponse.Attachments;
         if (attachmentsForApi != null && attachmentsForApi.Length > 0)
         {
             foreach (var att in attachmentsForApi)
             {
-                // Path auf null setzen - wird nicht an API geschickt
+                // Set path to null - not sent to API
                 att.Path = null;
             }
         }
@@ -105,7 +105,7 @@ public class InboundClass : IEmailProvider
         // Debug: Attachment-Struktur loggen
         if (emailResponse.Attachments != null && emailResponse.Attachments.Length > 0)
         {
-            Console.WriteLine($"[Inbound] Sende {emailResponse.Attachments.Length} Attachment(s):");
+            Console.WriteLine($"[Inbound] Sending {emailResponse.Attachments.Length} attachment(s):");
             for (int i = 0; i < emailResponse.Attachments.Length; i++)
             {
                 var att = emailResponse.Attachments[i];
@@ -118,11 +118,11 @@ public class InboundClass : IEmailProvider
 
         var jsonPayload = JsonConvert.SerializeObject(replyResponse, Formatting.Indented);
 
-        // Debug: JSON-Payload (gekürzt) ausgeben
+        // Debug: Output JSON payload (truncated)
         var payloadPreview = jsonPayload.Length > 500
             ? jsonPayload.Substring(0, 500) + "..."
             : jsonPayload;
-        Console.WriteLine($"[Inbound] Sende POST zu: {_apiUrl}emails/{mail.Id}/reply");
+        Console.WriteLine($"[Inbound] Sending POST to: {_apiUrl}emails/{mail.Id}/reply");
         Console.WriteLine($"[Inbound] Payload Preview:\n{payloadPreview}");
 
         request.Content = new StringContent(jsonPayload);
@@ -132,14 +132,14 @@ public class InboundClass : IEmailProvider
         if (!response.IsSuccessStatusCode)
         {
             var errorBody = await response.Content.ReadAsStringAsync();
-            Console.WriteLine($"[Inbound] FEHLER beim Senden der E-Mail:");
+            Console.WriteLine($"[Inbound] ERROR sending email:");
             Console.WriteLine($"  Status Code: {response.StatusCode}");
             Console.WriteLine($"  Response Body: {errorBody}");
             Console.WriteLine($"  Request URL: {_apiUrl}emails/{mail.Id}/reply");
         }
         else
         {
-            Console.WriteLine($"[Inbound] E-Mail erfolgreich gesendet! Status: {response.StatusCode}");
+            Console.WriteLine($"[Inbound] Email sent successfully! Status: {response.StatusCode}");
         }
     }
 }

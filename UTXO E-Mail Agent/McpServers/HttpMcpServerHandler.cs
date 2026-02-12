@@ -8,17 +8,17 @@ using System.Threading.Tasks;
 namespace UTXO_E_Mail_Agent.McpServers;
 
 /// <summary>
-/// Wrapper-Klasse für JSON-String Parameter
-/// Kompatibel mit Claude CLI 2.1.31+ die ein strukturiertes Schema benötigt
+/// Wrapper class for JSON string parameters
+/// Compatible with Claude CLI 2.1.31+ which requires a structured schema
 /// </summary>
 public class JsonStringParameter
 {
-    [Description("JSON-String mit API-Parametern. Das Format wird in der Tool-Beschreibung definiert.")]
+    [Description("JSON string with API parameters. The format is defined in the tool description.")]
     public string json { get; set; } = string.Empty;
 }
 
 /// <summary>
-/// Handler für HTTP-basierte MCP Server aus der Datenbank
+/// Handler for HTTP-based MCP servers from the database
 /// </summary>
 public class HttpMcpServerHandler
 {
@@ -33,11 +33,11 @@ public class HttpMcpServerHandler
     }
 
     /// <summary>
-    /// Führt einen HTTP-Call basierend auf der MCP-Server-Konfiguration aus
+    /// Executes an HTTP call based on the MCP server configuration
     /// </summary>
-    /// <param name="mcpserverid">ID des MCP Servers in der Datenbank</param>
-    /// <param name="conversationid">ID der Konversation</param>
-    /// <param name="parameter">Wrapper-Objekt mit JSON-String</param>
+    /// <param name="mcpserverid">ID of the MCP server in the database</param>
+    /// <param name="conversationid">ID of the conversation</param>
+    /// <param name="parameter">Wrapper object with JSON string</param>
     private async Task<string> ExecuteAsync(int mcpserverid, int conversationid, JsonStringParameter parameter)
     {
         try
@@ -117,7 +117,7 @@ public class HttpMcpServerHandler
 
     private async Task<HttpResponseMessage> ExecuteGetAsync(string url, string? parameters)
     {
-        // Bei GET: Parameter in URL als Query-String
+        // For GET: Parameters in URL as query string
         if (!string.IsNullOrEmpty(parameters))
         {
             var queryParams = ParseParametersToQueryString(parameters);
@@ -130,7 +130,7 @@ public class HttpMcpServerHandler
 
     private async Task<HttpResponseMessage> ExecutePostAsync(string url, string? parameters)
     {
-        // Bei POST: Parameter als JSON im Body
+        // For POST: Parameters as JSON in body
         var bodyJson = string.IsNullOrEmpty(parameters) ? "{}" : parameters;
 
         Console.WriteLine($"[MCP {_mcpConfig.Name}] POST Body:");
@@ -143,7 +143,7 @@ public class HttpMcpServerHandler
 
     private async Task<HttpResponseMessage> ExecutePutAsync(string url, string? parameters)
     {
-        // Bei PUT: Parameter als JSON im Body
+        // For PUT: Parameters as JSON in body
         var bodyJson = string.IsNullOrEmpty(parameters) ? "{}" : parameters;
 
         Console.WriteLine($"[MCP {_mcpConfig.Name}] PUT Body:");
@@ -156,7 +156,7 @@ public class HttpMcpServerHandler
 
     private async Task<HttpResponseMessage> ExecuteDeleteAsync(string url, string? parameters)
     {
-        // Bei DELETE: Parameter in URL als Query-String
+        // For DELETE: Parameters in URL as query string
         if (!string.IsNullOrEmpty(parameters))
         {
             var queryParams = ParseParametersToQueryString(parameters);
@@ -168,7 +168,7 @@ public class HttpMcpServerHandler
     }
 
     /// <summary>
-    /// Konvertiert JSON-Parameter zu Query-String für GET/DELETE
+    /// Converts JSON parameters to query string for GET/DELETE
     /// </summary>
     private string ParseParametersToQueryString(string jsonParameters)
     {
@@ -185,16 +185,16 @@ public class HttpMcpServerHandler
         }
         catch
         {
-            // Falls kein valides JSON, als Query-String interpretieren
+            // If not valid JSON, interpret as query string
             return jsonParameters;
         }
     }
 
     /// <summary>
-    /// Erstellt ein MCP Tool für diesen Server
-    /// Format: Nimmt JsonStringParameter Wrapper entgegen für Kompatibilität mit Claude CLI 2.1.31+
-    /// SDK generiert Schema mit "json" property für den JSON-String
-    /// Das JSON-Format wird in der Tool-Beschreibung (Description) definiert
+    /// Creates an MCP tool for this server
+    /// Format: Accepts JsonStringParameter wrapper for compatibility with Claude CLI 2.1.31+
+    /// SDK generates schema with "json" property for the JSON string
+    /// The JSON format is defined in the tool description (Description)
     /// </summary>
     public static Func<JsonStringParameter, Task<string>> CreateToolHandler(Mcpserver mcpConfig, int conversationid, string connectionString)
     {

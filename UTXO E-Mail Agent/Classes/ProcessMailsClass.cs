@@ -12,14 +12,14 @@ public class ProcessMailsClass(DefaultdbContext db, IConfiguration configuration
 
 
     /// <summary>
-    /// Verarbeitet eine E-Mail mit dem konfigurierten AI Provider
+    /// Processes an email with the configured AI provider
     /// </summary>
-    /// <param name="mail">Die zu verarbeitende E-Mail</param>
-    /// <param name="agent">Der Agent mit Konfiguration</param>
-    /// <returns>Die generierte Antwort vom AI Provider</returns>
+    /// <param name="mail">The email to process</param>
+    /// <param name="agent">The agent with configuration</param>
+    /// <returns>The generated response from the AI provider</returns>
     public async Task<AiResponseClass> ProcessMailAsync(MailClass mail, Agent agent)
     {
-        // AI Provider anhand des Agents auswählen
+        // Select AI provider based on agent configuration
         var aiProvider = AiProviderFactory.GetProvider(agent, _configuration);
 
         if (aiProvider == null)
@@ -27,7 +27,7 @@ public class ProcessMailsClass(DefaultdbContext db, IConfiguration configuration
             throw new InvalidOperationException($"Unknown AI provider: {agent.Aiprovider}");
         }
 
-        // Prompt für den AI Provider aufbauen
+        // Build prompt for the AI provider
         var prompt = BuildPrompt(mail, agent);
         var systemPrompt = BuildSystemPrompt(mail, agent);
         systemPrompt += GetMcpServerInformations(agent);
@@ -46,7 +46,7 @@ public class ProcessMailsClass(DefaultdbContext db, IConfiguration configuration
         await _db.Conversations.AddAsync(conversation);
         await _db.SaveChangesAsync();
         
-        // AI Provider aufrufen
+        // Call the AI provider
         var response = await aiProvider.GenerateResponse(systemPrompt, prompt, mail, agent, conversation);
 
         conversation.Agentresponsetext = response.EmailResponseText;

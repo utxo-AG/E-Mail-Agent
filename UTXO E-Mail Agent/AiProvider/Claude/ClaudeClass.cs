@@ -58,7 +58,7 @@ public class ClaudeClass : IAiProvider
                 new Dictionary<string, object> { { "name", "bash" } })
         };
 
-        // MCP-Tools aus Agent.Mcpservers dynamisch registrieren
+        // Dynamically register MCP tools from Agent.Mcpservers
         var mcpToolHandlers = new Dictionary<string, Func<JsonStringParameter, Task<string>>>();
 
         foreach (var mcpServer in agent.Mcpservers.OrEmptyIfNull())
@@ -156,7 +156,7 @@ public class ClaudeClass : IAiProvider
                 Console.WriteLine($"[Skill Download] Iteration {iteration}: Error: {ex.Message}");
             }
 
-            // Nur unsere MCP-Tools behandeln (built-in Tools wie code_execution/bash/web_search werden serverseitig verarbeitet)
+            // Only handle our MCP tools (built-in tools like code_execution/bash/web_search are processed server-side)
             var mcpToolCalls = response.Content
                 .OfType<ToolUseContent>()
                 .Where(tc => mcpToolHandlers.ContainsKey(tc.Name))
@@ -165,10 +165,10 @@ public class ClaudeClass : IAiProvider
             if (!mcpToolCalls.Any())
                 break;
 
-            // Claude-Antwort (mit Tool-Use) als Assistant-Message hinzufügen
+            // Add Claude response (with tool use) as assistant message
             messages.Add(response.Message);
 
-            // Jeden MCP-Tool-Call ausführen und Ergebnis zurücksenden
+            // Execute each MCP tool call and send result back
             foreach (var toolUse in mcpToolCalls)
             {
                 Console.WriteLine($"[MCP Tool Call] {toolUse.Name} - Input: {toolUse.Input}");
@@ -242,7 +242,7 @@ public class ClaudeClass : IAiProvider
             Console.WriteLine();
         }
 
-        // Text-Content extrahieren
+        // Extract text content
         var fullText = "";
         Console.WriteLine("----------------------------------------------");
         Console.WriteLine("All Content:");
@@ -271,7 +271,7 @@ public class ClaudeClass : IAiProvider
             }
         }
 
-        // JSON aus der Antwort extrahieren (Claude kann Text vor dem JSON schreiben)
+        // Extract JSON from response (Claude can write text before the JSON)
         var responseClass = ParseAiResponse(fullText);
 
         // Check if we need to generate a document with a second agent
@@ -305,7 +305,7 @@ public class ClaudeClass : IAiProvider
                     Console.WriteLine("[DocumentGenerator] Document generation failed - no attachment created");
 
                     // Add note to explanation that attachment could not be generated
-                    var note = "\n\n[Hinweis: Das angeforderte Dokument konnte leider nicht erstellt werden. Die Informationen sind jedoch im E-Mail-Text enthalten.]";
+                    var note = "\n\n[Note: The requested document could not be created. However, the information is included in the email text.]";
                     responseClass.AiExplanation = (responseClass.AiExplanation ?? "") + note;
                 }
             }
@@ -315,7 +315,7 @@ public class ClaudeClass : IAiProvider
                 Console.WriteLine($"[DocumentGenerator] Stack trace: {ex.StackTrace}");
 
                 // Add note to explanation that attachment could not be generated
-                var note = "\n\n[Hinweis: Das angeforderte Dokument konnte aufgrund eines technischen Fehlers nicht erstellt werden. Die Informationen sind jedoch im E-Mail-Text enthalten.]";
+                var note = "\n\n[Note: The requested document could not be created due to a technical error. However, the information is included in the email text.]";
                 responseClass.AiExplanation = (responseClass.AiExplanation ?? "") + note;
 
                 // Email will still be sent without the attachment
@@ -336,7 +336,7 @@ public class ClaudeClass : IAiProvider
             Console.WriteLine("[JSON Attachments] No attachments in JSON response");
         }
 
-        // Heruntergeladene Skill-Dateien als Attachments hinzufügen
+        // Add downloaded skill files as attachments
         if (allDownloadedFiles.Any())
         {
             var existingAttachments = responseClass.Attachments?.ToList() ?? new List<Attachment>();
@@ -369,7 +369,7 @@ public class ClaudeClass : IAiProvider
             responseClass.Attachments = existingAttachments.ToArray();
         }
 
-        // Attachments die nur einen Path haben: Datei lesen und base64-encoden
+        // Attachments that only have a path: Read file and base64 encode
         if (responseClass.Attachments != null)
         {
             foreach (var att in responseClass.Attachments)
@@ -406,7 +406,7 @@ public class ClaudeClass : IAiProvider
     }
 
     /// <summary>
-    /// Extrahiert das JSON aus Claudes Antwort. Claude kann Text vor dem JSON schreiben.
+    /// Extracts JSON from Claude's response. Claude can write text before the JSON.
     /// </summary>
     private static AiResponseClass ParseAiResponse(string fullText)
     {
@@ -427,7 +427,7 @@ public class ClaudeClass : IAiProvider
 
         try
         {
-            // Versuche zuerst einen ```json Block zu finden
+            // First try to find a ```json block
             var jsonBlockMatch = Regex.Match(fullText, @"```json\s*([\s\S]*?)\s*```");
             if (jsonBlockMatch.Success)
             {
@@ -435,7 +435,7 @@ public class ClaudeClass : IAiProvider
                 var parsed = JsonConvert.DeserializeObject<AiResponseClass>(jsonBlockMatch.Groups[1].Value);
                 if (parsed != null)
                 {
-                    // Text vor dem JSON als AiExplanation speichern
+                    // Save text before JSON as AiExplanation
                     var beforeJson = fullText[..fullText.IndexOf("```json", StringComparison.Ordinal)].Trim();
                     if (!string.IsNullOrEmpty(beforeJson))
                         parsed.AiExplanation = beforeJson;
@@ -443,11 +443,11 @@ public class ClaudeClass : IAiProvider
                 }
             }
 
-            // Fallback: Letztes vollständiges JSON-Objekt finden (von hinten suchen)
+            // Fallback: Find last complete JSON object (search from end)
             var lastBrace = fullText.LastIndexOf('}');
             if (lastBrace >= 0)
             {
-                // Passende öffnende Klammer finden
+                // Find matching opening brace
                 var depth = 0;
                 for (int i = lastBrace; i >= 0; i--)
                 {
@@ -469,12 +469,12 @@ public class ClaudeClass : IAiProvider
                                 return parsed;
                             }
                         }
-                        catch { /* Kein valides JSON, weiter suchen */ }
+                        catch { /* Not valid JSON, continue searching */ }
                     }
                 }
             }
 
-            // Letzter Fallback: Gesamttext als JSON parsen
+            // Last fallback: Parse entire text as JSON
             Console.WriteLine("[ParseAiResponse] Attempting to parse entire text as JSON");
             return JsonConvert.DeserializeObject<AiResponseClass>(fullText.Trim())
                    ?? new AiResponseClass { EmailResponseText = fullText.Trim() };

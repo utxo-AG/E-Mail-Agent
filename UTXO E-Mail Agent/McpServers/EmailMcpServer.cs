@@ -4,12 +4,12 @@ using Microsoft.EntityFrameworkCore;
 namespace UTXO_E_Mail_Agent.McpServers;
 
 /// <summary>
-/// MCP Server für E-Mail-bezogene Tools
+/// MCP Server for email-related tools
 /// </summary>
 public static class EmailMcpServer
 {
     /// <summary>
-    /// Sucht nach früheren E-Mails eines Kunden
+    /// Searches for previous emails from a customer
     /// </summary>
     public static async Task<string> SearchCustomerEmails(string emailAddress, string connectionString, int limit = 5)
     {
@@ -48,7 +48,7 @@ public static class EmailMcpServer
     }
 
     /// <summary>
-    /// Sucht nach Konversationen zu einem bestimmten Thema/Betreff
+    /// Searches for conversations about a specific topic/subject
     /// </summary>
     public static async Task<string> SearchBySubject(string searchTerm, string connectionString, int limit = 5)
     {
@@ -86,7 +86,7 @@ public static class EmailMcpServer
     }
 
     /// <summary>
-    /// Gibt Statistiken über E-Mail-Konversationen zurück
+    /// Returns statistics about email conversations
     /// </summary>
     public static async Task<string> GetEmailStats(int agentId, string connectionString)
     {
