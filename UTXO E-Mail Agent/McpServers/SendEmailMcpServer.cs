@@ -52,7 +52,7 @@ public class SendEmailMcpServer
             var jsonPayload = JsonConvert.SerializeObject(emailPayload, Formatting.Indented);
             Console.WriteLine($"[SendEmail MCP] Payload: {jsonPayload}");
 
-            using var request = new HttpRequestMessage(HttpMethod.Post, _apiUrl + "emails/send");
+            using var request = new HttpRequestMessage(HttpMethod.Post, _apiUrl + "emails");
             request.Headers.TryAddWithoutValidation("Authorization", $"Bearer {_bearerToken}");
             request.Content = new StringContent(jsonPayload, Encoding.UTF8, "application/json");
 
