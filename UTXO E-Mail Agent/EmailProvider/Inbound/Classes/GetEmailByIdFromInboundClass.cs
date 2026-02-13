@@ -1,7 +1,36 @@
 using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 using UTXO_E_Mail_Agent.Classes;
 
 namespace UTXO_E_Mail_Agent.EmailProvider.Inbound.Classes;
+
+/// <summary>
+/// JSON converter that handles both single string and string array values.
+/// Some email headers can come as either a single value or an array.
+/// </summary>
+public class SingleOrArrayConverter : JsonConverter<string[]>
+{
+    public override string[]? ReadJson(JsonReader reader, Type objectType, string[]? existingValue, bool hasExistingValue, JsonSerializer serializer)
+    {
+        var token = JToken.Load(reader);
+
+        if (token.Type == JTokenType.Null)
+            return null;
+
+        if (token.Type == JTokenType.Array)
+            return token.ToObject<string[]>();
+
+        if (token.Type == JTokenType.String)
+            return new[] { token.ToString() };
+
+        return null;
+    }
+
+    public override void WriteJson(JsonWriter writer, string[]? value, JsonSerializer serializer)
+    {
+        serializer.Serialize(writer, value);
+    }
+}
 
     public partial class GetEmailByIdFromInboundClass : MailClass
     {
@@ -61,6 +90,7 @@ namespace UTXO_E_Mail_Agent.EmailProvider.Inbound.Classes;
         public string ReceivedSpf { get; set; }
 
         [JsonProperty("authentication-results", NullValueHandling = NullValueHandling.Ignore)]
+        [JsonConverter(typeof(SingleOrArrayConverter))]
         public string[] AuthenticationResults { get; set; }
 
         [JsonProperty("x-ses-receipt", NullValueHandling = NullValueHandling.Ignore)]
