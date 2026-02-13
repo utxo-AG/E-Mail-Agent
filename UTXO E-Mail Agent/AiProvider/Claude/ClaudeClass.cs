@@ -75,7 +75,8 @@ public class ClaudeClass : IAiProvider
                     { "to", new Property() { Type = "string", Description = "Recipient email address" } },
                     { "subject", new Property() { Type = "string", Description = "Email subject" } },
                     { "text", new Property() { Type = "string", Description = "Plain text content of the email" } },
-                    { "html", new Property() { Type = "string", Description = "HTML content of the email (optional)" } }
+                    { "html", new Property() { Type = "string", Description = "HTML content of the email (optional)" } },
+                    { "reply_to", new Property() { Type = "string", Description = "Reply-to address (optional). IMPORTANT: When forwarding a customer email, set this to the customer's email so replies go directly to them." } }
                 },
                 Required = new List<string>() { "to", "subject", "text" }
             };
@@ -85,7 +86,7 @@ public class ClaudeClass : IAiProvider
 
             tools.Add(new Function(
                 "send_email",
-                $"Send an email to a recipient. Use this to forward emails or send new emails. The sender address is always {agent.Emailaddress}.",
+                $"Send an email to a recipient. Use this to forward emails or send new emails. The sender address is always {agent.Emailaddress}. When forwarding, use reply_to with the original sender's email so replies go to them.",
                 JsonNode.Parse(sendEmailSchemaJson)));
 
             Console.WriteLine($"[MCP] Registered built-in tool: send_email (from: {agent.Emailaddress})");
@@ -222,8 +223,9 @@ public class ClaudeClass : IAiProvider
                         var subject = toolUse.Input?["subject"]?.ToString() ?? "";
                         var text = toolUse.Input?["text"]?.ToString() ?? "";
                         var html = toolUse.Input?["html"]?.ToString();
+                        var replyTo = toolUse.Input?["reply_to"]?.ToString();
 
-                        result = await sendEmailServer.SendEmailAsync(to, subject, text, html);
+                        result = await sendEmailServer.SendEmailAsync(to, subject, text, html, replyTo);
                     }
                     else if (mcpToolHandlers.ContainsKey(toolUse.Name))
                     {

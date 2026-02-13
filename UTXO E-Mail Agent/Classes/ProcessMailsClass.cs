@@ -113,7 +113,12 @@ public class ProcessMailsClass(DefaultdbContext db, IConfiguration configuration
         s += "   - subject: Betreff (erforderlich)" + Environment.NewLine;
         s += "   - text: Inhalt als Plain-Text (erforderlich)" + Environment.NewLine;
         s += "   - html: Inhalt als HTML (optional)" + Environment.NewLine;
+        s += "   - reply_to: Antwort-Adresse (optional, aber WICHTIG bei Weiterleitungen!)" + Environment.NewLine;
         s += $"   Die Absenderadresse ist immer: {agent.Emailaddress}" + Environment.NewLine;
+        s += Environment.NewLine;
+        s += "   WICHTIG für Weiterleitungen:" + Environment.NewLine;
+        s += "   Wenn du eine Kunden-E-Mail weiterleitest, setze reply_to auf die E-Mail des Kunden!" + Environment.NewLine;
+        s += "   So kann der Empfänger (z.B. Support-Team) direkt dem Kunden antworten." + Environment.NewLine;
         s += Environment.NewLine;
 
         // Agent-specific MCP servers

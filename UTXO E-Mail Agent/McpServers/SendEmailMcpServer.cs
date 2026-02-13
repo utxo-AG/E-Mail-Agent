@@ -30,24 +30,43 @@ public class SendEmailMcpServer
     /// <param name="subject">Email subject</param>
     /// <param name="text">Plain text content of the email</param>
     /// <param name="html">HTML content of the email (optional)</param>
+    /// <param name="replyTo">Reply-to address (optional) - use this when forwarding so replies go to the original sender</param>
     /// <returns>Result message indicating success or failure</returns>
-    public async Task<string> SendEmailAsync(string to, string subject, string text, string? html = null)
+    public async Task<string> SendEmailAsync(string to, string subject, string text, string? html = null, string? replyTo = null)
     {
         Console.WriteLine($"[SendEmail MCP] ========================================");
         Console.WriteLine($"[SendEmail MCP] Sending email to: {to}");
         Console.WriteLine($"[SendEmail MCP] Subject: {subject}");
         Console.WriteLine($"[SendEmail MCP] From: {_fromAddress}");
+        if (!string.IsNullOrEmpty(replyTo))
+            Console.WriteLine($"[SendEmail MCP] Reply-To: {replyTo}");
 
         try
         {
-            var emailPayload = new
+            object emailPayload;
+            if (!string.IsNullOrEmpty(replyTo))
             {
-                from = _fromAddress,
-                to = to,
-                subject = subject,
-                text = text,
-                html = html ?? $"<html><body>{System.Web.HttpUtility.HtmlEncode(text).Replace("\n", "<br/>")}</body></html>"
-            };
+                emailPayload = new
+                {
+                    from = _fromAddress,
+                    to = to,
+                    subject = subject,
+                    text = text,
+                    html = html ?? $"<html><body>{System.Web.HttpUtility.HtmlEncode(text).Replace("\n", "<br/>")}</body></html>",
+                    reply_to = replyTo
+                };
+            }
+            else
+            {
+                emailPayload = new
+                {
+                    from = _fromAddress,
+                    to = to,
+                    subject = subject,
+                    text = text,
+                    html = html ?? $"<html><body>{System.Web.HttpUtility.HtmlEncode(text).Replace("\n", "<br/>")}</body></html>"
+                };
+            }
 
             var jsonPayload = JsonConvert.SerializeObject(emailPayload, Formatting.Indented);
             Console.WriteLine($"[SendEmail MCP] Payload: {jsonPayload}");
