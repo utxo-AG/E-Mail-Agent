@@ -5,6 +5,7 @@
 @inject IDbContextFactory<DefaultdbContext> DbFactory
 @inject NavigationManager NavigationManager
 @inject IDialogService DialogService
+@inject IHttpClientFactory HttpClientFactory
 
 <PageTitle>@(AgentId.HasValue ? "Edit Agent" : "Create New Agent")</PageTitle>
 
@@ -193,6 +194,12 @@ else
                             <MudText Typo="Typo.caption">@context.Url</MudText>
                         </MudTd>
                         <MudTd>
+                            <MudTooltip Text="Test">
+                                <MudIconButton Icon="@Icons.Material.Filled.PlayArrow"
+                                               Color="Color.Success"
+                                               Size="Size.Small"
+                                               OnClick="@(() => TestMcpServer(context))" />
+                            </MudTooltip>
                             <MudTooltip Text="Edit">
                                 <MudIconButton Icon="@Icons.Material.Filled.Edit"
                                                Color="Color.Primary"
@@ -402,5 +409,22 @@ else
                 await LoadMcpServers();
             }
         }
+    }
+
+    private async Task TestMcpServer(Mcpserver mcpServer)
+    {
+        var parameters = new DialogParameters<TestMcpServerDialog>
+        {
+            { x => x.McpServer, mcpServer }
+        };
+
+        var options = new DialogOptions
+        {
+            CloseButton = true,
+            MaxWidth = MaxWidth.Large,
+            FullWidth = true
+        };
+
+        await DialogService.ShowAsync<TestMcpServerDialog>($"Test: {mcpServer.Name}", parameters, options);
     }
 }

@@ -1,0 +1,209 @@
+@inject IHttpClientFactory HttpClientFactory
+
+<MudDialog>
+    <DialogContent>
+        <MudGrid>
+            <MudItem xs="12">
+                <MudAlert Severity="Severity.Info" Dense="true" Class="mb-3">
+                    <strong>@McpServer.Call.ToUpper()</strong> @McpServer.Url
+                </MudAlert>
+            </MudItem>
+
+            @if (McpServer.Call.ToUpper() == "POST" || McpServer.Call.ToUpper() == "PUT")
+            {
+                <MudItem xs="12">
+                    <MudTextField Label="JSON Parameters (optional)"
+                                  @bind-Value="jsonParameters"
+                                  Lines="6"
+                                  Variant="Variant.Outlined"
+                                  Placeholder="{&#10;  &quot;key&quot;: &quot;value&quot;&#10;}"
+                                  HelperText="Enter JSON body for POST/PUT requests" />
+                </MudItem>
+            }
+            else
+            {
+                <MudItem xs="12">
+                    <MudTextField Label="Query Parameters (optional)"
+                                  @bind-Value="jsonParameters"
+                                  Lines="3"
+                                  Variant="Variant.Outlined"
+                                  Placeholder="param1=value1&amp;param2=value2"
+                                  HelperText="Enter query string for GET/DELETE requests" />
+                </MudItem>
+            }
+
+            <MudItem xs="12">
+                <MudButton Variant="Variant.Filled"
+                           Color="Color.Primary"
+                           StartIcon="@Icons.Material.Filled.PlayArrow"
+                           OnClick="ExecuteTest"
+                           Disabled="@isLoading"
+                           FullWidth="true">
+                    @if (isLoading)
+                    {
+                        <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+                        <span>Executing...</span>
+                    }
+                    else
+                    {
+                        <span>Execute Request</span>
+                    }
+                </MudButton>
+            </MudItem>
+
+            @if (hasResult)
+            {
+                <MudItem xs="12">
+                    <MudDivider Class="my-2" />
+                </MudItem>
+
+                <MudItem xs="12">
+                    <MudAlert Severity="@(isSuccess ? Severity.Success : Severity.Error)" Dense="true">
+                        Status: @statusCode
+                    </MudAlert>
+                </MudItem>
+
+                <MudItem xs="12">
+                    <MudText Typo="Typo.subtitle2" Class="mb-1">Response:</MudText>
+                    <MudPaper Elevation="0" Class="pa-3" Style="background-color: #1e1e1e; max-height: 400px; overflow: auto;">
+                        <pre style="color: #d4d4d4; margin: 0; white-space: pre-wrap; word-wrap: break-word; font-size: 12px;">@FormatJson(responseBody)</pre>
+                    </MudPaper>
+                </MudItem>
+
+                <MudItem xs="12">
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">
+                        Response time: @responseTime ms
+                    </MudText>
+                </MudItem>
+            }
+        </MudGrid>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Close">Close</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter]
+    IMudDialogInstance MudDialog { get; set; } = default!;
+
+    [Parameter]
+    public Mcpserver McpServer { get; set; } = default!;
+
+    private string jsonParameters = "";
+    private bool isLoading = false;
+    private bool hasResult = false;
+    private bool isSuccess = false;
+    private string statusCode = "";
+    private string responseBody = "";
+    private long responseTime = 0;
+
+    private void Close()
+    {
+        MudDialog.Close();
+    }
+
+    private async Task ExecuteTest()
+    {
+        isLoading = true;
+        hasResult = false;
+        StateHasChanged();
+
+        var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+
+        try
+        {
+            var httpClient = HttpClientFactory.CreateClient();
+            httpClient.Timeout = TimeSpan.FromSeconds(30);
+
+            HttpResponseMessage response;
+            var url = McpServer.Url;
+            var method = McpServer.Call.ToUpper();
+
+            switch (method)
+            {
+                case "GET":
+                    if (!string.IsNullOrWhiteSpace(jsonParameters))
+                    {
+                        url = url.Contains("?") ? $"{url}&{jsonParameters}" : $"{url}?{jsonParameters}";
+                    }
+                    response = await httpClient.GetAsync(url);
+                    break;
+
+                case "POST":
+                    var postContent = new StringContent(
+                        string.IsNullOrWhiteSpace(jsonParameters) ? "{}" : jsonParameters,
+                        System.Text.Encoding.UTF8,
+                        "application/json");
+                    response = await httpClient.PostAsync(url, postContent);
+                    break;
+
+                case "PUT":
+                    var putContent = new StringContent(
+                        string.IsNullOrWhiteSpace(jsonParameters) ? "{}" : jsonParameters,
+                        System.Text.Encoding.UTF8,
+                        "application/json");
+                    response = await httpClient.PutAsync(url, putContent);
+                    break;
+
+                case "DELETE":
+                    if (!string.IsNullOrWhiteSpace(jsonParameters))
+                    {
+                        url = url.Contains("?") ? $"{url}&{jsonParameters}" : $"{url}?{jsonParameters}";
+                    }
+                    response = await httpClient.DeleteAsync(url);
+                    break;
+
+                default:
+                    throw new InvalidOperationException($"Unsupported HTTP method: {method}");
+            }
+
+            stopwatch.Stop();
+            responseTime = stopwatch.ElapsedMilliseconds;
+
+            statusCode = $"{(int)response.StatusCode} {response.StatusCode}";
+            isSuccess = response.IsSuccessStatusCode;
+            responseBody = await response.Content.ReadAsStringAsync();
+        }
+        catch (TaskCanceledException)
+        {
+            stopwatch.Stop();
+            responseTime = stopwatch.ElapsedMilliseconds;
+            statusCode = "Timeout";
+            isSuccess = false;
+            responseBody = "Request timed out after 30 seconds.";
+        }
+        catch (Exception ex)
+        {
+            stopwatch.Stop();
+            responseTime = stopwatch.ElapsedMilliseconds;
+            statusCode = "Error";
+            isSuccess = false;
+            responseBody = $"Error: {ex.Message}";
+        }
+
+        hasResult = true;
+        isLoading = false;
+        StateHasChanged();
+    }
+
+    private string FormatJson(string json)
+    {
+        if (string.IsNullOrWhiteSpace(json))
+            return "(empty response)";
+
+        try
+        {
+            var parsed = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>(json);
+            return System.Text.Json.JsonSerializer.Serialize(parsed, new System.Text.Json.JsonSerializerOptions
+            {
+                WriteIndented = true
+            });
+        }
+        catch
+        {
+            // Not valid JSON, return as-is
+            return json;
+        }
+    }
+}
