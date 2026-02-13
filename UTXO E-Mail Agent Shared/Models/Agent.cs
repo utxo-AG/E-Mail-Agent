@@ -41,5 +41,7 @@ public partial class Agent
 
     public virtual Customer Customer { get; set; } = null!;
 
+    public virtual ICollection<Logmessage> Logmessages { get; set; } = new List<Logmessage>();
+
     public virtual ICollection<Mcpserver> Mcpservers { get; set; } = new List<Mcpserver>();
 }

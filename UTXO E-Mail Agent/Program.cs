@@ -159,7 +159,7 @@ public class Program
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"[API] Error processing email: {ex.Message}");
+                Logger.LogError($"[API] Error processing email: {ex.Message}");
                 return Results.BadRequest(new ProcessEmailResponse
                 {
                     Success = false,

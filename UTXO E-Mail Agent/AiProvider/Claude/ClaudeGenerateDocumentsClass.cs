@@ -5,6 +5,7 @@ using Anthropic.SDK.Extensions;
 using Anthropic.SDK.Messaging;
 using UTXO_E_Mail_Agent.Classes;
 using UTXO_E_Mail_Agent.EmailProvider.Inbound.Classes;
+using UTXO_E_Mail_Agent.Services;
 
 namespace UTXO_E_Mail_Agent.AiProvider.Claude;
 
@@ -16,10 +17,12 @@ namespace UTXO_E_Mail_Agent.AiProvider.Claude;
 public class ClaudeGenerateDocumentsClass
 {
     private readonly string _apiKey;
+    private readonly int _agentId;
 
-    public ClaudeGenerateDocumentsClass(string apiKey)
+    public ClaudeGenerateDocumentsClass(string apiKey, int agentId)
     {
         _apiKey = apiKey;
+        _agentId = agentId;
     }
 
     /// <summary>
@@ -31,8 +34,8 @@ public class ClaudeGenerateDocumentsClass
     /// <returns>Attachment with the generated document, or null if generation failed</returns>
     public async Task<Attachment?> GenerateDocumentAsync(string attachmentType, string attachmentData, string? filename)
     {
-        Console.WriteLine($"[DocumentGenerator] Starting document generation: {attachmentType}");
-        Console.WriteLine($"[DocumentGenerator] Data length: {attachmentData?.Length ?? 0} characters");
+        Logger.Log($"[DocumentGenerator] Starting document generation: {attachmentType}", _agentId);
+        Logger.Log($"[DocumentGenerator] Data length: {attachmentData?.Length ?? 0} characters", _agentId);
 
         var httpClient = new HttpClient
         {
@@ -51,7 +54,7 @@ public class ClaudeGenerateDocumentsClass
             _ => "pdf" // Default to PDF
         };
 
-        Console.WriteLine($"[DocumentGenerator] Using skill: {skillId}");
+        Logger.Log($"[DocumentGenerator] Using skill: {skillId}", _agentId);
 
         // Create container with only the required skill
         var container = new Container
@@ -102,30 +105,30 @@ Antworte NUR mit dem erstellten Dokument, keine zusätzlichen Erklärungen.";
 
         try
         {
-            Console.WriteLine("[DocumentGenerator] Calling Claude API...");
+            Logger.Log("[DocumentGenerator] Calling Claude API...", _agentId);
             var response = await client.Messages.GetClaudeMessageAsync(parameters);
 
             // Log container info
             if (response.Container != null)
             {
-                Console.WriteLine($"[DocumentGenerator] Container ID: {response.Container.Id}");
+                Logger.Log($"[DocumentGenerator] Container ID: {response.Container.Id}", _agentId);
             }
 
             // Check for file IDs
             var fileIds = response.GetFileIds();
-            Console.WriteLine($"[DocumentGenerator] Found {fileIds.Count()} file IDs");
+            Logger.Log($"[DocumentGenerator] Found {fileIds.Count()} file IDs", _agentId);
 
             // Download files
             var outputDirectory = Path.Combine(Directory.GetCurrentDirectory(), "SkillOutput");
             Directory.CreateDirectory(outputDirectory);
 
             var downloadedFiles = await response.DownloadFilesAsync(client, outputDirectory);
-            Console.WriteLine($"[DocumentGenerator] Downloaded {downloadedFiles.Count()} files");
+            Logger.Log($"[DocumentGenerator] Downloaded {downloadedFiles.Count()} files", _agentId);
 
             if (downloadedFiles.Any())
             {
                 var filePath = downloadedFiles.First();
-                Console.WriteLine($"[DocumentGenerator] Using file: {filePath}");
+                Logger.Log($"[DocumentGenerator] Using file: {filePath}", _agentId);
 
                 // Read the file and create attachment
                 var fileBytes = await File.ReadAllBytesAsync(filePath);
@@ -133,7 +136,7 @@ Antworte NUR mit dem erstellten Dokument, keine zusätzlichen Erklärungen.";
                 var actualFilename = filename ?? Path.GetFileName(filePath);
                 var contentType = GetContentType(attachmentType);
 
-                Console.WriteLine($"[DocumentGenerator] Created attachment: {actualFilename} ({fileBytes.Length} bytes)");
+                Logger.Log($"[DocumentGenerator] Created attachment: {actualFilename} ({fileBytes.Length} bytes)", _agentId);
 
                 return new Attachment
                 {
@@ -145,21 +148,21 @@ Antworte NUR mit dem erstellten Dokument, keine zusätzlichen Erklärungen.";
             }
             else
             {
-                Console.WriteLine("[DocumentGenerator] WARNING: No files downloaded from skill");
-                Console.WriteLine("[DocumentGenerator] This may indicate a problem with the Skills API or the generated content");
+                Logger.LogWarning("[DocumentGenerator] No files downloaded from skill", _agentId);
+                Logger.LogWarning("[DocumentGenerator] This may indicate a problem with the Skills API or the generated content", _agentId);
 
                 // Log response content for debugging
-                Console.WriteLine("[DocumentGenerator] Response content types:");
+                Logger.Log("[DocumentGenerator] Response content types:", _agentId);
                 foreach (var content in response.Content)
                 {
-                    Console.WriteLine($"  - {content.GetType().Name}");
+                    Logger.Log($"  - {content.GetType().Name}", _agentId);
                     if (content is TextContent textContent)
                     {
                         // Log first 500 chars of text content for debugging
                         var preview = textContent.Text?.Length > 500
                             ? textContent.Text.Substring(0, 500) + "..."
                             : textContent.Text;
-                        Console.WriteLine($"    Text preview: {preview}");
+                        Logger.Log($"    Text preview: {preview}", _agentId);
                     }
                 }
 
@@ -168,20 +171,20 @@ Antworte NUR mit dem erstellten Dokument, keine zusätzlichen Erklärungen.";
         }
         catch (HttpRequestException ex)
         {
-            Console.WriteLine($"[DocumentGenerator] HTTP Error: {ex.Message}");
-            Console.WriteLine($"[DocumentGenerator] This may indicate network issues or API unavailability");
+            Logger.LogError($"[DocumentGenerator] HTTP Error: {ex.Message}", _agentId);
+            Logger.LogError($"[DocumentGenerator] This may indicate network issues or API unavailability", _agentId);
             return null;
         }
         catch (TaskCanceledException ex)
         {
-            Console.WriteLine($"[DocumentGenerator] Timeout Error: {ex.Message}");
-            Console.WriteLine($"[DocumentGenerator] Document generation took too long (>10 minutes)");
+            Logger.LogError($"[DocumentGenerator] Timeout Error: {ex.Message}", _agentId);
+            Logger.LogError($"[DocumentGenerator] Document generation took too long (>10 minutes)", _agentId);
             return null;
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"[DocumentGenerator] Unexpected Error: {ex.Message}");
-            Console.WriteLine($"[DocumentGenerator] Stack trace: {ex.StackTrace}");
+            Logger.LogError($"[DocumentGenerator] Unexpected Error: {ex.Message}", _agentId);
+            Logger.LogError($"[DocumentGenerator] Stack trace: {ex.StackTrace}", _agentId);
             return null;
         }
     }

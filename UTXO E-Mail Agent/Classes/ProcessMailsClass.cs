@@ -2,6 +2,7 @@ using System.Text;
 using Microsoft.Extensions.Configuration;
 using UTXO_E_Mail_Agent.Factory;
 using UTXO_E_Mail_Agent_Shared.Models;
+using UTXO_E_Mail_Agent.Services;
 
 namespace UTXO_E_Mail_Agent.Classes;
 
@@ -62,7 +63,7 @@ public class ProcessMailsClass(DefaultdbContext db, IConfiguration configuration
             {
                 if (!File.Exists(attachment.Path))
                 {
-                    Console.WriteLine($"[API] Warning: Attachment file not found: {attachment.Path}");
+                    Logger.LogWarning($"[API] Attachment file not found: {attachment.Path}");
                 }
                 else
                 {
@@ -73,7 +74,7 @@ public class ProcessMailsClass(DefaultdbContext db, IConfiguration configuration
                     }
                     catch (Exception ex)
                     {
-                        Console.WriteLine($"[API] Warning: Could not read attachment file {attachment.Path}: {ex.Message}");
+                        Logger.LogWarning($"[API] Could not read attachment file {attachment.Path}: {ex.Message}");
                     }
                 }
             }
@@ -81,7 +82,7 @@ public class ProcessMailsClass(DefaultdbContext db, IConfiguration configuration
             // Skip attachments with no content
             if (string.IsNullOrEmpty(content))
             {
-                Console.WriteLine($"[API] Warning: Skipping attachment {attachment.Filename} - no content available");
+                Logger.LogWarning($"[API] Skipping attachment {attachment.Filename} - no content available");
                 continue;
             }
 

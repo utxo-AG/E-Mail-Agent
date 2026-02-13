@@ -21,6 +21,8 @@ public partial class DefaultdbContext : DbContext
 
     public virtual DbSet<Customer> Customers { get; set; }
 
+    public virtual DbSet<Logmessage> Logmessages { get; set; }
+
     public virtual DbSet<Mcpserver> Mcpservers { get; set; }
 
     public virtual DbSet<Mcpserverrequest> Mcpserverrequests { get; set; }
@@ -226,6 +228,32 @@ public partial class DefaultdbContext : DbContext
             entity.HasOne(d => d.Package).WithMany(p => p.Customers)
                 .HasForeignKey(d => d.PackageId)
                 .HasConstraintName("customsers_packages");
+        });
+
+        modelBuilder.Entity<Logmessage>(entity =>
+        {
+            entity.HasKey(e => e.Id).HasName("PRIMARY");
+
+            entity.ToTable("logmessages");
+
+            entity.HasIndex(e => e.AgentId, "logmessages_agents");
+
+            entity.Property(e => e.Id).HasColumnName("id");
+            entity.Property(e => e.Additionaldata)
+                .HasColumnType("text")
+                .HasColumnName("additionaldata");
+            entity.Property(e => e.AgentId).HasColumnName("agent_id");
+            entity.Property(e => e.Created)
+                .HasColumnType("datetime")
+                .HasColumnName("created");
+            entity.Property(e => e.Message)
+                .HasMaxLength(255)
+                .HasColumnName("message");
+
+            entity.HasOne(d => d.Agent).WithMany(p => p.Logmessages)
+                .HasForeignKey(d => d.AgentId)
+                .OnDelete(DeleteBehavior.Cascade)
+                .HasConstraintName("logmessages_agents");
         });
 
         modelBuilder.Entity<Mcpserver>(entity =>

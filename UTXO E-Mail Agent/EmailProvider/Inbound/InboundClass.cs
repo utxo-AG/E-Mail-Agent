@@ -6,6 +6,7 @@ using UTXO_E_Mail_Agent.Classes;
 using UTXO_E_Mail_Agent.EmailProvider.Inbound.Classes;
 using UTXO_E_Mail_Agent.Interfaces;
 using UTXO_E_Mail_Agent_Shared.Models;
+using UTXO_E_Mail_Agent.Services;
 
 namespace UTXO_E_Mail_Agent.EmailProvider.Inbound;
 
@@ -105,14 +106,14 @@ public class InboundClass : IEmailProvider
         // Debug: Attachment-Struktur loggen
         if (emailResponse.Attachments != null && emailResponse.Attachments.Length > 0)
         {
-            Console.WriteLine($"[Inbound] Sending {emailResponse.Attachments.Length} attachment(s):");
+            Logger.Log($"[Inbound] Sending {emailResponse.Attachments.Length} attachment(s):");
             for (int i = 0; i < emailResponse.Attachments.Length; i++)
             {
                 var att = emailResponse.Attachments[i];
-                Console.WriteLine($"  [{i + 1}] Filename: {att.Filename}");
-                Console.WriteLine($"      ContentType: {att.ContentType}");
-                Console.WriteLine($"      Content Length: {att.Content?.Length ?? 0} chars");
-                Console.WriteLine($"      Path: {att.Path}");
+                Logger.Log($"  [{i + 1}] Filename: {att.Filename}");
+                Logger.Log($"      ContentType: {att.ContentType}");
+                Logger.Log($"      Content Length: {att.Content?.Length ?? 0} chars");
+                Logger.Log($"      Path: {att.Path}");
             }
         }
 
@@ -122,8 +123,8 @@ public class InboundClass : IEmailProvider
         var payloadPreview = jsonPayload.Length > 500
             ? jsonPayload.Substring(0, 500) + "..."
             : jsonPayload;
-        Console.WriteLine($"[Inbound] Sending POST to: {_apiUrl}emails/{mail.Id}/reply");
-        Console.WriteLine($"[Inbound] Payload Preview:\n{payloadPreview}");
+        Logger.Log($"[Inbound] Sending POST to: {_apiUrl}emails/{mail.Id}/reply");
+        Logger.Log($"[Inbound] Payload Preview:\n{payloadPreview}");
 
         request.Content = new StringContent(jsonPayload);
         request.Content.Headers.ContentType = MediaTypeHeaderValue.Parse("application/json");
@@ -132,14 +133,14 @@ public class InboundClass : IEmailProvider
         if (!response.IsSuccessStatusCode)
         {
             var errorBody = await response.Content.ReadAsStringAsync();
-            Console.WriteLine($"[Inbound] ERROR sending email:");
-            Console.WriteLine($"  Status Code: {response.StatusCode}");
-            Console.WriteLine($"  Response Body: {errorBody}");
-            Console.WriteLine($"  Request URL: {_apiUrl}emails/{mail.Id}/reply");
+            Logger.LogError($"[Inbound] ERROR sending email:");
+            Logger.LogError($"  Status Code: {response.StatusCode}");
+            Logger.LogError($"  Response Body: {errorBody}");
+            Logger.LogError($"  Request URL: {_apiUrl}emails/{mail.Id}/reply");
         }
         else
         {
-            Console.WriteLine($"[Inbound] Email sent successfully! Status: {response.StatusCode}");
+            Logger.Log($"[Inbound] Email sent successfully! Status: {response.StatusCode}");
         }
     }
 }

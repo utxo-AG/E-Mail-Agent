@@ -2,6 +2,7 @@ using System.Net.Http.Headers;
 using System.Text;
 using Microsoft.Extensions.Configuration;
 using Newtonsoft.Json;
+using UTXO_E_Mail_Agent.Services;
 
 namespace UTXO_E_Mail_Agent.McpServers;
 
@@ -14,13 +15,15 @@ public class SendEmailMcpServer
     private readonly string _apiUrl;
     private readonly string _bearerToken;
     private readonly string _fromAddress;
+    private readonly int _agentId;
     private static readonly HttpClient _httpClient = new();
 
-    public SendEmailMcpServer(IConfiguration config, string fromAddress)
+    public SendEmailMcpServer(IConfiguration config, string fromAddress, int agentId)
     {
         _apiUrl = config["Email:ApiUrl"] ?? throw new InvalidOperationException("Email:ApiUrl not configured");
         _bearerToken = config["Email:BearerToken"] ?? throw new InvalidOperationException("Email:BearerToken not configured");
         _fromAddress = fromAddress;
+        _agentId = agentId;
     }
 
     /// <summary>
@@ -34,12 +37,12 @@ public class SendEmailMcpServer
     /// <returns>Result message indicating success or failure</returns>
     public async Task<string> SendEmailAsync(string to, string subject, string text, string? html = null, string? replyTo = null)
     {
-        Console.WriteLine($"[SendEmail MCP] ========================================");
-        Console.WriteLine($"[SendEmail MCP] Sending email to: {to}");
-        Console.WriteLine($"[SendEmail MCP] Subject: {subject}");
-        Console.WriteLine($"[SendEmail MCP] From: {_fromAddress}");
+        Logger.Log($"[SendEmail MCP] ========================================", _agentId);
+        Logger.Log($"[SendEmail MCP] Sending email to: {to}", _agentId);
+        Logger.Log($"[SendEmail MCP] Subject: {subject}", _agentId);
+        Logger.Log($"[SendEmail MCP] From: {_fromAddress}", _agentId);
         if (!string.IsNullOrEmpty(replyTo))
-            Console.WriteLine($"[SendEmail MCP] Reply-To: {replyTo}");
+            Logger.Log($"[SendEmail MCP] Reply-To: {replyTo}", _agentId);
 
         try
         {
@@ -69,7 +72,7 @@ public class SendEmailMcpServer
             }
 
             var jsonPayload = JsonConvert.SerializeObject(emailPayload, Formatting.Indented);
-            Console.WriteLine($"[SendEmail MCP] Payload: {jsonPayload}");
+            Logger.Log($"[SendEmail MCP] Payload: {jsonPayload}", _agentId);
 
             using var request = new HttpRequestMessage(HttpMethod.Post, _apiUrl + "emails");
             request.Headers.TryAddWithoutValidation("Authorization", $"Bearer {_bearerToken}");
@@ -80,23 +83,23 @@ public class SendEmailMcpServer
 
             if (response.IsSuccessStatusCode)
             {
-                Console.WriteLine($"[SendEmail MCP] Success: {response.StatusCode}");
-                Console.WriteLine($"[SendEmail MCP] Response: {responseContent}");
-                Console.WriteLine($"[SendEmail MCP] ========================================");
+                Logger.Log($"[SendEmail MCP] Success: {response.StatusCode}", _agentId);
+                Logger.Log($"[SendEmail MCP] Response: {responseContent}", _agentId);
+                Logger.Log($"[SendEmail MCP] ========================================", _agentId);
                 return $"Email successfully sent to {to} with subject '{subject}'";
             }
             else
             {
-                Console.WriteLine($"[SendEmail MCP] Error: {response.StatusCode}");
-                Console.WriteLine($"[SendEmail MCP] Response: {responseContent}");
-                Console.WriteLine($"[SendEmail MCP] ========================================");
+                Logger.LogError($"[SendEmail MCP] Error: {response.StatusCode}", _agentId);
+                Logger.LogError($"[SendEmail MCP] Response: {responseContent}", _agentId);
+                Logger.LogError($"[SendEmail MCP] ========================================", _agentId);
                 return $"ERROR: Failed to send email. Status: {response.StatusCode}, Response: {responseContent}";
             }
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"[SendEmail MCP] Exception: {ex.Message}");
-            Console.WriteLine($"[SendEmail MCP] ========================================");
+            Logger.LogError($"[SendEmail MCP] Exception: {ex.Message}", _agentId);
+            Logger.LogError($"[SendEmail MCP] ========================================", _agentId);
             return $"ERROR: {ex.Message}";
         }
     }

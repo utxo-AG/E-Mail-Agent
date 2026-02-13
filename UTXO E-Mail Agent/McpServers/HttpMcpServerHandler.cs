@@ -4,6 +4,7 @@ using System.ComponentModel;
 using Microsoft.EntityFrameworkCore;
 using UTXO_E_Mail_Agent_Shared.Models;
 using System.Threading.Tasks;
+using UTXO_E_Mail_Agent.Services;
 
 namespace UTXO_E_Mail_Agent.McpServers;
 
@@ -52,9 +53,9 @@ public class HttpMcpServerHandler
             var method = _mcpConfig.Call.ToUpper();
             var url = _mcpConfig.Url;
 
-            Console.WriteLine($"[MCP {_mcpConfig.Name}] ========================================");
-            Console.WriteLine($"[MCP {_mcpConfig.Name}] Executing {method} to {url}");
-            Console.WriteLine($"[MCP {_mcpConfig.Name}] Raw Parameters: {jsonString ?? "(none)"}");
+            Logger.Log($"[MCP {_mcpConfig.Name}] ========================================", _mcpConfig.AgentId);
+            Logger.Log($"[MCP {_mcpConfig.Name}] Executing {method} to {url}", _mcpConfig.AgentId);
+            Logger.Log($"[MCP {_mcpConfig.Name}] Raw Parameters: {jsonString ?? "(none)"}", _mcpConfig.AgentId);
 
             Mcpserverrequest mrequest = new Mcpserverrequest(){McpserverId = mcpserverid, ConversationId =  conversationid, Parameter =  jsonString ?? "(none)", Created =  DateTime.Now};
             
@@ -87,9 +88,9 @@ public class HttpMcpServerHandler
 
             if (response.IsSuccessStatusCode)
             {
-                Console.WriteLine($"[MCP {_mcpConfig.Name}] Success: {response.StatusCode}");
-                Console.WriteLine($"[MCP {_mcpConfig.Name}] Response: {content}");
-                Console.WriteLine($"[MCP {_mcpConfig.Name}] ========================================");
+                Logger.Log($"[MCP {_mcpConfig.Name}] Success: {response.StatusCode}", _mcpConfig.AgentId);
+                Logger.Log($"[MCP {_mcpConfig.Name}] Response: {content}", _mcpConfig.AgentId);
+                Logger.Log($"[MCP {_mcpConfig.Name}] ========================================", _mcpConfig.AgentId);
                 mrequest.Result = content;
                 db.Mcpserverrequests.Add(mrequest);
                 await db.SaveChangesAsync();
@@ -98,9 +99,9 @@ public class HttpMcpServerHandler
             }
             else
             {
-                Console.Error.WriteLine($"[MCP {_mcpConfig.Name}] Error: {response.StatusCode}");
-                Console.Error.WriteLine($"[MCP {_mcpConfig.Name}] Error Response: {content}");
-                Console.Error.WriteLine($"[MCP {_mcpConfig.Name}] ========================================");
+                Logger.LogError($"[MCP {_mcpConfig.Name}] Error: {response.StatusCode}", _mcpConfig.AgentId);
+                Logger.LogError($"[MCP {_mcpConfig.Name}] Error Response: {content}", _mcpConfig.AgentId);
+                Logger.LogError($"[MCP {_mcpConfig.Name}] ========================================", _mcpConfig.AgentId);
                 mrequest.Result = "ERROR ({response.StatusCode}): {content}";
                 db.Mcpserverrequests.Add(mrequest);
                 await db.SaveChangesAsync();
@@ -110,7 +111,7 @@ public class HttpMcpServerHandler
         }
         catch (Exception ex)
         {
-            Console.Error.WriteLine($"[MCP {_mcpConfig.Name}] Exception: {ex.Message}");
+            Logger.LogError($"[MCP {_mcpConfig.Name}] Exception: {ex.Message}", _mcpConfig.AgentId);
             return $"ERROR: {ex.Message}";
         }
     }
@@ -122,7 +123,7 @@ public class HttpMcpServerHandler
         {
             var queryParams = ParseParametersToQueryString(parameters);
             url = $"{url}?{queryParams}";
-            Console.WriteLine($"[MCP {_mcpConfig.Name}] Final URL: {url}");
+            Logger.Log($"[MCP {_mcpConfig.Name}] Final URL: {url}", _mcpConfig.AgentId);
         }
 
         return await _httpClient.GetAsync(url);
@@ -133,8 +134,8 @@ public class HttpMcpServerHandler
         // For POST: Parameters as JSON in body
         var bodyJson = string.IsNullOrEmpty(parameters) ? "{}" : parameters;
 
-        Console.WriteLine($"[MCP {_mcpConfig.Name}] POST Body:");
-        Console.WriteLine($"[MCP {_mcpConfig.Name}] {bodyJson}");
+        Logger.Log($"[MCP {_mcpConfig.Name}] POST Body:", _mcpConfig.AgentId);
+        Logger.Log($"[MCP {_mcpConfig.Name}] {bodyJson}", _mcpConfig.AgentId);
 
         var content = new StringContent(bodyJson, Encoding.UTF8, "application/json");
 
@@ -146,8 +147,8 @@ public class HttpMcpServerHandler
         // For PUT: Parameters as JSON in body
         var bodyJson = string.IsNullOrEmpty(parameters) ? "{}" : parameters;
 
-        Console.WriteLine($"[MCP {_mcpConfig.Name}] PUT Body:");
-        Console.WriteLine($"[MCP {_mcpConfig.Name}] {bodyJson}");
+        Logger.Log($"[MCP {_mcpConfig.Name}] PUT Body:", _mcpConfig.AgentId);
+        Logger.Log($"[MCP {_mcpConfig.Name}] {bodyJson}", _mcpConfig.AgentId);
 
         var content = new StringContent(bodyJson, Encoding.UTF8, "application/json");
 
@@ -161,7 +162,7 @@ public class HttpMcpServerHandler
         {
             var queryParams = ParseParametersToQueryString(parameters);
             url = $"{url}?{queryParams}";
-            Console.WriteLine($"[MCP {_mcpConfig.Name}] Final URL: {url}");
+            Logger.Log($"[MCP {_mcpConfig.Name}] Final URL: {url}", _mcpConfig.AgentId);
         }
 
         return await _httpClient.DeleteAsync(url);

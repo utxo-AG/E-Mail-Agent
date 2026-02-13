@@ -5,6 +5,7 @@ using MimeKit;
 using UTXO_E_Mail_Agent.Classes;
 using UTXO_E_Mail_Agent.Interfaces;
 using UTXO_E_Mail_Agent_Shared.Models;
+using UTXO_E_Mail_Agent.Services;
 
 namespace UTXO_E_Mail_Agent.EmailProvider.Pop3;
 
@@ -64,12 +65,12 @@ public class Pop3Class : IEmailProvider
 
             await client.DisconnectAsync(true);
 
-            Console.WriteLine($"[POP3] Found {messages.Count} email(s)");
+            Logger.Log($"[POP3] Found {messages.Count} email(s)");
             return messages.ToArray();
         }
         catch (Exception ex)
         {
-            Console.Error.WriteLine($"[POP3] Error fetching emails: {ex.Message}");
+            Logger.LogError($"[POP3] Error fetching emails: {ex.Message}");
             throw;
         }
     }
@@ -128,12 +129,12 @@ public class Pop3Class : IEmailProvider
 
             await client.DisconnectAsync(true);
 
-            Console.WriteLine($"[POP3] Successfully fetched email: {result.Subject}");
+            Logger.Log($"[POP3] Successfully fetched email: {result.Subject}");
             return result;
         }
         catch (Exception ex)
         {
-            Console.Error.WriteLine($"[POP3] Error fetching email details: {ex.Message}");
+            Logger.LogError($"[POP3] Error fetching email details: {ex.Message}");
             throw;
         }
     }
@@ -189,11 +190,11 @@ public class Pop3Class : IEmailProvider
             await smtp.SendAsync(message);
             await smtp.DisconnectAsync(true);
 
-            Console.WriteLine($"[POP3/SMTP] Successfully sent reply to: {mail.From}");
+            Logger.Log($"[POP3/SMTP] Successfully sent reply to: {mail.From}");
         }
         catch (Exception ex)
         {
-            Console.Error.WriteLine($"[POP3/SMTP] Error sending reply: {ex.Message}");
+            Logger.LogError($"[POP3/SMTP] Error sending reply: {ex.Message}");
             throw;
         }
     }

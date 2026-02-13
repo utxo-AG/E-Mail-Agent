@@ -8,6 +8,7 @@ using UTXO_E_Mail_Agent.Classes;
 using UTXO_E_Mail_Agent.Interfaces;
 using UTXO_E_Mail_Agent_Shared.Models;
 using Attachment = UTXO_E_Mail_Agent.EmailProvider.Inbound.Classes.Attachment;
+using UTXO_E_Mail_Agent.Services;
 
 namespace UTXO_E_Mail_Agent.EmailProvider.Imap;
 
@@ -67,12 +68,12 @@ public class ImapClass : IEmailProvider
 
             await client.DisconnectAsync(true);
 
-            Console.WriteLine($"[IMAP] Found {result.Length} unread email(s)");
+            Logger.Log($"[IMAP] Found {result.Length} unread email(s)");
             return result;
         }
         catch (Exception ex)
         {
-            Console.Error.WriteLine($"[IMAP] Error fetching emails: {ex.Message}");
+            Logger.LogError($"[IMAP] Error fetching emails: {ex.Message}");
             throw;
         }
     }
@@ -134,12 +135,12 @@ public class ImapClass : IEmailProvider
 
             await client.DisconnectAsync(true);
 
-            Console.WriteLine($"[IMAP] Successfully fetched email: {result.Subject}");
+            Logger.Log($"[IMAP] Successfully fetched email: {result.Subject}");
             return result;
         }
         catch (Exception ex)
         {
-            Console.Error.WriteLine($"[IMAP] Error fetching email details: {ex.Message}");
+            Logger.LogError($"[IMAP] Error fetching email details: {ex.Message}");
             throw;
         }
     }
@@ -195,11 +196,11 @@ public class ImapClass : IEmailProvider
             await smtp.SendAsync(message);
             await smtp.DisconnectAsync(true);
 
-            Console.WriteLine($"[IMAP/SMTP] Successfully sent reply to: {mail.From}");
+            Logger.Log($"[IMAP/SMTP] Successfully sent reply to: {mail.From}");
         }
         catch (Exception ex)
         {
-            Console.Error.WriteLine($"[IMAP/SMTP] Error sending reply: {ex.Message}");
+            Logger.LogError($"[IMAP/SMTP] Error sending reply: {ex.Message}");
             throw;
         }
     }

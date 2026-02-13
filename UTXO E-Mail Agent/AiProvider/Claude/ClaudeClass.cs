@@ -14,6 +14,7 @@ using UTXO_E_Mail_Agent.Classes;
 using UTXO_E_Mail_Agent.EmailProvider.Inbound.Classes;
 using UTXO_E_Mail_Agent.Interfaces;
 using UTXO_E_Mail_Agent.McpServers;
+using UTXO_E_Mail_Agent.Services;
 
 namespace UTXO_E_Mail_Agent.AiProvider.Claude;
 
@@ -65,7 +66,7 @@ public class ClaudeClass : IAiProvider
         SendEmailMcpServer? sendEmailServer = null;
         try
         {
-            sendEmailServer = new SendEmailMcpServer(_configuration, agent.Emailaddress);
+            sendEmailServer = new SendEmailMcpServer(_configuration, agent.Emailaddress, agent.Id);
 
             var sendEmailSchema = new InputSchema()
             {
@@ -89,11 +90,11 @@ public class ClaudeClass : IAiProvider
                 $"Send an email to a recipient. Use this to forward emails or send new emails. The sender address is always {agent.Emailaddress}. When forwarding, use reply_to with the original sender's email so replies go to them.",
                 JsonNode.Parse(sendEmailSchemaJson)));
 
-            Console.WriteLine($"[MCP] Registered built-in tool: send_email (from: {agent.Emailaddress})");
+            Logger.Log($"[MCP] Registered built-in tool: send_email (from: {agent.Emailaddress})", agent.Id);
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"[MCP] Warning: Could not register send_email tool: {ex.Message}");
+            Logger.LogWarning($"[MCP] Could not register send_email tool: {ex.Message}", agent.Id);
         }
 
         // Dynamically register MCP tools from Agent.Mcpservers
@@ -129,7 +130,7 @@ public class ClaudeClass : IAiProvider
             var handler = HttpMcpServerHandler.CreateToolHandler(mcpServer, conversation.Id, _connectionString);
             mcpToolHandlers[toolName] = handler;
 
-            Console.WriteLine($"[MCP] Registered tool: {toolName} -> {mcpServer.Call.ToUpper()} {mcpServer.Url}");
+            Logger.Log($"[MCP] Registered tool: {toolName} -> {mcpServer.Call.ToUpper()} {mcpServer.Url}", agent.Id);
         }
 
         var messages = new List<Message>
@@ -157,7 +158,7 @@ public class ClaudeClass : IAiProvider
 
         for (int iteration = 0; iteration < maxIterations; iteration++)
         {
-            Console.WriteLine($"[Skill Download] Iteration {iteration}: Starting download");
+            Logger.Log($"[Skill Download] Iteration {iteration}: Starting download", agent.Id);
             response = await client.Messages.GetClaudeMessageAsync(parameters);
 
             // Download skill files after EACH iteration (before response gets overwritten)
@@ -166,32 +167,32 @@ public class ClaudeClass : IAiProvider
                 // Debug: Log container info
                 if (response.Container != null)
                 {
-                    Console.WriteLine($"[Skill Download] Iteration {iteration}: Container ID = {response.Container.Id}");
+                    Logger.Log($"[Skill Download] Iteration {iteration}: Container ID = {response.Container.Id}", agent.Id);
                 }
 
                 // Try to get file IDs from this response
                 var fileIds = response.GetFileIds();
-                Console.WriteLine($"[Skill Download] Iteration {iteration}: Found {fileIds.Count()} file IDs");
+                Logger.Log($"[Skill Download] Iteration {iteration}: Found {fileIds.Count()} file IDs", agent.Id);
 
                 var iterationFiles = await response.DownloadFilesAsync(client, outputDirectory);
                 if (iterationFiles.Any())
                 {
-                    Console.WriteLine($"[Skill Download] Iteration {iteration}: Downloaded {iterationFiles.Count()} files");
+                    Logger.Log($"[Skill Download] Iteration {iteration}: Downloaded {iterationFiles.Count()} files", agent.Id);
                     foreach (var f in iterationFiles)
                     {
-                        Console.WriteLine($"  -> {f}");
+                        Logger.Log($"  -> {f}", agent.Id);
                         if (!allDownloadedFiles.Contains(f))
                             allDownloadedFiles.Add(f);
                     }
                 }
                 else
                 {
-                    Console.WriteLine($"[Skill Download] Iteration {iteration}: No files downloaded");
+                    Logger.Log($"[Skill Download] Iteration {iteration}: No files downloaded", agent.Id);
                 }
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"[Skill Download] Iteration {iteration}: Error: {ex.Message}");
+                Logger.LogError($"[Skill Download] Iteration {iteration}: Error: {ex.Message}", agent.Id);
             }
 
             // Handle our custom tools (MCP tools + send_email)
@@ -210,7 +211,7 @@ public class ClaudeClass : IAiProvider
             // Execute each tool call and send result back
             foreach (var toolUse in customToolCalls)
             {
-                Console.WriteLine($"[MCP Tool Call] {toolUse.Name} - Input: {toolUse.Input}");
+                Logger.Log($"[MCP Tool Call] {toolUse.Name} - Input: {toolUse.Input}", agent.Id);
 
                 try
                 {
@@ -265,7 +266,7 @@ public class ClaudeClass : IAiProvider
                 }
                 catch (Exception ex)
                 {
-                    Console.Error.WriteLine($"[MCP Tool Error] {toolUse.Name}: {ex.Message}");
+                    Logger.LogError($"[MCP Tool Error] {toolUse.Name}: {ex.Message}", agent.Id);
 
                     messages.Add(new Message()
                     {
@@ -288,46 +289,45 @@ public class ClaudeClass : IAiProvider
         }
 
         // Use files collected from all iterations
-        Console.WriteLine($"[Skill Download] Total downloaded files: {allDownloadedFiles.Count}");
+        Logger.Log($"[Skill Download] Total downloaded files: {allDownloadedFiles.Count}", agent.Id);
 
         if (allDownloadedFiles.Any())
         {
-            Console.WriteLine("----------------------------------------------");
-            Console.WriteLine("Downloaded Files:");
-            Console.WriteLine("----------------------------------------------");
+            Logger.Log("----------------------------------------------", agent.Id);
+            Logger.Log("Downloaded Files:", agent.Id);
+            Logger.Log("----------------------------------------------", agent.Id);
             foreach (var filePath in allDownloadedFiles)
             {
-                Console.WriteLine($"  {filePath}");
+                Logger.Log($"  {filePath}", agent.Id);
             }
-            Console.WriteLine();
         }
 
         // Extract text content
         var fullText = "";
-        Console.WriteLine("----------------------------------------------");
-        Console.WriteLine("All Content:");
-        Console.WriteLine("----------------------------------------------");
+        Logger.Log("----------------------------------------------", agent.Id);
+        Logger.Log("All Content:", agent.Id);
+        Logger.Log("----------------------------------------------", agent.Id);
         foreach (var content in response.Content)
         {
-            Console.WriteLine($"Type: {content.GetType().Name}");
+            Logger.Log($"Type: {content.GetType().Name}", agent.Id);
 
             if (content is TextContent textContent)
             {
-                Console.WriteLine($"{textContent.Text}");
+                Logger.Log($"{textContent.Text}", agent.Id);
                 fullText += textContent.Text + "\n";
             }
             else if (content is WebSearchToolResultContent webSearchContent)
             {
-                Console.WriteLine($"Web Search Tool Result with {webSearchContent.Content.Count} items");
+                Logger.Log($"Web Search Tool Result with {webSearchContent.Content.Count} items", agent.Id);
             }
             else if (content is ToolUseContent toolUse)
             {
-                Console.WriteLine($"Tool Use: {toolUse.Name}");
+                Logger.Log($"Tool Use: {toolUse.Name}", agent.Id);
             }
             else
             {
                 // Log unknown content types for debugging
-                Console.WriteLine($"[DEBUG] Content properties: {System.Text.Json.JsonSerializer.Serialize(content)}");
+                Logger.Log($"[DEBUG] Content properties: {System.Text.Json.JsonSerializer.Serialize(content)}", agent.Id);
             }
         }
 
@@ -339,12 +339,12 @@ public class ClaudeClass : IAiProvider
             !string.IsNullOrEmpty(responseClass.AttachmentType) &&
             !string.IsNullOrEmpty(responseClass.AttachmentData))
         {
-            Console.WriteLine($"[DocumentGenerator] MustCreateAttachment=true, Type={responseClass.AttachmentType}");
-            Console.WriteLine($"[DocumentGenerator] Starting second agent for document generation...");
+            Logger.Log($"[DocumentGenerator] MustCreateAttachment=true, Type={responseClass.AttachmentType}", agent.Id);
+            Logger.Log($"[DocumentGenerator] Starting second agent for document generation...", agent.Id);
 
             try
             {
-                var documentGenerator = new ClaudeGenerateDocumentsClass(_apikey);
+                var documentGenerator = new ClaudeGenerateDocumentsClass(_apikey, agent.Id);
                 var generatedAttachment = await documentGenerator.GenerateDocumentAsync(
                     responseClass.AttachmentType,
                     responseClass.AttachmentData,
@@ -353,7 +353,7 @@ public class ClaudeClass : IAiProvider
 
                 if (generatedAttachment != null)
                 {
-                    Console.WriteLine($"[DocumentGenerator] Successfully generated: {generatedAttachment.Filename}");
+                    Logger.Log($"[DocumentGenerator] Successfully generated: {generatedAttachment.Filename}", agent.Id);
 
                     // Add the generated attachment to the response
                     var attachmentsList = responseClass.Attachments?.ToList() ?? new List<Attachment>();
@@ -362,7 +362,7 @@ public class ClaudeClass : IAiProvider
                 }
                 else
                 {
-                    Console.WriteLine("[DocumentGenerator] Document generation failed - no attachment created");
+                    Logger.LogWarning("[DocumentGenerator] Document generation failed - no attachment created", agent.Id);
 
                     // Add note to explanation that attachment could not be generated
                     var note = "\n\n[Note: The requested document could not be created. However, the information is included in the email text.]";
@@ -371,8 +371,8 @@ public class ClaudeClass : IAiProvider
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"[DocumentGenerator] Error during document generation: {ex.Message}");
-                Console.WriteLine($"[DocumentGenerator] Stack trace: {ex.StackTrace}");
+                Logger.LogError($"[DocumentGenerator] Error during document generation: {ex.Message}", agent.Id);
+                Logger.LogError($"[DocumentGenerator] Stack trace: {ex.StackTrace}", agent.Id);
 
                 // Add note to explanation that attachment could not be generated
                 var note = "\n\n[Note: The requested document could not be created due to a technical error. However, the information is included in the email text.]";
@@ -385,15 +385,15 @@ public class ClaudeClass : IAiProvider
         // Debug: Log parsed attachments from JSON
         if (responseClass.Attachments != null && responseClass.Attachments.Length > 0)
         {
-            Console.WriteLine($"[JSON Attachments] Found {responseClass.Attachments.Length} attachments in JSON:");
+            Logger.Log($"[JSON Attachments] Found {responseClass.Attachments.Length} attachments in JSON:", agent.Id);
             foreach (var att in responseClass.Attachments)
             {
-                Console.WriteLine($"  - Filename: {att.Filename}, Path: {att.Path}, HasContent: {!string.IsNullOrEmpty(att.Content)}");
+                Logger.Log($"  - Filename: {att.Filename}, Path: {att.Path}, HasContent: {!string.IsNullOrEmpty(att.Content)}", agent.Id);
             }
         }
         else
         {
-            Console.WriteLine("[JSON Attachments] No attachments in JSON response");
+            Logger.Log("[JSON Attachments] No attachments in JSON response", agent.Id);
         }
 
         // Add downloaded skill files as attachments
@@ -418,11 +418,11 @@ public class ClaudeClass : IAiProvider
                         Path = filePath
                     });
 
-                    Console.WriteLine("[Attachment] Added skill file: " + fileName + " (" + contentType + ")");
+                    Logger.Log("[Attachment] Added skill file: " + fileName + " (" + contentType + ")", agent.Id);
                 }
                 catch (Exception ex)
                 {
-                    Console.Error.WriteLine("[Attachment Error] Could not read file " + filePath + ": " + ex.Message);
+                    Logger.LogError("[Attachment Error] Could not read file " + filePath + ": " + ex.Message, agent.Id);
                 }
             }
 
@@ -445,11 +445,11 @@ public class ClaudeClass : IAiProvider
                         if (string.IsNullOrEmpty(att.Filename))
                             att.Filename = System.IO.Path.GetFileName(att.Path) ?? att.Path;
 
-                        Console.WriteLine("[Attachment] Loaded from path: " + att.Filename);
+                        Logger.Log("[Attachment] Loaded from path: " + att.Filename, agent.Id);
                     }
                     catch (Exception ex)
                     {
-                        Console.Error.WriteLine("[Attachment Error] Could not read " + att.Path + ": " + ex.Message);
+                        Logger.LogError("[Attachment Error] Could not read " + att.Path + ": " + ex.Message, agent.Id);
                     }
                 }
             }
@@ -470,12 +470,12 @@ public class ClaudeClass : IAiProvider
     /// </summary>
     private static AiResponseClass ParseAiResponse(string fullText)
     {
-        Console.WriteLine($"[ParseAiResponse] Attempting to parse response ({fullText?.Length ?? 0} characters)");
+        Logger.Log($"[ParseAiResponse] Attempting to parse response ({fullText?.Length ?? 0} characters)");
 
         // Check for empty or null response
         if (string.IsNullOrWhiteSpace(fullText))
         {
-            Console.WriteLine("[ParseAiResponse] WARNING: Empty response from Claude!");
+            Logger.LogWarning("[ParseAiResponse] Empty response from Claude!");
             return new AiResponseClass
             {
                 EmailResponseText = "Ich konnte keine passende Antwort generieren. Bitte versuchen Sie es erneut.",
@@ -491,7 +491,7 @@ public class ClaudeClass : IAiProvider
             var jsonBlockMatch = Regex.Match(fullText, @"```json\s*([\s\S]*?)\s*```");
             if (jsonBlockMatch.Success)
             {
-                Console.WriteLine("[ParseAiResponse] Found JSON block in markdown");
+                Logger.Log("[ParseAiResponse] Found JSON block in markdown");
                 var parsed = JsonConvert.DeserializeObject<AiResponseClass>(jsonBlockMatch.Groups[1].Value);
                 if (parsed != null)
                 {
@@ -522,7 +522,7 @@ public class ClaudeClass : IAiProvider
                             var parsed = JsonConvert.DeserializeObject<AiResponseClass>(jsonCandidate);
                             if (parsed != null && !string.IsNullOrEmpty(parsed.EmailResponseText))
                             {
-                                Console.WriteLine("[ParseAiResponse] Found valid JSON object");
+                                Logger.Log("[ParseAiResponse] Found valid JSON object");
                                 var beforeJson = fullText[..i].Trim();
                                 if (!string.IsNullOrEmpty(beforeJson))
                                     parsed.AiExplanation = beforeJson;
@@ -535,14 +535,14 @@ public class ClaudeClass : IAiProvider
             }
 
             // Last fallback: Parse entire text as JSON
-            Console.WriteLine("[ParseAiResponse] Attempting to parse entire text as JSON");
+            Logger.Log("[ParseAiResponse] Attempting to parse entire text as JSON");
             return JsonConvert.DeserializeObject<AiResponseClass>(fullText.Trim())
                    ?? new AiResponseClass { EmailResponseText = fullText.Trim() };
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"[ParseAiResponse] ERROR: Failed to parse response: {ex.Message}");
-            Console.WriteLine($"[ParseAiResponse] Response content: {fullText.Substring(0, Math.Min(500, fullText.Length))}...");
+            Logger.LogError($"[ParseAiResponse] Failed to parse response: {ex.Message}");
+            Logger.LogError($"[ParseAiResponse] Response content: {fullText.Substring(0, Math.Min(500, fullText.Length))}...");
 
             // Return a default response on error
             return new AiResponseClass
