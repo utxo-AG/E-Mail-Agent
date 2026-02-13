@@ -184,6 +184,25 @@ public class ProcessMailsClass(DefaultdbContext db, IConfiguration configuration
         promptBuilder.AppendLine("```");
 
         promptBuilder.AppendLine();
+        promptBuilder.AppendLine("WICHTIG - WEITERLEITUNG VON E-MAILS:");
+        promptBuilder.AppendLine("Wenn Du eine E-Mail mit send_email weiterleitest:");
+        promptBuilder.AppendLine("- Sende KEINE Bestätigung an den ursprünglichen Absender!");
+        promptBuilder.AppendLine("- Setze EmailResponseText, EmailResponseSubject und EmailResponseHtml auf null");
+        promptBuilder.AppendLine("- Nur wenn in deiner Aufgabe explizit steht, dass der Kunde informiert werden soll, sende eine Antwort");
+        promptBuilder.AppendLine("- Erkläre in AiExplanation was du getan hast (z.B. 'E-Mail an support@firma.de weitergeleitet')");
+        promptBuilder.AppendLine();
+        promptBuilder.AppendLine("Beispiel bei Weiterleitung OHNE Kundenbenachrichtigung:");
+        promptBuilder.AppendLine("```json");
+        promptBuilder.AppendLine("{");
+        promptBuilder.AppendLine("  \"EmailResponseText\": null,");
+        promptBuilder.AppendLine("  \"EmailResponseSubject\": null,");
+        promptBuilder.AppendLine("  \"EmailResponseHtml\": null,");
+        promptBuilder.AppendLine("  \"AiExplanation\": \"E-Mail an störungen@firma.de weitergeleitet\",");
+        promptBuilder.AppendLine("  \"attachments\": []");
+        promptBuilder.AppendLine("}");
+        promptBuilder.AppendLine("```");
+
+        promptBuilder.AppendLine();
         promptBuilder.AppendLine("KRITISCH - ANTWORTFORMAT:");
         promptBuilder.AppendLine("Deine FINALE Antwort MUSS ZWINGEND folgendes JSON-Format haben:");
         promptBuilder.AppendLine("```json");
