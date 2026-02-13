@@ -99,10 +99,18 @@ public class EmailPollingService : BackgroundService
                             var aiResponse = await processor.ProcessMailAsync(mail, agent);
 
                             Console.WriteLine("[EmailPollingService]   - AI Response generated");
+                            Console.WriteLine($"[EmailPollingService]   - AI Explanation: {aiResponse.AiExplanation}");
 
-                            // Send reply
-                            await provider.SendReplyResponseEmail(aiResponse, mail, agent);
-                            Console.WriteLine("[EmailPollingService]   - Reply sent");
+                            // Only send reply if there's actual content
+                            if (!string.IsNullOrEmpty(aiResponse.EmailResponseText) || !string.IsNullOrEmpty(aiResponse.EmailResponseHtml))
+                            {
+                                await provider.SendReplyResponseEmail(aiResponse, mail, agent);
+                                Console.WriteLine("[EmailPollingService]   - Reply sent");
+                            }
+                            else
+                            {
+                                Console.WriteLine("[EmailPollingService]   - No reply sent (forwarded or no response required)");
+                            }
                         }
                     }
                 }
