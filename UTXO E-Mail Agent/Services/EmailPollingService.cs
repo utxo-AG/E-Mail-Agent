@@ -29,7 +29,7 @@ public class EmailPollingService : BackgroundService
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        Console.WriteLine("[EmailPollingService] Starting background email polling service...");
+        Logger.Log("[EmailPollingService] Starting background email polling service...");
 
         while (!stoppingToken.IsCancellationRequested)
         {
@@ -39,10 +39,10 @@ public class EmailPollingService : BackgroundService
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"[EmailPollingService] Error in polling loop: {ex.Message}");
+                Logger.LogError($"[EmailPollingService] Error in polling loop: {ex.Message}", additionalData: ex.StackTrace);
             }
 
-            Console.WriteLine($"[EmailPollingService] Waiting {_pollingIntervalSeconds} seconds until next check...");
+            Logger.Log($"[EmailPollingService] Waiting {_pollingIntervalSeconds} seconds until next check...");
             await Task.Delay(_pollingIntervalSeconds * 1000, stoppingToken);
         }
     }
@@ -58,20 +58,20 @@ public class EmailPollingService : BackgroundService
             .Where(a => a.State == "active" && a.Emailprovidertype == "polling")
             .ToListAsync();
 
-        Console.WriteLine($"[EmailPollingService] Found {agents.Count} active agent(s) for polling");
+        Logger.Log($"[EmailPollingService] Found {agents.Count} active agent(s) for polling");
 
         foreach (var agent in agents)
         {
             try
             {
-                Console.WriteLine($"[EmailPollingService] Processing agent {agent.Id} ({agent.Emailaddress}) with provider: {agent.Emailprovider}");
+                Logger.Log($"[EmailPollingService] Processing agent {agent.Id} ({agent.Emailaddress})", agent.Id);
 
                 // Select email provider by type
                 var provider = EmailProviderFactory.GetProvider(agent.Emailprovider, _configuration, db);
 
                 if (provider == null)
                 {
-                    Console.WriteLine($"[EmailPollingService] Unknown email provider: {agent.Emailprovider}");
+                    Logger.LogWarning($"[EmailPollingService] Unknown email provider: {agent.Emailprovider}", agent.Id);
                     continue;
                 }
 
@@ -79,49 +79,46 @@ public class EmailPollingService : BackgroundService
 
                 if (emails != null && emails.Length > 0)
                 {
-                    Console.WriteLine($"[EmailPollingService] Found {emails.Length} new email(s) for agent {agent.Id}");
+                    Logger.Log($"[EmailPollingService] Found {emails.Length} new email(s) for agent {agent.Id}", agent.Id);
 
                     foreach (var email in emails)
                     {
-                        Console.WriteLine($"[EmailPollingService]   - Email from: {email.From}, Subject: {email.Subject}");
+                        Logger.Log($"[EmailPollingService] Email from: {email.From}, Subject: {email.Subject}", agent.Id);
                         var mail = await provider.GetMail(email, agent);
 
                         if (mail != null)
                         {
-                            // Show preview of email content
-                            var preview = mail.Text?.Length > 100
-                                ? mail.Text.Substring(0, 100) + "..."
-                                : mail.Text ?? "[No text content]";
-                            Console.WriteLine($"[EmailPollingService]   - Email content preview: {preview}");
+                            // Log email content as additional data
+                            var emailData = $"From: {mail.From}\nSubject: {mail.Subject}\nDate: {mail.CreatedAt}\n\nContent:\n{mail.Text}";
+                            Logger.Log($"[EmailPollingService] Processing email: {mail.Subject}", agent.Id, emailData);
 
                             // Process mail with AI
                             var processor = new ProcessMailsClass(db, _configuration);
                             var aiResponse = await processor.ProcessMailAsync(mail, agent);
 
-                            Console.WriteLine("[EmailPollingService]   - AI Response generated");
-                            Console.WriteLine($"[EmailPollingService]   - AI Explanation: {aiResponse.AiExplanation}");
+                            Logger.Log($"[EmailPollingService] AI Response generated", agent.Id, aiResponse.AiExplanation);
 
                             // Only send reply if there's actual content
                             if (!string.IsNullOrEmpty(aiResponse.EmailResponseText) || !string.IsNullOrEmpty(aiResponse.EmailResponseHtml))
                             {
                                 await provider.SendReplyResponseEmail(aiResponse, mail, agent);
-                                Console.WriteLine("[EmailPollingService]   - Reply sent");
+                                Logger.Log($"[EmailPollingService] Reply sent to {mail.From}", agent.Id, aiResponse.EmailResponseText);
                             }
                             else
                             {
-                                Console.WriteLine("[EmailPollingService]   - No reply sent (forwarded or no response required)");
+                                Logger.Log($"[EmailPollingService] No reply sent (forwarded or no response required)", agent.Id);
                             }
                         }
                     }
                 }
                 else
                 {
-                    Console.WriteLine($"[EmailPollingService] No new emails for agent {agent.Id}");
+                    Logger.Log($"[EmailPollingService] No new emails for agent {agent.Id}", agent.Id);
                 }
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"[EmailPollingService] Error processing agent {agent.Id}: {ex.Message}");
+                Logger.LogError($"[EmailPollingService] Error processing agent {agent.Id}: {ex.Message}", agent.Id, ex.StackTrace);
             }
         }
     }

@@ -10,11 +10,6 @@ using UTXO_E_Mail_Agent.Models;
 using UTXO_E_Mail_Agent.Services;
 using UTXO_E_Mail_Agent_Shared.Models;
 
-// To update models from database:
-// dotnet ef dbcontext scaffold "server=YOUR_SERVER;port=YOUR_PORT;user=YOUR_USER;password=YOUR_PASSWORD;database=YOUR_DB" Pomelo.EntityFrameworkCore.MySql -o Models --project "../UTXO E-Mail Agent Shared" --force --no-onconfiguring
-
-// The --no-onconfiguring flag prevents hardcoding credentials in DefaultdbContext.cs
-
 namespace UTXO_E_Mail_Agent;
 
 public class Program
@@ -41,6 +36,9 @@ public class Program
         _pollingIntervalSeconds = int.Parse(_configuration["AppSettings:PollingIntervalSeconds"] ?? "60");
         _connectionString = _configuration.GetConnectionString("DefaultConnection")
             ?? throw new InvalidOperationException("Connection string 'DefaultConnection' not found.");
+
+        // Initialize logger with database connection
+        Logger.Initialize(_connectionString);
 
         // Add services
         builder.Services.AddDbContext<DefaultdbContext>(options =>
