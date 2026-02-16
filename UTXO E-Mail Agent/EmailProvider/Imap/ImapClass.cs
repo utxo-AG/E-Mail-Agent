@@ -147,6 +147,37 @@ public class ImapClass : IEmailProvider
         }
     }
 
+    public async Task MarkAsUnreadAsync(ListNewEmailsClass email, Agent agent)
+    {
+        try
+        {
+            using var client = new ImapClient();
+            client.ServerCertificateValidationCallback = (s, c, h, e) => true;
+
+            var server = agent.Emailserver ?? throw new InvalidOperationException("Email server not configured");
+            var useSsl = agent.Emailusessl ?? true;
+            var port = agent.Emailport ?? (useSsl ? 993 : 143);
+
+            await client.ConnectAsync(server, port, useSsl);
+            await client.AuthenticateAsync(
+                agent.Emailusername ?? throw new InvalidOperationException("Email username not configured"),
+                agent.Emailpassword ?? throw new InvalidOperationException("Email password not configured"));
+
+            var inbox = client.Inbox;
+            await inbox.OpenAsync(FolderAccess.ReadWrite);
+
+            var uid = new UniqueId(uint.Parse(email.Id));
+            await inbox.RemoveFlagsAsync(uid, MessageFlags.Seen, true);
+
+            await client.DisconnectAsync(true);
+            Logger.Log($"[IMAP] Marked email {email.Id} as unread again", agent.Id);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError($"[IMAP] Error marking email as unread: {ex.Message}", agent.Id);
+        }
+    }
+
     public async Task SendReplyResponseEmail(AiResponseClass emailResponse, MailClass mail, Agent agent)
     {
         try
