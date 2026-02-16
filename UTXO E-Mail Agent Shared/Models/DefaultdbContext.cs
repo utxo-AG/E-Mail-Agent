@@ -29,6 +29,8 @@ public partial class DefaultdbContext : DbContext
 
     public virtual DbSet<Package> Packages { get; set; }
 
+    public virtual DbSet<Server> Servers { get; set; }
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder
@@ -64,12 +66,12 @@ public partial class DefaultdbContext : DbContext
 
             entity.Property(e => e.Id).HasColumnName("id");
             entity.Property(e => e.Aimodel)
+                .HasMaxLength(255)
                 .HasDefaultValueSql("'claude-sonnet-4-20250514'")
-                .HasColumnType("enum('claude-sonnet-4-20250514','claude-opus-4-5-20251101','claude-sonnet-4-5-20250929','claude-haiku-3-5')")
                 .HasColumnName("aimodel");
             entity.Property(e => e.Aiprovider)
                 .HasDefaultValueSql("'claude'")
-                .HasColumnType("enum('claude')")
+                .HasColumnType("enum('claude','openai','grok','gemini')")
                 .HasColumnName("aiprovider");
             entity.Property(e => e.CustomerId).HasColumnName("customer_id");
             entity.Property(e => e.Defaultlanguage)
@@ -96,6 +98,17 @@ public partial class DefaultdbContext : DbContext
                 .HasMaxLength(255)
                 .HasColumnName("emailusername");
             entity.Property(e => e.Emailusessl).HasColumnName("emailusessl");
+            entity.Property(e => e.Smtppassword)
+                .HasMaxLength(255)
+                .HasColumnName("smtppassword");
+            entity.Property(e => e.Smtpport).HasColumnName("smtpport");
+            entity.Property(e => e.Smtpserver)
+                .HasMaxLength(255)
+                .HasColumnName("smtpserver");
+            entity.Property(e => e.Smtpusername)
+                .HasMaxLength(255)
+                .HasColumnName("smtpusername");
+            entity.Property(e => e.Smtpusessl).HasColumnName("smtpusessl");
             entity.Property(e => e.State)
                 .HasColumnType("enum('active','suspend','deleted')")
                 .HasColumnName("state");
@@ -326,6 +339,24 @@ public partial class DefaultdbContext : DbContext
             entity.Property(e => e.Price)
                 .HasColumnType("double(10,2)")
                 .HasColumnName("price");
+        });
+
+        modelBuilder.Entity<Server>(entity =>
+        {
+            entity.HasKey(e => e.Id).HasName("PRIMARY");
+
+            entity.ToTable("server");
+
+            entity.Property(e => e.Id).HasColumnName("id");
+            entity.Property(e => e.Lastlifesign)
+                .HasColumnType("datetime")
+                .HasColumnName("lastlifesign");
+            entity.Property(e => e.Servername)
+                .HasMaxLength(255)
+                .HasColumnName("servername");
+            entity.Property(e => e.State)
+                .HasColumnType("enum('active','notactive')")
+                .HasColumnName("state");
         });
 
         OnModelCreatingPartial(modelBuilder);

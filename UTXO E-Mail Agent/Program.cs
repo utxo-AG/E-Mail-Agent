@@ -67,6 +67,13 @@ public class Program
 
         var app = builder.Build();
 
+        // Register server in database on startup
+        using (var scope = app.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<DefaultdbContext>();
+            await ServerRegistrationService.RegisterServerAsync(db);
+        }
+
         // Configure middleware
         app.UseCors("AllowAll");
 
@@ -117,7 +124,7 @@ public class Program
                     Id = "API-" + Guid.NewGuid().ToString(),
                     Type = "email",
                     From = "api@example.com",
-                    To = new[] { agent.Emailaddress },
+                    To = [agent.Emailaddress],
                     Subject = "API Request",
                     Status = "unread",
                     CreatedAt = DateTime.Now.ToString("o"),

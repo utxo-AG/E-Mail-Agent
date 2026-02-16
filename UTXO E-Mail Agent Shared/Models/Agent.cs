@@ -23,6 +23,10 @@ public partial class Agent
 
     public string? Emailserver { get; set; }
 
+    public int? Emailport { get; set; }
+
+    public bool? Emailusessl { get; set; }
+
     public string? Tasktobecompleted { get; set; }
 
     public string Aiprovider { get; set; } = null!;
@@ -31,9 +35,15 @@ public partial class Agent
 
     public string Emailprovidertype { get; set; } = null!;
 
-    public int? Emailport { get; set; }
+    public string? Smtpserver { get; set; }
 
-    public bool? Emailusessl { get; set; }
+    public int? Smtpport { get; set; }
+
+    public string? Smtpusername { get; set; }
+
+    public string? Smtppassword { get; set; }
+
+    public bool? Smtpusessl { get; set; }
 
     public virtual ICollection<Conversation> Conversations { get; set; } = new List<Conversation>();
 

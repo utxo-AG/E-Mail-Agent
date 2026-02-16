@@ -108,6 +108,51 @@ else
                     </MudItem>
                 }
 
+                @if (agent.Emailprovider?.ToLower() == "imap" || agent.Emailprovider?.ToLower() == "pop3")
+                {
+                    <MudItem xs="12">
+                        <MudText Typo="Typo.subtitle1" Class="mt-2 mb-2">SMTP Server Configuration (Outgoing Mail)</MudText>
+                    </MudItem>
+
+                    <MudItem xs="12" md="6">
+                        <MudTextField Label="SMTP Server"
+                                      @bind-Value="agent.Smtpserver"
+                                      Required="true"
+                                      Placeholder="e.g., smtp.gmail.com" />
+                    </MudItem>
+
+                    <MudItem xs="12" md="6">
+                        <MudNumericField Label="SMTP Port (optional)"
+                                         @bind-Value="agent.Smtpport"
+                                         Min="1"
+                                         Max="65535"
+                                         Placeholder="e.g., 587 (TLS), 465 (SSL)" />
+                    </MudItem>
+
+                    <MudItem xs="12" md="6">
+                        <MudTextField Label="SMTP Username"
+                                      @bind-Value="agent.Smtpusername"
+                                      Required="true" />
+                    </MudItem>
+
+                    <MudItem xs="12" md="6">
+                        <MudTextField Label="SMTP Password"
+                                      @bind-Value="agent.Smtppassword"
+                                      Required="true"
+                                      InputType="InputType.Password" />
+                    </MudItem>
+
+                    <MudItem xs="12" md="6">
+                        <MudSwitch Label="SMTP Use SSL/TLS"
+                                   @bind-Value="agent.Smtpusessl"
+                                   Color="Color.Primary" />
+                    </MudItem>
+
+                    <MudItem xs="12">
+                        <MudDivider Class="my-2" />
+                    </MudItem>
+                }
+
                 <MudItem xs="12" md="6">
                     <MudSelect Label="AI Provider" @bind-Value="agent.Aiprovider" Required="true" Disabled="true">
                         <MudSelectItem Value="@("claude")">Anthropic Claude</MudSelectItem>
@@ -116,10 +161,11 @@ else
 
                 <MudItem xs="12" md="6">
                     <MudSelect T="string" Label="AI Model" @bind-Value="agent.Aimodel" Required="true">
-                        <MudSelectItem Value="@("claude-sonnet-4-20250514")">Claude Sonnet 4 (Latest)</MudSelectItem>
+                        <MudSelectItem Value="@("claude-opus-4-6")">Claude Opus 4.6</MudSelectItem>
                         <MudSelectItem Value="@("claude-sonnet-4-5-20250929")">Claude Sonnet 4.5</MudSelectItem>
-                        <MudSelectItem Value="@("claude-opus-4-5-20251101")">Claude Opus 4.5</MudSelectItem>
-                        <MudSelectItem Value="@("claude-haiku-3-5")">Claude Haiku 3.5</MudSelectItem>
+                        <MudSelectItem Value="@("claude-sonnet-4-20250514")">Claude Sonnet 4</MudSelectItem>
+                        <MudSelectItem Value="@("claude-haiku-4-5-20251001")">Claude Haiku 4.5</MudSelectItem>
+                        <MudSelectItem Value="@("claude-3-5-haiku-20241022")">Claude Haiku 3.5</MudSelectItem>
                     </MudSelect>
                 </MudItem>
 
@@ -305,6 +351,11 @@ else
                 existingAgent.Aiprovider = agent.Aiprovider;
                 existingAgent.Aimodel = agent.Aimodel;
                 existingAgent.Tasktobecompleted = agent.Tasktobecompleted;
+                existingAgent.Smtpserver = agent.Smtpserver;
+                existingAgent.Smtpport = agent.Smtpport;
+                existingAgent.Smtpusername = agent.Smtpusername;
+                existingAgent.Smtppassword = agent.Smtppassword;
+                existingAgent.Smtpusessl = agent.Smtpusessl;
 
                 await db.SaveChangesAsync();
             }

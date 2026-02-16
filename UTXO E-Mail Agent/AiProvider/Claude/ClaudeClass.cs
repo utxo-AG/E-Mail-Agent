@@ -57,16 +57,27 @@ public class ClaudeClass : IAiProvider
             new Function("code_execution", "code_execution_20250825",
                 new Dictionary<string, object> { { "name", "code_execution" } }),
             ServerTools.GetWebSearchTool(5, null, null,
-                new UserLocation() { City = "Berlin", Country = "DE" }),
+                new UserLocation() { City = agent.Customer.City, Country = agent.Customer.Country.ToUpper() }),
             new Function("bash", "bash_20250124",
                 new Dictionary<string, object> { { "name", "bash" } })
         };
 
         // Send Email Tool - always available for forwarding/sending emails
-        SendEmailMcpServer? sendEmailServer = null;
+        // Select the right implementation based on the agent's email provider
+        ISendEmailMcpServer? sendEmailServer = null;
         try
         {
-            sendEmailServer = new SendEmailMcpServer(_configuration, agent.Emailaddress, agent.Id);
+            var provider = agent.Emailprovider?.ToLower();
+            if (provider == "imap" || provider == "pop3")
+            {
+                sendEmailServer = new SendEmailMcpServerSmtp(agent);
+                Logger.Log($"[MCP] Using SMTP send email server for {provider} agent", agent.Id);
+            }
+            else
+            {
+                sendEmailServer = new SendEmailMcpServerInbound(_configuration, agent.Emailaddress, agent.Id);
+                Logger.Log($"[MCP] Using Inbound API send email server for {provider} agent", agent.Id);
+            }
 
             var sendEmailSchema = new InputSchema()
             {
@@ -141,9 +152,9 @@ public class ClaudeClass : IAiProvider
 
         var parameters = new MessageParameters
         {
-            Model = AnthropicModels.Claude4Sonnet,
+            Model = agent.Aimodel,
             MaxTokens = 8000,
-            System = new List<SystemMessage>() { new SystemMessage(systemPrompt) },
+            System = [new SystemMessage(systemPrompt)],
             Messages = messages,
             Container = container,
             Tools = tools

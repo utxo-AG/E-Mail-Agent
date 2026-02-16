@@ -52,6 +52,9 @@ public class EmailPollingService : BackgroundService
         using var scope = _scopeFactory.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<DefaultdbContext>();
 
+        // Update server lifesign
+        await ServerRegistrationService.UpdateLifesignAsync(db);
+
         // Load all active agents
         var agents = await db.Agents
             .Include(a => a.Mcpservers)
