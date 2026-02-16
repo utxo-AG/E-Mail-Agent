@@ -67,6 +67,17 @@ public class EmailPollingService : BackgroundService
         {
             try
             {
+                // Skip agent if it was polled less than 60 seconds ago (prevents duplicate processing on multiple servers)
+                if (agent.Lastpoll.HasValue && (DateTime.UtcNow - agent.Lastpoll.Value).TotalSeconds < 60)
+                {
+                    Logger.Log($"[EmailPollingService] Skipping agent {agent.Id} - last polled {(int)(DateTime.UtcNow - agent.Lastpoll.Value).TotalSeconds}s ago", agent.Id);
+                    continue;
+                }
+
+                // Mark agent as polled
+                agent.Lastpoll = DateTime.UtcNow;
+                await db.SaveChangesAsync();
+
                 Logger.Log($"[EmailPollingService] Processing agent {agent.Id} ({agent.Emailaddress})", agent.Id);
 
                 // Select email provider by type
