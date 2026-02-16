@@ -89,4 +89,21 @@ public static class ServerRegistrationService
 
         await db.Database.ExecuteSqlAsync($"UPDATE server SET state='notactive' WHERE lastlifesign < DATE_SUB(UTC_TIMESTAMP(), INTERVAL 10 MINUTE)");
     }
+
+    /// <summary>
+    /// Sets this server to notactive on shutdown.
+    /// </summary>
+    public static async Task DeregisterServerAsync(DefaultdbContext db)
+    {
+        var identifier = await GetServerIdentifierAsync();
+
+        var server = await db.Servers.FirstOrDefaultAsync(s => s.Servername == identifier);
+        if (server != null)
+        {
+            server.State = "notactive";
+            server.Lastlifesign = DateTime.UtcNow;
+            await db.SaveChangesAsync();
+            Logger.Log($"[ServerRegistration] Server '{identifier}' set to notactive (shutdown)");
+        }
+    }
 }

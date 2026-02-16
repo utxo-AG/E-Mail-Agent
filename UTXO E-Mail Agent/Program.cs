@@ -74,6 +74,14 @@ public class Program
             await ServerRegistrationService.RegisterServerAsync(db);
         }
 
+        // Deregister server on shutdown
+        app.Lifetime.ApplicationStopping.Register(() =>
+        {
+            using var scope = app.Services.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<DefaultdbContext>();
+            ServerRegistrationService.DeregisterServerAsync(db).GetAwaiter().GetResult();
+        });
+
         // Configure middleware
         app.UseCors("AllowAll");
 
