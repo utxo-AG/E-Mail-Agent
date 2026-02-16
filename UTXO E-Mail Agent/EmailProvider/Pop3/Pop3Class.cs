@@ -23,6 +23,7 @@ public class Pop3Class : IEmailProvider
         try
         {
             using var client = new Pop3Client();
+            client.ServerCertificateValidationCallback = (s, c, h, e) => true;
 
             // Connect to POP3 server
             var server = agent.Emailserver ?? throw new InvalidOperationException("Email server not configured");
@@ -80,6 +81,7 @@ public class Pop3Class : IEmailProvider
         try
         {
             using var client = new Pop3Client();
+            client.ServerCertificateValidationCallback = (s, c, h, e) => true;
 
             // Connect to POP3 server
             var server = agent.Emailserver ?? throw new InvalidOperationException("Email server not configured");
@@ -175,6 +177,7 @@ public class Pop3Class : IEmailProvider
 
             // Send via SMTP
             using var smtp = new SmtpClient();
+            smtp.ServerCertificateValidationCallback = (s, c, h, e) => true;
 
             // Use SMTP server (usually same domain but smtp. prefix)
             var smtpServer = agent.Emailserver?.Replace("pop3.", "smtp.").Replace("pop.", "smtp.")

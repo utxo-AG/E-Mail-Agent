@@ -26,6 +26,7 @@ public class ImapClass : IEmailProvider
         try
         {
             using var client = new ImapClient();
+            client.ServerCertificateValidationCallback = (s, c, h, e) => true;
 
             // Connect to IMAP server
             var server = agent.Emailserver ?? throw new InvalidOperationException("Email server not configured");
@@ -83,6 +84,7 @@ public class ImapClass : IEmailProvider
         try
         {
             using var client = new ImapClient();
+            client.ServerCertificateValidationCallback = (s, c, h, e) => true;
 
             // Connect to IMAP server
             var server = agent.Emailserver ?? throw new InvalidOperationException("Email server not configured");
@@ -181,6 +183,7 @@ public class ImapClass : IEmailProvider
 
             // Send via SMTP
             using var smtp = new SmtpClient();
+            smtp.ServerCertificateValidationCallback = (s, c, h, e) => true;
 
             // Use SMTP server (usually same domain but smtp. prefix)
             var smtpServer = agent.Emailserver?.Replace("imap.", "smtp.") ?? throw new InvalidOperationException("Email server not configured");

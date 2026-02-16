@@ -1,0 +1,84 @@
+@inject ISnackbar Snackbar
+@using MailKit.Net.Smtp
+@using MimeKit
+
+<MudButton Variant="Variant.Outlined"
+           Color="Color.Info"
+           StartIcon="@Icons.Material.Filled.Send"
+           OnClick="TestConnection"
+           Disabled="testing">
+    @if (testing)
+    {
+        <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+        <span>Testing...</span>
+    }
+    else
+    {
+        <span>Test SMTP Connection</span>
+    }
+</MudButton>
+
+@code {
+    [Parameter] public string? Server { get; set; }
+    [Parameter] public int? Port { get; set; }
+    [Parameter] public string? Username { get; set; }
+    [Parameter] public string? Password { get; set; }
+    [Parameter] public bool? UseSsl { get; set; }
+    [Parameter] public string? FromAddress { get; set; }
+
+    private bool testing;
+
+    private async Task TestConnection()
+    {
+        if (string.IsNullOrEmpty(Server) || string.IsNullOrEmpty(Username) || string.IsNullOrEmpty(Password))
+        {
+            Snackbar.Add("Please fill in SMTP server, username and password first", Severity.Warning);
+            return;
+        }
+
+        if (string.IsNullOrEmpty(FromAddress))
+        {
+            Snackbar.Add("Please fill in the email address first", Severity.Warning);
+            return;
+        }
+
+        testing = true;
+        StateHasChanged();
+
+        try
+        {
+            var useSsl = UseSsl ?? true;
+            var port = Port ?? (useSsl ? 465 : 587);
+
+            using var client = new SmtpClient();
+            client.ServerCertificateValidationCallback = (s, c, h, e) => true;
+            await client.ConnectAsync(Server, port, useSsl);
+            await client.AuthenticateAsync(Username, Password);
+
+            // Send a test email to a fixed test address
+            const string testRecipient = "test@utxo.ag";
+            var message = new MimeMessage();
+            message.From.Add(MailboxAddress.Parse(FromAddress));
+            message.To.Add(MailboxAddress.Parse(testRecipient));
+            message.Subject = $"SMTP Test - {FromAddress}";
+            message.Body = new TextPart("plain")
+            {
+                Text = $"This is a test email from {FromAddress} to verify the SMTP configuration is working correctly."
+            };
+
+            await client.SendAsync(message);
+            await client.DisconnectAsync(true);
+
+            Snackbar.Add($"SMTP test successful! Test email sent to {testRecipient}.", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"SMTP test failed: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            testing = false;
+            StateHasChanged();
+        }
+    }
+}

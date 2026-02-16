@@ -104,6 +104,15 @@ else
                     </MudItem>
 
                     <MudItem xs="12">
+                        <TestIncomingMailButton Provider="@agent.Emailprovider"
+                                               Server="@agent.Emailserver"
+                                               Port="@agent.Emailport"
+                                               Username="@agent.Emailusername"
+                                               Password="@agent.Emailpassword"
+                                               UseSsl="@agent.Emailusessl" />
+                    </MudItem>
+
+                    <MudItem xs="12">
                         <MudDivider Class="my-2" />
                     </MudItem>
                 }
@@ -146,6 +155,15 @@ else
                         <MudSwitch Label="SMTP Use SSL/TLS"
                                    @bind-Value="agent.Smtpusessl"
                                    Color="Color.Primary" />
+                    </MudItem>
+
+                    <MudItem xs="12">
+                        <TestSmtpButton Server="@agent.Smtpserver"
+                                        Port="@agent.Smtpport"
+                                        Username="@agent.Smtpusername"
+                                        Password="@agent.Smtppassword"
+                                        UseSsl="@agent.Smtpusessl"
+                                        FromAddress="@agent.Emailaddress" />
                     </MudItem>
 
                     <MudItem xs="12">

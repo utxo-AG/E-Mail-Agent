@@ -62,6 +62,7 @@ public class SendEmailMcpServerSmtp : ISendEmailMcpServer
             message.Body = bodyBuilder.ToMessageBody();
 
             using var client = new SmtpClient();
+            client.ServerCertificateValidationCallback = (s, c, h, e) => true;
             await client.ConnectAsync(_smtpServer, _smtpPort, _useSsl);
             await client.AuthenticateAsync(_smtpUsername, _smtpPassword);
             await client.SendAsync(message);
