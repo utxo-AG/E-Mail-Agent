@@ -98,6 +98,9 @@ public partial class DefaultdbContext : DbContext
                 .HasMaxLength(255)
                 .HasColumnName("emailusername");
             entity.Property(e => e.Emailusessl).HasColumnName("emailusessl");
+            entity.Property(e => e.Lastpoll)
+                .HasColumnType("datetime")
+                .HasColumnName("lastpoll");
             entity.Property(e => e.Smtppassword)
                 .HasMaxLength(255)
                 .HasColumnName("smtppassword");

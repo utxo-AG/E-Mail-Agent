@@ -45,6 +45,8 @@ public partial class Agent
 
     public bool? Smtpusessl { get; set; }
 
+    public DateTime? Lastpoll { get; set; }
+
     public virtual ICollection<Conversation> Conversations { get; set; } = new List<Conversation>();
 
     public virtual Customer Customer { get; set; } = null!;
