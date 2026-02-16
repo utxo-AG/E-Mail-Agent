@@ -57,7 +57,7 @@ public class ClaudeClass : IAiProvider
             new Function("code_execution", "code_execution_20250825",
                 new Dictionary<string, object> { { "name", "code_execution" } }),
             ServerTools.GetWebSearchTool(5, null, null,
-                new UserLocation() { City = agent.Customer.City, Country = agent.Customer.Country.ToUpper() }),
+                new UserLocation() { City = agent.Customer.City, Country = CountryToIso2(agent.Customer.Country) }),
             new Function("bash", "bash_20250124",
                 new Dictionary<string, object> { { "name", "bash" } })
         };
@@ -565,6 +565,62 @@ public class ClaudeClass : IAiProvider
                 AiExplanation = $"Parse error: {ex.Message}"
             };
         }
+    }
+
+    private static string CountryToIso2(string? country)
+    {
+        if (string.IsNullOrEmpty(country)) return "DE";
+
+        // If already a 2-char code, return as-is
+        if (country.Length == 2) return country.ToUpper();
+
+        return country.ToLower() switch
+        {
+            "germany" or "deutschland" => "DE",
+            "austria" or "österreich" => "AT",
+            "switzerland" or "schweiz" => "CH",
+            "albania" => "AL",
+            "belgium" => "BE",
+            "bosnia and herzegovina" => "BA",
+            "bulgaria" => "BG",
+            "croatia" => "HR",
+            "cyprus" => "CY",
+            "czech republic" => "CZ",
+            "denmark" => "DK",
+            "estonia" => "EE",
+            "finland" => "FI",
+            "france" => "FR",
+            "greece" => "GR",
+            "hungary" => "HU",
+            "iceland" => "IS",
+            "ireland" => "IE",
+            "italy" => "IT",
+            "latvia" => "LV",
+            "liechtenstein" => "LI",
+            "lithuania" => "LT",
+            "luxembourg" => "LU",
+            "malta" => "MT",
+            "moldova" => "MD",
+            "monaco" => "MC",
+            "montenegro" => "ME",
+            "netherlands" => "NL",
+            "north macedonia" => "MK",
+            "norway" => "NO",
+            "poland" => "PL",
+            "portugal" => "PT",
+            "romania" => "RO",
+            "serbia" => "RS",
+            "slovakia" => "SK",
+            "slovenia" => "SI",
+            "spain" => "ES",
+            "sweden" => "SE",
+            "turkey" => "TR",
+            "ukraine" => "UA",
+            "united kingdom" => "GB",
+            "united states" => "US",
+            "canada" => "CA",
+            _ => "DE"
+        };
     }
 
     private static string GetContentTypeFromExtension(string filePath)
