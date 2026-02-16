@@ -192,21 +192,12 @@ public class ProcessMailsClass(DefaultdbContext db, IConfiguration configuration
         promptBuilder.AppendLine();
         promptBuilder.AppendLine("WICHTIG - WEITERLEITUNG VON E-MAILS:");
         promptBuilder.AppendLine("Wenn Du eine E-Mail mit send_email weiterleitest:");
-        promptBuilder.AppendLine("- Sende KEINE Bestätigung an den ursprünglichen Absender!");
-        promptBuilder.AppendLine("- Setze EmailResponseText, EmailResponseSubject und EmailResponseHtml auf null");
-        promptBuilder.AppendLine("- Nur wenn in deiner Aufgabe explizit steht, dass der Kunde informiert werden soll, sende eine Antwort");
-        promptBuilder.AppendLine("- Erkläre in AiExplanation was du getan hast (z.B. 'E-Mail an support@firma.de weitergeleitet')");
+        promptBuilder.AppendLine("- Die Weiterleitung selbst erfolgt über das send_email Tool");
+        promptBuilder.AppendLine("- Ob der ursprüngliche Absender eine Bestätigung/Antwort erhalten soll, steht in deiner Aufgabe oben");
+        promptBuilder.AppendLine("- Wenn der Absender eine Antwort bekommen soll: Fülle EmailResponseText, EmailResponseSubject und EmailResponseHtml aus");
+        promptBuilder.AppendLine("- Wenn der Absender KEINE Antwort bekommen soll: Setze EmailResponseText, EmailResponseSubject und EmailResponseHtml auf null");
+        promptBuilder.AppendLine("- Erkläre in AiExplanation IMMER was du getan hast (z.B. 'E-Mail an support@firma.de weitergeleitet' oder 'Kunde informiert und E-Mail weitergeleitet')");
         promptBuilder.AppendLine();
-        promptBuilder.AppendLine("Beispiel bei Weiterleitung OHNE Kundenbenachrichtigung:");
-        promptBuilder.AppendLine("```json");
-        promptBuilder.AppendLine("{");
-        promptBuilder.AppendLine("  \"EmailResponseText\": null,");
-        promptBuilder.AppendLine("  \"EmailResponseSubject\": null,");
-        promptBuilder.AppendLine("  \"EmailResponseHtml\": null,");
-        promptBuilder.AppendLine("  \"AiExplanation\": \"E-Mail an störungen@firma.de weitergeleitet\",");
-        promptBuilder.AppendLine("  \"attachments\": []");
-        promptBuilder.AppendLine("}");
-        promptBuilder.AppendLine("```");
 
         promptBuilder.AppendLine();
         promptBuilder.AppendLine("KRITISCH - ANTWORTFORMAT:");
