@@ -86,5 +86,7 @@ public static class ServerRegistrationService
             server.Lastlifesign = DateTime.UtcNow;
             await db.SaveChangesAsync();
         }
+
+        await db.Database.ExecuteSqlAsync($"UPDATE server SET state='notactive' WHERE lastlifesign < DATE_SUB(UTC_TIMESTAMP(), INTERVAL 10 MINUTE)");
     }
 }
