@@ -33,6 +33,8 @@ public partial class Customer
 
     public int? PackageId { get; set; }
 
+    public string? Companyinformation { get; set; }
+
     public virtual ICollection<Agent> Agents { get; set; } = new List<Agent>();
 
     public virtual Package? Package { get; set; }

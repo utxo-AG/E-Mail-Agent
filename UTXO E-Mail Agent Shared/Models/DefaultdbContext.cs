@@ -71,7 +71,6 @@ public partial class DefaultdbContext : DbContext
                 .HasDefaultValueSql("'claude'")
                 .HasColumnType("enum('claude')")
                 .HasColumnName("aiprovider");
-            entity.Property(e => e.Companyinformation).HasColumnName("companyinformation");
             entity.Property(e => e.CustomerId).HasColumnName("customer_id");
             entity.Property(e => e.Defaultlanguage)
                 .HasMaxLength(2)
@@ -190,6 +189,7 @@ public partial class DefaultdbContext : DbContext
             entity.Property(e => e.City)
                 .HasMaxLength(255)
                 .HasColumnName("city");
+            entity.Property(e => e.Companyinformation).HasColumnName("companyinformation");
             entity.Property(e => e.Companyname)
                 .HasMaxLength(255)
                 .HasColumnName("companyname");

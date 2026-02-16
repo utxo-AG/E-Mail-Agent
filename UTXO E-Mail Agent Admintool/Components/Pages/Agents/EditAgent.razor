@@ -124,13 +124,6 @@ else
                 </MudItem>
 
                 <MudItem xs="12">
-                    <MudTextField Label="Company Information"
-                                  @bind-Value="agent.Companyinformation"
-                                  Lines="5"
-                                  Variant="Variant.Outlined" />
-                </MudItem>
-
-                <MudItem xs="12">
                     <MudTextField Label="Task to be Completed"
                                   @bind-Value="agent.Tasktobecompleted"
                                   Lines="5"
@@ -311,7 +304,6 @@ else
                 existingAgent.Emailusessl = agent.Emailusessl;
                 existingAgent.Aiprovider = agent.Aiprovider;
                 existingAgent.Aimodel = agent.Aimodel;
-                existingAgent.Companyinformation = agent.Companyinformation;
                 existingAgent.Tasktobecompleted = agent.Tasktobecompleted;
 
                 await db.SaveChangesAsync();

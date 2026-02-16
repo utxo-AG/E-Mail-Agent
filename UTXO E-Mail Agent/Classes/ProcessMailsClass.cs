@@ -148,10 +148,10 @@ public class ProcessMailsClass(DefaultdbContext db, IConfiguration configuration
         promptBuilder.AppendLine($"Sprache in der Du die Antwort erstellen sollst: {agent.Defaultlanguage}");
         promptBuilder.AppendLine();
 
-        if (!string.IsNullOrEmpty(agent.Companyinformation))
+        if (!string.IsNullOrEmpty(agent.Customer.Companyinformation))
         {
             promptBuilder.AppendLine("Firmeninformationen:");
-            promptBuilder.AppendLine(agent.Companyinformation);
+            promptBuilder.AppendLine(agent.Customer.Companyinformation);
             promptBuilder.AppendLine();
         }
 

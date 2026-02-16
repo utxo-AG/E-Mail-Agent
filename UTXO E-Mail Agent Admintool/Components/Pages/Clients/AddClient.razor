@@ -54,59 +54,7 @@
             </MudItem>
 
             <MudItem xs="12">
-                <MudSelect Label="Country"
-                           @bind-Value="newCustomer.Country"
-                           Required="true"
-                           RequiredError="Country is required">
-                    @* Most used countries first *@
-                    <MudSelectItem Value="@("Germany")">Germany</MudSelectItem>
-                    <MudSelectItem Value="@("Austria")">Austria</MudSelectItem>
-                    <MudSelectItem Value="@("Switzerland")">Switzerland</MudSelectItem>
-                    <MudDivider />
-                    @* Other countries alphabetically *@
-                    <MudSelectItem Value="@("Albania")">Albania</MudSelectItem>
-                    <MudSelectItem Value="@("Belgium")">Belgium</MudSelectItem>
-                    <MudSelectItem Value="@("Bosnia and Herzegovina")">Bosnia and Herzegovina</MudSelectItem>
-                    <MudSelectItem Value="@("Bulgaria")">Bulgaria</MudSelectItem>
-                    <MudSelectItem Value="@("Croatia")">Croatia</MudSelectItem>
-                    <MudSelectItem Value="@("Cyprus")">Cyprus</MudSelectItem>
-                    <MudSelectItem Value="@("Czech Republic")">Czech Republic</MudSelectItem>
-                    <MudSelectItem Value="@("Denmark")">Denmark</MudSelectItem>
-                    <MudSelectItem Value="@("Estonia")">Estonia</MudSelectItem>
-                    <MudSelectItem Value="@("Finland")">Finland</MudSelectItem>
-                    <MudSelectItem Value="@("France")">France</MudSelectItem>
-                    <MudSelectItem Value="@("Greece")">Greece</MudSelectItem>
-                    <MudSelectItem Value="@("Hungary")">Hungary</MudSelectItem>
-                    <MudSelectItem Value="@("Iceland")">Iceland</MudSelectItem>
-                    <MudSelectItem Value="@("Ireland")">Ireland</MudSelectItem>
-                    <MudSelectItem Value="@("Italy")">Italy</MudSelectItem>
-                    <MudSelectItem Value="@("Latvia")">Latvia</MudSelectItem>
-                    <MudSelectItem Value="@("Liechtenstein")">Liechtenstein</MudSelectItem>
-                    <MudSelectItem Value="@("Lithuania")">Lithuania</MudSelectItem>
-                    <MudSelectItem Value="@("Luxembourg")">Luxembourg</MudSelectItem>
-                    <MudSelectItem Value="@("Malta")">Malta</MudSelectItem>
-                    <MudSelectItem Value="@("Moldova")">Moldova</MudSelectItem>
-                    <MudSelectItem Value="@("Monaco")">Monaco</MudSelectItem>
-                    <MudSelectItem Value="@("Montenegro")">Montenegro</MudSelectItem>
-                    <MudSelectItem Value="@("Netherlands")">Netherlands</MudSelectItem>
-                    <MudSelectItem Value="@("North Macedonia")">North Macedonia</MudSelectItem>
-                    <MudSelectItem Value="@("Norway")">Norway</MudSelectItem>
-                    <MudSelectItem Value="@("Poland")">Poland</MudSelectItem>
-                    <MudSelectItem Value="@("Portugal")">Portugal</MudSelectItem>
-                    <MudSelectItem Value="@("Romania")">Romania</MudSelectItem>
-                    <MudSelectItem Value="@("Serbia")">Serbia</MudSelectItem>
-                    <MudSelectItem Value="@("Slovakia")">Slovakia</MudSelectItem>
-                    <MudSelectItem Value="@("Slovenia")">Slovenia</MudSelectItem>
-                    <MudSelectItem Value="@("Spain")">Spain</MudSelectItem>
-                    <MudSelectItem Value="@("Sweden")">Sweden</MudSelectItem>
-                    <MudSelectItem Value="@("Turkey")">Turkey</MudSelectItem>
-                    <MudSelectItem Value="@("Ukraine")">Ukraine</MudSelectItem>
-                    <MudSelectItem Value="@("United Kingdom")">United Kingdom</MudSelectItem>
-                    <MudDivider />
-                    <MudSelectItem Value="@("United States")">United States</MudSelectItem>
-                    <MudSelectItem Value="@("Canada")">Canada</MudSelectItem>
-                    <MudSelectItem Value="@("Other")">Other</MudSelectItem>
-                </MudSelect>
+                <CountrySelect @bind-Value="newCustomer.Country" />
             </MudItem>
 
             <MudItem xs="12">
@@ -122,7 +70,12 @@
                               @bind-Value="newCustomer.Username"
                               HelperText="Optional - for customer portal access" />
             </MudItem>
-
+            <MudItem xs="12">
+                <MudTextField Label="Companyinformation"
+                              @bind-Value="newCustomer.Companyinformation"
+                              Lines="5"
+                              Variant="Variant.Outlined" />
+            </MudItem>
             <MudItem xs="12">
                 <MudSelect Label="Package"
                            @bind-Value="newCustomer.PackageId"

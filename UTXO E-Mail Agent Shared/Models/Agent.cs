@@ -23,8 +23,6 @@ public partial class Agent
 
     public string? Emailserver { get; set; }
 
-    public string? Companyinformation { get; set; }
-
     public string? Tasktobecompleted { get; set; }
 
     public string Aiprovider { get; set; } = null!;

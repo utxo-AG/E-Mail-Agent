@@ -88,6 +88,7 @@ public class Program
                 if (request.AgentId.HasValue)
                 {
                     agent = await db.Agents
+                        .Include(a=>a.Customer)
                         .Include(a => a.Mcpservers)
                         .Where(a => a.Id == request.AgentId.Value && a.State == "active")
                         .FirstOrDefaultAsync();
@@ -95,6 +96,7 @@ public class Program
                 else
                 {
                     agent = await db.Agents
+                        .Include(a=>a.Customer)
                         .Include(a => a.Mcpservers)
                         .Where(a => a.State == "active")
                         .FirstOrDefaultAsync();
