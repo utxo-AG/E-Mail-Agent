@@ -150,9 +150,13 @@ public class ClaudeClass : IAiProvider
                 $"E-Mail Subject: {mailClass.Subject} {Environment.NewLine} E-Mail Text:{mailClass.Text} {Environment.NewLine} E-Mail Text (HTML) {mailClass.Html}")
         };
 
+        var effectiveModel = ModelFallbackCache.GetModel(agent.Aimodel);
+        if (effectiveModel != agent.Aimodel)
+            Logger.Log($"[Claude] Model fallback active: {agent.Aimodel} -> {effectiveModel}", agent.Id);
+
         var parameters = new MessageParameters
         {
-            Model = agent.Aimodel,
+            Model = effectiveModel,
             MaxTokens = 8000,
             System = [new SystemMessage(systemPrompt)],
             Messages = messages,
@@ -169,8 +173,16 @@ public class ClaudeClass : IAiProvider
 
         for (int iteration = 0; iteration < maxIterations; iteration++)
         {
-            Logger.Log($"[Skill Download] Iteration {iteration}: Starting download", agent.Id);
-            response = await client.Messages.GetClaudeMessageAsync(parameters);
+            Logger.Log($"[Skill Download] Iteration {iteration}: Starting download (model: {parameters.Model})", agent.Id);
+            try
+            {
+                response = await client.Messages.GetClaudeMessageAsync(parameters);
+            }
+            catch (Exception ex) when (ex.Message.Contains("overloaded", StringComparison.OrdinalIgnoreCase))
+            {
+                ModelFallbackCache.RecordOverload();
+                throw; // Re-throw so EmailPollingService handles retry
+            }
 
             // Download skill files after EACH iteration (before response gets overwritten)
             try
