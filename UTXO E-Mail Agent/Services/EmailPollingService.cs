@@ -118,7 +118,7 @@ public class EmailPollingService : BackgroundService
                                 // Only send reply if there's actual content
                                 if (!string.IsNullOrEmpty(aiResponse.EmailResponseText) || !string.IsNullOrEmpty(aiResponse.EmailResponseHtml))
                                 {
-                                    await provider.SendReplyResponseEmail(aiResponse, mail, agent);
+                                    await provider.SendReplyResponseEmail(aiResponse, mail, agent, aiResponse.Conversation);
                                     Logger.Log($"[EmailPollingService] Reply sent to {mail.From}", agent.Id, aiResponse.EmailResponseText);
                                 }
                                 else

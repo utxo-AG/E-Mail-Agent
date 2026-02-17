@@ -77,7 +77,7 @@ public class InboundClass : IEmailProvider
         return null;
     }
 
-    public async Task SendReplyResponseEmail(AiResponseClass emailResponse, MailClass mail, Agent agent)
+    public async Task SendReplyResponseEmail(AiResponseClass emailResponse, MailClass mail, Agent agent, Conversation? conversation)
     {
         using var httpClient = new HttpClient();
         using var request = new HttpRequestMessage(new HttpMethod("POST"), _apiUrl + $"emails/{mail.Id}/reply");
@@ -141,6 +141,11 @@ public class InboundClass : IEmailProvider
         else
         {
             Logger.Log($"[Inbound] Email sent successfully! Status: {response.StatusCode}");
+            Sentemail se=new Sentemail(){ Created = DateTime.UtcNow, ConversationId =  conversation?.Id, 
+                Emailreceiver = mail.From, Emailtext =  emailResponse.EmailResponseText, 
+                Subject =  emailResponse.EmailResponseSubject,};
+            _db.Sentemails.Add(se);
+            await _db.SaveChangesAsync();
         }
     }
 }

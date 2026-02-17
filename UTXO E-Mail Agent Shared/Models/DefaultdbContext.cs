@@ -29,6 +29,8 @@ public partial class DefaultdbContext : DbContext
 
     public virtual DbSet<Package> Packages { get; set; }
 
+    public virtual DbSet<Sentemail> Sentemails { get; set; }
+
     public virtual DbSet<Server> Servers { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -342,6 +344,35 @@ public partial class DefaultdbContext : DbContext
             entity.Property(e => e.Price)
                 .HasColumnType("double(10,2)")
                 .HasColumnName("price");
+        });
+
+        modelBuilder.Entity<Sentemail>(entity =>
+        {
+            entity.HasKey(e => e.Id).HasName("PRIMARY");
+
+            entity.ToTable("sentemails");
+
+            entity.HasIndex(e => e.ConversationId, "sentemails_conversations");
+
+            entity.Property(e => e.Id)
+                .ValueGeneratedNever()
+                .HasColumnName("id");
+            entity.Property(e => e.ConversationId).HasColumnName("conversation_id");
+            entity.Property(e => e.Created)
+                .HasColumnType("datetime")
+                .HasColumnName("created");
+            entity.Property(e => e.Emailreceiver)
+                .HasMaxLength(255)
+                .HasColumnName("emailreceiver");
+            entity.Property(e => e.Emailtext).HasColumnName("emailtext");
+            entity.Property(e => e.Subject)
+                .HasMaxLength(255)
+                .HasColumnName("subject");
+
+            entity.HasOne(d => d.Conversation).WithMany(p => p.Sentemails)
+                .HasForeignKey(d => d.ConversationId)
+                .OnDelete(DeleteBehavior.Cascade)
+                .HasConstraintName("sentemails_conversations");
         });
 
         modelBuilder.Entity<Server>(entity =>

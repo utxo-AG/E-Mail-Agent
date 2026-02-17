@@ -12,10 +12,12 @@ namespace UTXO_E_Mail_Agent.EmailProvider.Pop3;
 public class Pop3Class : IEmailProvider
 {
     private readonly IConfiguration _config;
+    private readonly DefaultdbContext _db;
 
     public Pop3Class(IConfiguration config, DefaultdbContext db)
     {
         _config = config;
+        _db = db;
     }
 
     public async Task<ListNewEmailsClass[]?> GetEmailsAsync(Agent agent)
@@ -141,7 +143,7 @@ public class Pop3Class : IEmailProvider
         }
     }
 
-    public async Task SendReplyResponseEmail(AiResponseClass emailResponse, MailClass mail, Agent agent)
+    public async Task SendReplyResponseEmail(AiResponseClass emailResponse, MailClass mail, Agent agent, Conversation? conversation)
     {
         try
         {
@@ -193,6 +195,11 @@ public class Pop3Class : IEmailProvider
             await smtp.DisconnectAsync(true);
 
             Logger.Log($"[POP3/SMTP] Successfully sent reply to: {mail.From}");
+            Sentemail se=new Sentemail(){ Created = DateTime.UtcNow, ConversationId =  conversation?.Id, 
+                Emailreceiver = mail.From, Emailtext =  emailResponse.EmailResponseText, 
+                Subject =  emailResponse.EmailResponseSubject,};
+            _db.Sentemails.Add(se);
+            await _db.SaveChangesAsync();
         }
         catch (Exception ex)
         {

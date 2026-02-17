@@ -8,7 +8,7 @@ public interface IEmailProvider
 {
     public Task<ListNewEmailsClass[]?> GetEmailsAsync(Agent agent);
     public Task<MailClass?> GetMail(ListNewEmailsClass email, Agent agent);
-    public Task SendReplyResponseEmail(AiResponseClass emailResponse, MailClass mail, Agent agent);
+    public Task SendReplyResponseEmail(AiResponseClass emailResponse, MailClass mail, Agent agent, Conversation? conversation);
 
     /// <summary>
     /// Marks an email as unread again (e.g. after a processing error).

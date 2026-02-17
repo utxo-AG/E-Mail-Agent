@@ -98,6 +98,7 @@ public class ProcessMailsClass(DefaultdbContext db, IConfiguration configuration
         }
 
         await _db.SaveChangesAsync();
+        response.Conversation=conversation;
         
         return response;
     }

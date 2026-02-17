@@ -42,4 +42,6 @@ public partial class Conversation
     public virtual ICollection<Conversation> InverseConversationreference { get; set; } = new List<Conversation>();
 
     public virtual ICollection<Mcpserverrequest> Mcpserverrequests { get; set; } = new List<Mcpserverrequest>();
+
+    public virtual ICollection<Sentemail> Sentemails { get; set; } = new List<Sentemail>();
 }

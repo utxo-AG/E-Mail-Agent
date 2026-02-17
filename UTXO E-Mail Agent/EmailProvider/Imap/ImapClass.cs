@@ -196,7 +196,7 @@ public class ImapClass : IEmailProvider
         }
     }
 
-    public async Task SendReplyResponseEmail(AiResponseClass emailResponse, MailClass mail, Agent agent)
+    public async Task SendReplyResponseEmail(AiResponseClass emailResponse, MailClass mail, Agent agent, Conversation? conversation)
     {
         try
         {
@@ -246,8 +246,16 @@ public class ImapClass : IEmailProvider
 
             await smtp.SendAsync(message);
             await smtp.DisconnectAsync(true);
-
+            
             Logger.Log($"[IMAP/SMTP] Successfully sent reply to: {mail.From}");
+            
+            Sentemail se=new Sentemail(){ Created = DateTime.UtcNow, ConversationId =  conversation?.Id, 
+                Emailreceiver = mail.From, Emailtext =  emailResponse.EmailResponseText, 
+                Subject =  emailResponse.EmailResponseSubject,};
+            _db.Sentemails.Add(se);
+            await _db.SaveChangesAsync();
+            
+            
         }
         catch (Exception ex)
         {
