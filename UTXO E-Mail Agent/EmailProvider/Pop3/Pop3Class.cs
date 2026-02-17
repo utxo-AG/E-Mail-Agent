@@ -175,19 +175,18 @@ public class Pop3Class : IEmailProvider
                 message.References.Add(mail.Id);
             }
 
-            // Send via SMTP
+            // Send via SMTP using agent's SMTP settings
             using var smtp = new SmtpClient();
             smtp.ServerCertificateValidationCallback = (s, c, h, e) => true;
 
-            // Use SMTP server (usually same domain but smtp. prefix)
-            var smtpServer = agent.Emailserver?.Replace("pop3.", "smtp.").Replace("pop.", "smtp.")
-                ?? throw new InvalidOperationException("Email server not configured");
-            var smtpPort = 587; // Standard SMTP TLS port
+            var smtpServer = agent.Smtpserver ?? throw new InvalidOperationException("SMTP server not configured");
+            var smtpPort = agent.Smtpport ?? 465;
+            var useSsl = agent.Smtpusessl ?? true;
 
-            await smtp.ConnectAsync(smtpServer, smtpPort, MailKit.Security.SecureSocketOptions.StartTls);
+            await smtp.ConnectAsync(smtpServer, smtpPort, useSsl);
 
-            var username = agent.Emailusername ?? throw new InvalidOperationException("Email username not configured");
-            var password = agent.Emailpassword ?? throw new InvalidOperationException("Email password not configured");
+            var username = agent.Smtpusername ?? throw new InvalidOperationException("SMTP username not configured");
+            var password = agent.Smtppassword ?? throw new InvalidOperationException("SMTP password not configured");
             await smtp.AuthenticateAsync(username, password);
 
             await smtp.SendAsync(message);

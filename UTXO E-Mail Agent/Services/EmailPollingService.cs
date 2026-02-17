@@ -103,6 +103,15 @@ public class EmailPollingService : BackgroundService
 
                         if (mail != null)
                         {
+                            // Check if this email was already processed (prevent duplicate processing)
+                            var alreadyProcessed = await db.Conversations
+                                .AnyAsync(c => c.AgentId == agent.Id && c.Messageid == mail.Id);
+                            if (alreadyProcessed)
+                            {
+                                Logger.Log($"[EmailPollingService] Skipping email {mail.Id} - already processed (conversation exists for agent {agent.Id})", agent.Id);
+                                continue;
+                            }
+
                             try
                             {
                                 // Log email content as additional data
