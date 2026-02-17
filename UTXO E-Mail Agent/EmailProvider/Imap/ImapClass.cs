@@ -2,6 +2,7 @@ using MailKit;
 using MailKit.Net.Imap;
 using MailKit.Net.Smtp;
 using MailKit.Search;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using MimeKit;
 using UTXO_E_Mail_Agent.Classes;
@@ -15,13 +16,15 @@ namespace UTXO_E_Mail_Agent.EmailProvider.Imap;
 public class ImapClass : IEmailProvider
 {
     private readonly IConfiguration _config;
+    private readonly DefaultdbContext _db;
 
     public ImapClass(IConfiguration config, DefaultdbContext db)
     {
         _config = config;
+        _db = db;
     }
 
-    public async Task<ListNewEmailsClass[]?> GetEmailsAsync(Agent agent)
+        public async Task<ListNewEmailsClass[]?> GetEmailsAsync(Agent agent)
     {
         try
         {
@@ -56,7 +59,7 @@ public class ImapClass : IEmailProvider
             // Fetch basic info for unread messages
             var messages = await inbox.FetchAsync(uids, MessageSummaryItems.Envelope | MessageSummaryItems.UniqueId);
 
-            var result = messages.Select(msg => new ListNewEmailsClass
+            var allEmails = messages.Select(msg => new ListNewEmailsClass
             {
                 Id = msg.UniqueId.ToString(),
                 Type = "received",
@@ -65,12 +68,27 @@ public class ImapClass : IEmailProvider
                 Subject = msg.Envelope.Subject ?? "(No Subject)",
                 Status = "unread",
                 CreatedAt = msg.Envelope.Date?.ToString("yyyy-MM-dd HH:mm:ss") ?? DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss")
-            }).ToArray();
+            }).ToList();
 
             await client.DisconnectAsync(true);
 
-            Logger.Log($"[IMAP] Found {result.Length} unread email(s)");
-            return result;
+            // Filter out already processed emails (same check as InboundClass)
+            var result = new List<ListNewEmailsClass>();
+            foreach (var email in allEmails)
+            {
+                var alreadyProcessed = await _db.Conversations
+                    .AsNoTracking()
+                    .AnyAsync(c => c.AgentId == agent.Id && c.Messageid == email.Id);
+                if (alreadyProcessed)
+                {
+                    Logger.Log($"[IMAP] Skipping email {email.Id} - already processed", agent.Id);
+                    continue;
+                }
+                result.Add(email);
+            }
+
+            Logger.Log($"[IMAP] Found {allEmails.Count} unread, {result.Count} new email(s)");
+            return result.ToArray();
         }
         catch (Exception ex)
         {
