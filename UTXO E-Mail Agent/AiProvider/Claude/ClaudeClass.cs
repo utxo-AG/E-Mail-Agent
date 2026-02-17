@@ -58,8 +58,8 @@ public class ClaudeClass : IAiProvider
                 new Dictionary<string, object> { { "name", "code_execution" } }),
             ServerTools.GetWebSearchTool(5, null, null,
                 new UserLocation() { City = agent.Customer.City, Country = CountryToIso2(agent.Customer.Country) }),
-            new Function("bash", "bash_20250124",
-                new Dictionary<string, object> { { "name", "bash" } })
+            // new Function("bash", "bash_20250124",
+            //     new Dictionary<string, object> { { "name", "bash" } })
         };
 
         // Send Email Tool - always available for forwarding/sending emails
@@ -218,21 +218,20 @@ public class ClaudeClass : IAiProvider
                 Logger.LogError($"[Skill Download] Iteration {iteration}: Error: {ex.Message}", agent.Id);
             }
 
-            // Handle our custom tools (MCP tools + send_email)
-            // Built-in tools like code_execution/bash/web_search are processed server-side
-            var customToolCalls = response.Content
+            // Check for ALL tool calls in the response
+            var allToolCalls = response.Content
                 .OfType<ToolUseContent>()
-                .Where(tc => mcpToolHandlers.ContainsKey(tc.Name) || tc.Name == "send_email")
                 .ToList();
 
-            if (!customToolCalls.Any())
+            // No tool calls at all → AI is done
+            if (!allToolCalls.Any())
                 break;
 
             // Add Claude response (with tool use) as assistant message
             messages.Add(response.Message);
 
             // Execute each tool call and send result back
-            foreach (var toolUse in customToolCalls)
+            foreach (var toolUse in allToolCalls)
             {
                 Logger.Log($"[MCP Tool Call] {toolUse.Name} - Input: {toolUse.Input}", agent.Id);
 
@@ -268,7 +267,11 @@ public class ClaudeClass : IAiProvider
                     }
                     else
                     {
-                        result = $"ERROR: Unknown tool {toolUse.Name}";
+                        // Server-side tools (bash, code_execution, web_search) that weren't processed
+                        // Tell the AI to use the available custom tools instead
+                        var availableTools = string.Join(", ", mcpToolHandlers.Keys.Append("send_email"));
+                        result = $"ERROR: Tool '{toolUse.Name}' is not available for direct use. Please use the available tools instead: {availableTools}";
+                        Logger.LogWarning($"[MCP] AI tried to use unavailable tool: {toolUse.Name}, available: {availableTools}", agent.Id);
                     }
 
                     messages.Add(new Message()
