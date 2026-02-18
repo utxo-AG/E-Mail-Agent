@@ -116,79 +116,116 @@ public class HttpMcpServerHandler
         }
     }
 
+    private HttpRequestMessage CreateRequest(HttpMethod method, string url, HttpContent? content = null)
+    {
+        var request = new HttpRequestMessage(method, url);
+        if (content != null)
+            request.Content = content;
+
+        // Add Bearer token if configured
+        if (!string.IsNullOrEmpty(_mcpConfig.Bearer))
+            request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", _mcpConfig.Bearer);
+
+        return request;
+    }
+
     private async Task<HttpResponseMessage> ExecuteGetAsync(string url, string? parameters)
     {
-        // For GET: Parameters in URL as query string
-        if (!string.IsNullOrEmpty(parameters))
+        // Resolve path parameters first, then remaining as query string
+        var (resolvedUrl, remaining) = ResolvePathParameters(url, parameters);
+        if (remaining != null && remaining.Count > 0)
         {
-            var queryParams = ParseParametersToQueryString(parameters);
-            url = $"{url}?{queryParams}";
-            Logger.Log($"[MCP {_mcpConfig.Name}] Final URL: {url}", _mcpConfig.AgentId);
+            resolvedUrl = $"{resolvedUrl}?{DictToQueryString(remaining)}";
         }
+        Logger.Log($"[MCP {_mcpConfig.Name}] Final URL: {resolvedUrl}", _mcpConfig.AgentId);
 
-        return await _httpClient.GetAsync(url);
+        return await _httpClient.SendAsync(CreateRequest(HttpMethod.Get, resolvedUrl));
     }
 
     private async Task<HttpResponseMessage> ExecutePostAsync(string url, string? parameters)
     {
-        // For POST: Parameters as JSON in body
-        var bodyJson = string.IsNullOrEmpty(parameters) ? "{}" : parameters;
+        // Resolve path parameters, remaining go as JSON body
+        var (resolvedUrl, remaining) = ResolvePathParameters(url, parameters);
+        var bodyJson = remaining != null ? JsonSerializer.Serialize(remaining) : (string.IsNullOrEmpty(parameters) ? "{}" : parameters);
 
-        Logger.Log($"[MCP {_mcpConfig.Name}] POST Body:", _mcpConfig.AgentId);
-        Logger.Log($"[MCP {_mcpConfig.Name}] {bodyJson}", _mcpConfig.AgentId);
+        Logger.Log($"[MCP {_mcpConfig.Name}] POST URL: {resolvedUrl}", _mcpConfig.AgentId);
+        Logger.Log($"[MCP {_mcpConfig.Name}] POST Body: {bodyJson}", _mcpConfig.AgentId);
 
         var content = new StringContent(bodyJson, Encoding.UTF8, "application/json");
 
-        return await _httpClient.PostAsync(url, content);
+        return await _httpClient.SendAsync(CreateRequest(HttpMethod.Post, resolvedUrl, content));
     }
 
     private async Task<HttpResponseMessage> ExecutePutAsync(string url, string? parameters)
     {
-        // For PUT: Parameters as JSON in body
-        var bodyJson = string.IsNullOrEmpty(parameters) ? "{}" : parameters;
+        // Resolve path parameters, remaining go as JSON body
+        var (resolvedUrl, remaining) = ResolvePathParameters(url, parameters);
+        var bodyJson = remaining != null ? JsonSerializer.Serialize(remaining) : (string.IsNullOrEmpty(parameters) ? "{}" : parameters);
 
-        Logger.Log($"[MCP {_mcpConfig.Name}] PUT Body:", _mcpConfig.AgentId);
-        Logger.Log($"[MCP {_mcpConfig.Name}] {bodyJson}", _mcpConfig.AgentId);
+        Logger.Log($"[MCP {_mcpConfig.Name}] PUT URL: {resolvedUrl}", _mcpConfig.AgentId);
+        Logger.Log($"[MCP {_mcpConfig.Name}] PUT Body: {bodyJson}", _mcpConfig.AgentId);
 
         var content = new StringContent(bodyJson, Encoding.UTF8, "application/json");
 
-        return await _httpClient.PutAsync(url, content);
+        return await _httpClient.SendAsync(CreateRequest(HttpMethod.Put, resolvedUrl, content));
     }
 
     private async Task<HttpResponseMessage> ExecuteDeleteAsync(string url, string? parameters)
     {
-        // For DELETE: Parameters in URL as query string
-        if (!string.IsNullOrEmpty(parameters))
+        // Resolve path parameters first, then remaining as query string
+        var (resolvedUrl, remaining) = ResolvePathParameters(url, parameters);
+        if (remaining != null && remaining.Count > 0)
         {
-            var queryParams = ParseParametersToQueryString(parameters);
-            url = $"{url}?{queryParams}";
-            Logger.Log($"[MCP {_mcpConfig.Name}] Final URL: {url}", _mcpConfig.AgentId);
+            resolvedUrl = $"{resolvedUrl}?{DictToQueryString(remaining)}";
         }
+        Logger.Log($"[MCP {_mcpConfig.Name}] Final URL: {resolvedUrl}", _mcpConfig.AgentId);
 
-        return await _httpClient.DeleteAsync(url);
+        return await _httpClient.SendAsync(CreateRequest(HttpMethod.Delete, resolvedUrl));
     }
 
     /// <summary>
-    /// Converts JSON parameters to query string for GET/DELETE
+    /// Replaces {placeholder} path parameters in the URL with values from JSON parameters.
+    /// Returns the resolved URL and the remaining parameters that were not used as path params.
     /// </summary>
-    private string ParseParametersToQueryString(string jsonParameters)
+    private (string url, Dictionary<string, object>? remaining) ResolvePathParameters(string url, string? jsonParameters)
     {
+        if (string.IsNullOrEmpty(jsonParameters))
+            return (url, null);
+
         try
         {
             var dict = JsonSerializer.Deserialize<Dictionary<string, object>>(jsonParameters);
             if (dict == null || dict.Count == 0)
-                return string.Empty;
+                return (url, null);
 
-            var queryParams = string.Join("&",
-                dict.Select(kvp => $"{Uri.EscapeDataString(kvp.Key)}={Uri.EscapeDataString(kvp.Value?.ToString() ?? "")}"));
+            var remaining = new Dictionary<string, object>(dict);
 
-            return queryParams;
+            // Replace {key} placeholders in URL with parameter values
+            foreach (var kvp in dict)
+            {
+                var placeholder = $"{{{kvp.Key}}}";
+                if (url.Contains(placeholder))
+                {
+                    url = url.Replace(placeholder, Uri.EscapeDataString(kvp.Value?.ToString() ?? ""));
+                    remaining.Remove(kvp.Key);
+                }
+            }
+
+            return (url, remaining.Count > 0 ? remaining : null);
         }
         catch
         {
-            // If not valid JSON, interpret as query string
-            return jsonParameters;
+            return (url, null);
         }
+    }
+
+    /// <summary>
+    /// Converts a dictionary to query string format (key1=value1&amp;key2=value2)
+    /// </summary>
+    private string DictToQueryString(Dictionary<string, object> dict)
+    {
+        return string.Join("&",
+            dict.Select(kvp => $"{Uri.EscapeDataString(kvp.Key)}={Uri.EscapeDataString(kvp.Value?.ToString() ?? "")}"));
     }
 
     /// <summary>

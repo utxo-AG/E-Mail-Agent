@@ -40,6 +40,15 @@
                         <MudSelectItem Value="@("UPDATE")">UPDATE</MudSelectItem>
                     </MudSelect>
                 </MudItem>
+
+                <MudItem xs="12">
+                    <MudTextField Label="Bearer Token"
+                                  @bind-Value="editServer.Bearer"
+                                  Placeholder="Optional - API authentication token"
+                                  InputType="InputType.Password"
+                                  Adornment="Adornment.Start"
+                                  AdornmentIcon="@Icons.Material.Filled.Key" />
+                </MudItem>
             </MudGrid>
         </MudForm>
     </DialogContent>
@@ -75,7 +84,8 @@
                 Name = McpServer.Name,
                 Description = McpServer.Description,
                 Url = McpServer.Url,
-                Call = McpServer.Call
+                Call = McpServer.Call,
+                Bearer = McpServer.Bearer
             };
         }
         else
@@ -111,6 +121,7 @@
                 existing.Description = editServer.Description;
                 existing.Url = editServer.Url;
                 existing.Call = editServer.Call;
+                existing.Bearer = editServer.Bearer;
 
                 await db.SaveChangesAsync();
             }
