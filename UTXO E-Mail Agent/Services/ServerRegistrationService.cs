@@ -12,6 +12,11 @@ public static class ServerRegistrationService
     private static string? _serverIdentifier;
 
     /// <summary>
+    /// The database ID of this server. Set after RegisterServerAsync.
+    /// </summary>
+    public static int? ServerId { get; private set; }
+
+    /// <summary>
     /// Gets the unique server identifier. Tries DigitalOcean Metadata API first,
     /// falls back to Environment.MachineName.
     /// </summary>
@@ -70,6 +75,8 @@ public static class ServerRegistrationService
         }
 
         await db.SaveChangesAsync();
+        ServerId = server.Id;
+        Logger.Log($"[ServerRegistration] Server ID: {ServerId}");
     }
 
     /// <summary>
