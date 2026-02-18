@@ -66,6 +66,8 @@ public partial class DefaultdbContext : DbContext
 
             entity.HasIndex(e => e.CustomerId, "agents_customers");
 
+            entity.HasIndex(e => e.ServerId, "agents_server");
+
             entity.Property(e => e.Id).HasColumnName("id");
             entity.Property(e => e.Aimodel)
                 .HasMaxLength(255)
@@ -103,6 +105,7 @@ public partial class DefaultdbContext : DbContext
             entity.Property(e => e.Lastpoll)
                 .HasColumnType("datetime")
                 .HasColumnName("lastpoll");
+            entity.Property(e => e.ServerId).HasColumnName("server_id");
             entity.Property(e => e.Smtppassword)
                 .HasMaxLength(255)
                 .HasColumnName("smtppassword");
@@ -122,6 +125,11 @@ public partial class DefaultdbContext : DbContext
             entity.HasOne(d => d.Customer).WithMany(p => p.Agents)
                 .HasForeignKey(d => d.CustomerId)
                 .HasConstraintName("agents_customers");
+
+            entity.HasOne(d => d.Server).WithMany(p => p.Agents)
+                .HasForeignKey(d => d.ServerId)
+                .OnDelete(DeleteBehavior.SetNull)
+                .HasConstraintName("agents_server");
         });
 
         modelBuilder.Entity<Conversation>(entity =>
@@ -284,6 +292,9 @@ public partial class DefaultdbContext : DbContext
 
             entity.Property(e => e.Id).HasColumnName("id");
             entity.Property(e => e.AgentId).HasColumnName("agent_id");
+            entity.Property(e => e.Bearer)
+                .HasMaxLength(255)
+                .HasColumnName("bearer");
             entity.Property(e => e.Call)
                 .HasColumnType("enum('GET','POST','DELETE','UPDATE')")
                 .HasColumnName("call");
@@ -354,9 +365,7 @@ public partial class DefaultdbContext : DbContext
 
             entity.HasIndex(e => e.ConversationId, "sentemails_conversations");
 
-            entity.Property(e => e.Id)
-                .ValueGeneratedNever()
-                .HasColumnName("id");
+            entity.Property(e => e.Id).HasColumnName("id");
             entity.Property(e => e.ConversationId).HasColumnName("conversation_id");
             entity.Property(e => e.Created)
                 .HasColumnType("datetime")

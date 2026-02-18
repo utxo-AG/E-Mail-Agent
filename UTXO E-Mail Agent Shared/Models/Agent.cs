@@ -47,6 +47,8 @@ public partial class Agent
 
     public DateTime? Lastpoll { get; set; }
 
+    public int? ServerId { get; set; }
+
     public virtual ICollection<Conversation> Conversations { get; set; } = new List<Conversation>();
 
     public virtual Customer Customer { get; set; } = null!;
@@ -54,4 +56,6 @@ public partial class Agent
     public virtual ICollection<Logmessage> Logmessages { get; set; } = new List<Logmessage>();
 
     public virtual ICollection<Mcpserver> Mcpservers { get; set; } = new List<Mcpserver>();
+
+    public virtual Server? Server { get; set; }
 }

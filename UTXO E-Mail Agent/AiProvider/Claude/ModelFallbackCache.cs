@@ -12,9 +12,9 @@ public static class ModelFallbackCache
     private static DateTime? _fallbackUntil;
     private static readonly object _lock = new();
 
-    private const int OverloadThreshold = 3;
+    private const int OverloadThreshold = 2;
     private static readonly TimeSpan OverloadWindow = TimeSpan.FromMinutes(3);
-    private static readonly TimeSpan FallbackDuration = TimeSpan.FromMinutes(5);
+    private static readonly TimeSpan FallbackDuration = TimeSpan.FromMinutes(10);
 
     private const string OpusModel = "claude-opus-4-6";
     private const string SonnetFallback = "claude-sonnet-4-5-20250929";

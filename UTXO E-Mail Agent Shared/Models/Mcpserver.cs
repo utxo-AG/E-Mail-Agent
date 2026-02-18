@@ -17,6 +17,8 @@ public partial class Mcpserver
 
     public string Call { get; set; } = null!;
 
+    public string? Bearer { get; set; }
+
     public virtual Agent Agent { get; set; } = null!;
 
     public virtual ICollection<Mcpserverrequest> Mcpserverrequests { get; set; } = new List<Mcpserverrequest>();

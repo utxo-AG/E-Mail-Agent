@@ -35,7 +35,7 @@ public class EmailPollingService : BackgroundService
         {
             try
             {
-                await ProcessAgentsAsync();
+                await ProcessAgentsAsync(ServerRegistrationService.ServerId);
             }
             catch (Exception ex)
             {
@@ -47,7 +47,7 @@ public class EmailPollingService : BackgroundService
         }
     }
 
-    private async Task ProcessAgentsAsync()
+    private async Task ProcessAgentsAsync(int? serverid)
     {
         using var scope = _scopeFactory.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<DefaultdbContext>();
@@ -59,7 +59,7 @@ public class EmailPollingService : BackgroundService
         var agents = await db.Agents
             .Include(a => a.Customer)
             .Include(a => a.Mcpservers)
-            .Where(a => a.State == "active" && a.Emailprovidertype == "polling")
+            .Where(a => a.State == "active" && a.Emailprovidertype == "polling" && (a.ServerId==null || a.ServerId == serverid))
             .ToListAsync();
 
         Logger.Log($"[EmailPollingService] Found {agents.Count} active agent(s) for polling");

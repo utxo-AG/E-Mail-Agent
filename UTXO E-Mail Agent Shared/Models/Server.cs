@@ -12,4 +12,6 @@ public partial class Server
     public DateTime? Lastlifesign { get; set; }
 
     public string State { get; set; } = null!;
+
+    public virtual ICollection<Agent> Agents { get; set; } = new List<Agent>();
 }
