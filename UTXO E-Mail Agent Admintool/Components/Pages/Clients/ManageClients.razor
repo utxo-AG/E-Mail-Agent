@@ -33,8 +33,15 @@
                 @context.Id
             </MudTd>
             <MudTd>
-                @context.Firstname @context.Lastname
-                <br/>
+                @if (!string.IsNullOrEmpty(context.Companyname))
+                {
+                    <MudText Typo="Typo.body2"><b>@context.Companyname</b></MudText>
+                    <MudText Typo="Typo.caption">@context.Firstname @context.Lastname</MudText>
+                }
+                else
+                {
+                    <MudText Typo="Typo.body2">@context.Firstname @context.Lastname</MudText>
+                }
             </MudTd>
             <MudTd>@context.Street 
                 </MudTd>
