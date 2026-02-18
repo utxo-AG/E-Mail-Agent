@@ -6,6 +6,14 @@ namespace UTXO_E_Mail_Agent.Classes;
 public class AiResponseClass
 {
     public Conversation Conversation;
+
+    /// <summary>
+    /// Tracks recipients that already received an email via send_email tool during AI processing.
+    /// Used to prevent duplicate sends from SendReplyResponseEmail.
+    /// </summary>
+    [Newtonsoft.Json.JsonIgnore]
+    public HashSet<string> AlreadySentTo { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+
     public string EmailResponseText { get; set; } = string.Empty;
     public string EmailResponseHtml { get; set; } = string.Empty;
     public string EmailResponseSubject { get; set; } = string.Empty;

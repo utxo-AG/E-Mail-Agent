@@ -115,11 +115,18 @@ public class EmailPollingService : BackgroundService
 
                                 Logger.Log($"[EmailPollingService] AI Response generated", agent.Id, aiResponse.AiExplanation);
 
-                                // Only send reply if there's actual content
+                                // Only send reply if there's actual content and recipient hasn't already been emailed via send_email tool
                                 if (!string.IsNullOrEmpty(aiResponse.EmailResponseText) || !string.IsNullOrEmpty(aiResponse.EmailResponseHtml))
                                 {
-                                    await provider.SendReplyResponseEmail(aiResponse, mail, agent, aiResponse.Conversation);
-                                    Logger.Log($"[EmailPollingService] Reply sent to {mail.From}", agent.Id, aiResponse.EmailResponseText);
+                                    if (aiResponse.AlreadySentTo.Contains(mail.From))
+                                    {
+                                        Logger.Log($"[EmailPollingService] Skipping reply to {mail.From} - already sent via send_email tool", agent.Id);
+                                    }
+                                    else
+                                    {
+                                        await provider.SendReplyResponseEmail(aiResponse, mail, agent, aiResponse.Conversation);
+                                        Logger.Log($"[EmailPollingService] Reply sent to {mail.From}", agent.Id, aiResponse.EmailResponseText);
+                                    }
                                 }
                                 else
                                 {

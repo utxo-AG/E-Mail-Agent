@@ -115,14 +115,35 @@ public class ClaudeClass : IAiProvider
         {
             var toolName = SanitizeToolName(mcpServer.Name);
 
+            // Extract {placeholder} names from URL to create proper schema properties
+            var urlPlaceholders = Regex.Matches(mcpServer.Url, @"\{(\w+)\}")
+                .Select(m => m.Groups[1].Value)
+                .ToList();
+
+            var properties = new Dictionary<string, Property>();
+            var required = new List<string>();
+
+            if (urlPlaceholders.Any())
+            {
+                // Create individual properties for each URL placeholder
+                foreach (var placeholder in urlPlaceholders)
+                {
+                    properties.Add(placeholder, new Property() { Type = "string", Description = $"Value for {{{placeholder}}} in the URL" });
+                    required.Add(placeholder);
+                }
+            }
+            else
+            {
+                // No placeholders - use generic json property for query/body parameters
+                properties.Add("json", new Property() { Type = "string", Description = mcpServer.Description });
+                required.Add("json");
+            }
+
             var inputSchema = new InputSchema()
             {
                 Type = "object",
-                Properties = new Dictionary<string, Property>()
-                {
-                    { "json", new Property() { Type = "string", Description = mcpServer.Description } }
-                },
-                Required = new List<string>() { "json" }
+                Properties = properties,
+                Required = required
             };
 
             var jsonOpts = new JsonSerializerOptions
@@ -168,6 +189,7 @@ public class ClaudeClass : IAiProvider
         const int maxIterations = 20;
         MessageResponse response = null;
         var allDownloadedFiles = new List<string>(); // Collect files from all iterations
+        var sentEmailRecipients = new HashSet<string>(StringComparer.OrdinalIgnoreCase); // Track send_email recipients
         var outputDirectory = Path.Combine(Directory.GetCurrentDirectory(), "SkillOutput");
         Directory.CreateDirectory(outputDirectory);
 
@@ -249,6 +271,10 @@ public class ClaudeClass : IAiProvider
                         var replyTo = toolUse.Input?["reply_to"]?.ToString();
 
                         result = await sendEmailServer.SendEmailAsync(to, subject, text, html, replyTo);
+
+                        // Track that this recipient already received an email
+                        if (!string.IsNullOrEmpty(to))
+                            sentEmailRecipients.Add(to);
                     }
                     else if (mcpToolHandlers.ContainsKey(toolUse.Name))
                     {
@@ -454,6 +480,9 @@ public class ClaudeClass : IAiProvider
 
             responseClass.Attachments = existingAttachments.ToArray();
         }
+
+        // Transfer send_email tracking to response (for duplicate send prevention)
+        responseClass.AlreadySentTo = sentEmailRecipients;
 
         // Attachments that only have a path: Read file and base64 encode
         if (responseClass.Attachments != null)

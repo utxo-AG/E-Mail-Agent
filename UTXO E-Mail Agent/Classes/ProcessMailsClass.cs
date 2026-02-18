@@ -191,13 +191,19 @@ public class ProcessMailsClass(DefaultdbContext db, IConfiguration configuration
         promptBuilder.AppendLine("```");
 
         promptBuilder.AppendLine();
-        promptBuilder.AppendLine("WICHTIG - WEITERLEITUNG VON E-MAILS:");
-        promptBuilder.AppendLine("Wenn Du eine E-Mail mit send_email weiterleitest:");
-        promptBuilder.AppendLine("- Die Weiterleitung selbst erfolgt über das send_email Tool");
-        promptBuilder.AppendLine("- Ob der ursprüngliche Absender eine Bestätigung/Antwort erhalten soll, steht in deiner Aufgabe oben");
+        promptBuilder.AppendLine("WICHTIG - SEND_EMAIL VS. JSON-ANTWORT:");
+        promptBuilder.AppendLine("Es gibt ZWEI verschiedene Wege eine E-Mail zu senden:");
+        promptBuilder.AppendLine("1. send_email Tool: NUR für Weiterleitungen an ANDERE Adressen (z.B. internes Team, Support)");
+        promptBuilder.AppendLine("2. JSON-Antwort (EmailResponseText/Html): NUR für die Antwort an den URSPRÜNGLICHEN ABSENDER");
+        promptBuilder.AppendLine();
+        promptBuilder.AppendLine("NIEMALS send_email benutzen um dem ursprünglichen Absender zu antworten!");
+        promptBuilder.AppendLine("Die Antwort an den Absender erfolgt IMMER über die JSON-Felder EmailResponseText/EmailResponseHtml.");
+        promptBuilder.AppendLine("Das System schickt die JSON-Antwort automatisch an den Absender.");
+        promptBuilder.AppendLine();
+        promptBuilder.AppendLine("- Ob der ursprüngliche Absender eine Antwort erhalten soll, steht in deiner Aufgabe oben");
         promptBuilder.AppendLine("- Wenn der Absender eine Antwort bekommen soll: Fülle EmailResponseText, EmailResponseSubject und EmailResponseHtml aus");
         promptBuilder.AppendLine("- Wenn der Absender KEINE Antwort bekommen soll: Setze EmailResponseText, EmailResponseSubject und EmailResponseHtml auf null");
-        promptBuilder.AppendLine("- Erkläre in AiExplanation IMMER was du getan hast (z.B. 'E-Mail an support@firma.de weitergeleitet' oder 'Kunde informiert und E-Mail weitergeleitet')");
+        promptBuilder.AppendLine("- Erkläre in AiExplanation IMMER was du getan hast");
         promptBuilder.AppendLine();
 
         promptBuilder.AppendLine();

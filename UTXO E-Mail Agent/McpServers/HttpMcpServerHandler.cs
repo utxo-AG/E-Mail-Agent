@@ -215,6 +215,24 @@ public class HttpMcpServerHandler
         }
         catch
         {
+            // Fallback: Parameter is not valid JSON
+            // Check if it's a fully resolved URL (AI built the URL itself)
+            var urlBase = System.Text.RegularExpressions.Regex.Replace(url, @"\{(\w+)\}", "");
+            if (!string.IsNullOrWhiteSpace(jsonParameters) && jsonParameters.Trim().StartsWith(urlBase.Split('{')[0]))
+            {
+                Logger.Log($"[MCP {_mcpConfig.Name}] Fallback: Using raw parameter as resolved URL", _mcpConfig.AgentId);
+                return (jsonParameters.Trim(), null);
+            }
+
+            // Otherwise try single placeholder replacement
+            var placeholders = System.Text.RegularExpressions.Regex.Matches(url, @"\{(\w+)\}");
+            if (placeholders.Count == 1 && !string.IsNullOrWhiteSpace(jsonParameters))
+            {
+                var placeholder = placeholders[0].Value;
+                var resolvedUrl = url.Replace(placeholder, Uri.EscapeDataString(jsonParameters.Trim()));
+                Logger.Log($"[MCP {_mcpConfig.Name}] Fallback: Resolved {placeholder} from raw parameter", _mcpConfig.AgentId);
+                return (resolvedUrl, null);
+            }
             return (url, null);
         }
     }
