@@ -59,33 +59,38 @@ public class ImapClass : IEmailProvider
             // Fetch basic info for unread messages
             var messages = await inbox.FetchAsync(uids, MessageSummaryItems.Envelope | MessageSummaryItems.UniqueId);
 
-            var allEmails = messages.Select(msg => new ListNewEmailsClass
+            var allEmails = messages.Select(msg => new
             {
-                Id = msg.UniqueId.ToString(),
-                Type = "received",
-                From = msg.Envelope.From.Mailboxes.FirstOrDefault()?.Address ?? "unknown",
-                To = new[] { msg.Envelope.To.Mailboxes.FirstOrDefault()?.Address ?? agent.Emailaddress ?? "unknown" },
-                Subject = msg.Envelope.Subject ?? "(No Subject)",
-                Status = "unread",
-                CreatedAt = msg.Envelope.Date?.ToString("yyyy-MM-dd HH:mm:ss") ?? DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss")
+                UniqueId = msg.UniqueId,
+                Email = new ListNewEmailsClass
+                {
+                    Id = msg.UniqueId.ToString(),
+                    Type = "received",
+                    From = msg.Envelope.From.Mailboxes.FirstOrDefault()?.Address ?? "unknown",
+                    To = new[] { msg.Envelope.To.Mailboxes.FirstOrDefault()?.Address ?? agent.Emailaddress ?? "unknown" },
+                    Subject = msg.Envelope.Subject ?? "(No Subject)",
+                    Status = "unread",
+                    CreatedAt = msg.Envelope.Date?.ToString("yyyy-MM-dd HH:mm:ss") ?? DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss")
+                }
             }).ToList();
 
-            await client.DisconnectAsync(true);
-
-            // Filter out already processed emails (same check as InboundClass)
+            // Filter out already processed emails and mark them as read on IMAP
             var result = new List<ListNewEmailsClass>();
-            foreach (var email in allEmails)
+            foreach (var item in allEmails)
             {
                 var alreadyProcessed = await _db.Conversations
                     .AsNoTracking()
-                    .AnyAsync(c => c.AgentId == agent.Id && c.Messageid == email.Id);
+                    .AnyAsync(c => c.AgentId == agent.Id && c.Messageid == item.Email.Id);
                 if (alreadyProcessed)
                 {
-                    Logger.Log($"[IMAP] Skipping email {email.Id} - already processed", agent.Id);
+                    await inbox.AddFlagsAsync(item.UniqueId, MessageFlags.Seen, true);
+                    Logger.Log($"[IMAP] Marked email {item.Email.Id} as read - already processed", agent.Id);
                     continue;
                 }
-                result.Add(email);
+                result.Add(item.Email);
             }
+
+            await client.DisconnectAsync(true);
 
             Logger.Log($"[IMAP] Found {allEmails.Count} unread, {result.Count} new email(s)");
             return result.ToArray();
