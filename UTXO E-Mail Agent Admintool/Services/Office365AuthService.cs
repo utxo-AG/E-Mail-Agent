@@ -42,10 +42,10 @@ public class Office365AuthService
     public string GetAuthorizationUrl(int agentId)
     {
         var authUrl = _msalClient.GetAuthorizationRequestUrl(_scopes)
-            .WithState(agentId.ToString())
             .WithExtraQueryParameters(new Dictionary<string, string>
             {
-                { "prompt", "select_account" }
+                { "prompt", "select_account" },
+                { "state", agentId.ToString() }
             })
             .ExecuteAsync().Result;
 
@@ -79,33 +79,10 @@ public class Office365AuthService
             agent.Office365AccessToken = result.AccessToken;
             agent.Office365TokenExpiresAt = result.ExpiresOn.UtcDateTime;
             agent.Office365UserId = result.Account?.Username;
-
-            // Extract refresh token from the cache
-            // Note: MSAL stores the refresh token internally, but we need to extract it
-            // for our database-based token storage. We'll get it from the token cache serialization.
-            var accounts = await _msalClient.GetAccountsAsync();
-            var account = accounts.FirstOrDefault();
-            if (account != null)
-            {
-                try
-                {
-                    // Try to get a fresh token with refresh token to populate our fields
-                    var silentResult = await _msalClient
-                        .AcquireTokenSilent(_scopes, account)
-                        .ExecuteAsync();
-                    
-                    // The refresh token is managed by MSAL, but we can store what we have
-                    // For proper refresh token access, we'd need to implement a custom token cache
-                }
-                catch
-                {
-                    // Silent token acquisition failed, which is fine for initial auth
-                }
-            }
-
-            // For now, we'll rely on the fact that we have the access token
-            // and the user can re-authenticate if it expires and refresh fails
-            // A more robust solution would implement a custom MSAL token cache
+            
+            // Note: For refresh token handling, we would need a custom MSAL token cache.
+            // The current implementation stores the access token and relies on re-authentication
+            // when the token expires. For production, consider implementing ITokenCacheSerializer.
             
             await db.SaveChangesAsync();
 

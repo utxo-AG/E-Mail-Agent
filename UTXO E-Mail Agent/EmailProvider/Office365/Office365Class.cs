@@ -202,7 +202,7 @@ public class Office365Class : IEmailProvider
         }
     }
 
-    public async Task SendReplyResponseEmail(AiResponseClass emailResponse, MailClass mail, Agent agent, Conversation? conversation)
+    public async Task SendReplyResponseEmail(AiResponseClass emailResponse, MailClass mail, Agent agent, UTXO_E_Mail_Agent_Shared.Models.Conversation? conversation)
     {
         try
         {
