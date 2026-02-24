@@ -79,17 +79,12 @@ public class InboundClass : IEmailProvider
 
     public async Task SendReplyResponseEmail(AiResponseClass emailResponse, MailClass mail, Agent agent, Conversation? conversation)
     {
-        using var httpClient = new HttpClient();
-        using var request = new HttpRequestMessage(new HttpMethod("POST"), _apiUrl + $"emails/{mail.Id}/reply");
-        request.Headers.TryAddWithoutValidation("Authorization", $"Bearer {_bearerToken}");
-
         // Prepare attachments: Remove path field (only for local use)
         var attachmentsForApi = emailResponse.Attachments;
         if (attachmentsForApi != null && attachmentsForApi.Length > 0)
         {
             foreach (var att in attachmentsForApi)
             {
-                // Set path to null - not sent to API
                 att.Path = null;
             }
         }
@@ -119,33 +114,57 @@ public class InboundClass : IEmailProvider
 
         var jsonPayload = JsonConvert.SerializeObject(replyResponse, Formatting.Indented);
 
-        // Debug: Output JSON payload (truncated)
         var payloadPreview = jsonPayload.Length > 500
             ? jsonPayload.Substring(0, 500) + "..."
             : jsonPayload;
         Logger.Log($"[Inbound] Sending POST to: {_apiUrl}emails/{mail.Id}/reply");
         Logger.Log($"[Inbound] Payload Preview:\n{payloadPreview}");
 
-        request.Content = new StringContent(jsonPayload);
-        request.Content.Headers.ContentType = MediaTypeHeaderValue.Parse("application/json");
+        // Retry with exponential backoff: 5s, 15s, 30s
+        const int maxRetries = 3;
+        int[] delaysSeconds = [5, 15, 30];
 
-        var response = await httpClient.SendAsync(request);
-        if (!response.IsSuccessStatusCode)
+        for (int attempt = 1; attempt <= maxRetries; attempt++)
         {
+            using var httpClient = new HttpClient();
+            using var request = new HttpRequestMessage(HttpMethod.Post, _apiUrl + $"emails/{mail.Id}/reply");
+            request.Headers.TryAddWithoutValidation("Authorization", $"Bearer {_bearerToken}");
+            request.Content = new StringContent(jsonPayload);
+            request.Content.Headers.ContentType = MediaTypeHeaderValue.Parse("application/json");
+
+            var response = await httpClient.SendAsync(request);
+
+            if (response.IsSuccessStatusCode)
+            {
+                Logger.Log($"[Inbound] Email sent successfully! Status: {response.StatusCode}" +
+                    (attempt > 1 ? $" (attempt {attempt})" : ""));
+                Sentemail se = new Sentemail()
+                {
+                    Created = DateTime.UtcNow,
+                    ConversationId = conversation?.Id,
+                    Emailreceiver = mail.From,
+                    Emailtext = emailResponse.EmailResponseText,
+                    Subject = emailResponse.EmailResponseSubject,
+                };
+                _db.Sentemails.Add(se);
+                await _db.SaveChangesAsync();
+                return;
+            }
+
             var errorBody = await response.Content.ReadAsStringAsync();
-            Logger.LogError($"[Inbound] ERROR sending email:");
+            Logger.LogError($"[Inbound] ERROR sending email (attempt {attempt}/{maxRetries}):");
             Logger.LogError($"  Status Code: {response.StatusCode}");
             Logger.LogError($"  Response Body: {errorBody}");
             Logger.LogError($"  Request URL: {_apiUrl}emails/{mail.Id}/reply");
+
+            if (attempt < maxRetries)
+            {
+                var delay = delaysSeconds[attempt - 1];
+                Logger.Log($"[Inbound] Retrying in {delay} seconds...");
+                await Task.Delay(delay * 1000);
+            }
         }
-        else
-        {
-            Logger.Log($"[Inbound] Email sent successfully! Status: {response.StatusCode}");
-            Sentemail se=new Sentemail(){ Created = DateTime.UtcNow, ConversationId =  conversation?.Id, 
-                Emailreceiver = mail.From, Emailtext =  emailResponse.EmailResponseText, 
-                Subject =  emailResponse.EmailResponseSubject,};
-            _db.Sentemails.Add(se);
-            await _db.SaveChangesAsync();
-        }
+
+        Logger.LogError($"[Inbound] All {maxRetries} attempts failed for email {mail.Id}");
     }
 }
