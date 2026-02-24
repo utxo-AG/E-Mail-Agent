@@ -218,11 +218,11 @@ public class Office365Class : IEmailProvider
             // Create the reply message
             var replyMessage = new Message
             {
-                Subject = emailResponse.Subject ?? $"Re: {mail.Subject}",
+                Subject = emailResponse.EmailResponseSubject ?? $"Re: {mail.Subject}",
                 Body = new ItemBody
                 {
                     ContentType = BodyType.Html,
-                    Content = emailResponse.Html ?? emailResponse.Text ?? ""
+                    Content = emailResponse.EmailResponseHtml ?? emailResponse.EmailResponseText ?? ""
                 },
                 ToRecipients = new List<Recipient>
                 {
@@ -269,7 +269,7 @@ public class Office365Class : IEmailProvider
                     ConversationId = conversation.Id,
                     Emailreceiver = mail.From,
                     Subject = replyMessage.Subject,
-                    Emailtext = emailResponse.Text ?? emailResponse.Html ?? "",
+                    Emailtext = emailResponse.EmailResponseText ?? emailResponse.EmailResponseHtml ?? "",
                     Created = DateTime.UtcNow
                 };
                 _db.Sentemails.Add(sentEmail);
