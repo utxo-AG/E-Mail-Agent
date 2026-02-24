@@ -1,0 +1,41 @@
+@inject ISnackbar Snackbar
+@inject NavigationManager NavigationManager
+@inject IHttpClientFactory HttpClientFactory
+
+<MudButton Variant="Variant.Filled"
+           Color="Color.Primary"
+           StartIcon="@Icons.Material.Filled.Cloud"
+           OnClick="ConnectToOffice365"
+           Disabled="connecting || AgentId <= 0">
+    @if (connecting)
+    {
+        <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+        <span>Connecting...</span>
+    }
+    else
+    {
+        <span>Mit Microsoft verbinden</span>
+    }
+</MudButton>
+
+@code {
+    [Parameter] public int AgentId { get; set; }
+    
+    private bool connecting;
+
+    private void ConnectToOffice365()
+    {
+        if (AgentId <= 0)
+        {
+            Snackbar.Add("Bitte speichern Sie den Agent zuerst, bevor Sie Office 365 verbinden.", Severity.Warning);
+            return;
+        }
+
+        connecting = true;
+        StateHasChanged();
+
+        // Redirect to the OAuth login endpoint
+        // The controller will redirect to Microsoft login
+        NavigationManager.NavigateTo($"/api/office365/login/{AgentId}", forceLoad: true);
+    }
+}

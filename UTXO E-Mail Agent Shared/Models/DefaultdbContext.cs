@@ -89,7 +89,7 @@ public partial class DefaultdbContext : DbContext
                 .HasColumnName("emailpassword");
             entity.Property(e => e.Emailport).HasColumnName("emailport");
             entity.Property(e => e.Emailprovider)
-                .HasColumnType("enum('inbound','imap','pop3','exchange')")
+                .HasColumnType("enum('inbound','imap','pop3','exchange','office365')")
                 .HasColumnName("emailprovider");
             entity.Property(e => e.Emailprovidertype)
                 .HasDefaultValueSql("'polling'")
@@ -121,6 +121,18 @@ public partial class DefaultdbContext : DbContext
                 .HasColumnType("enum('active','suspend','deleted')")
                 .HasColumnName("state");
             entity.Property(e => e.Tasktobecompleted).HasColumnName("tasktobecompleted");
+            entity.Property(e => e.Office365AccessToken)
+                .HasColumnType("text")
+                .HasColumnName("office365_access_token");
+            entity.Property(e => e.Office365RefreshToken)
+                .HasColumnType("text")
+                .HasColumnName("office365_refresh_token");
+            entity.Property(e => e.Office365TokenExpiresAt)
+                .HasColumnType("datetime")
+                .HasColumnName("office365_token_expires_at");
+            entity.Property(e => e.Office365UserId)
+                .HasMaxLength(255)
+                .HasColumnName("office365_user_id");
 
             entity.HasOne(d => d.Customer).WithMany(p => p.Agents)
                 .HasForeignKey(d => d.CustomerId)

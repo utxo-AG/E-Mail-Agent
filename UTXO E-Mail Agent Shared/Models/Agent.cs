@@ -49,6 +49,15 @@ public partial class Agent
 
     public int? ServerId { get; set; }
 
+    // Office 365 OAuth Fields
+    public string? Office365AccessToken { get; set; }
+
+    public string? Office365RefreshToken { get; set; }
+
+    public DateTime? Office365TokenExpiresAt { get; set; }
+
+    public string? Office365UserId { get; set; }
+
     public virtual ICollection<Conversation> Conversations { get; set; } = new List<Conversation>();
 
     public virtual Customer Customer { get; set; } = null!;

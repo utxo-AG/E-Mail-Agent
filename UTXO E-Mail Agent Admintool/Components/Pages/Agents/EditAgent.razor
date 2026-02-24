@@ -6,6 +6,7 @@
 @inject NavigationManager NavigationManager
 @inject IDialogService DialogService
 @inject IHttpClientFactory HttpClientFactory
+@inject ISnackbar Snackbar
 
 <PageTitle>@(AgentId.HasValue ? "Edit Agent" : "Create New Agent")</PageTitle>
 
@@ -48,6 +49,7 @@ else
                         <MudSelectItem Value="@("imap")">IMAP</MudSelectItem>
                         <MudSelectItem Value="@("exchange")">Exchange</MudSelectItem>
                         <MudSelectItem Value="@("pop3")">POP3</MudSelectItem>
+                        <MudSelectItem Value="@("office365")">Office 365</MudSelectItem>
                     </MudSelect>
                 </MudItem>
 
@@ -58,6 +60,47 @@ else
                             <MudSelectItem Value="@("polling")">Polling</MudSelectItem>
                             <MudSelectItem Value="@("webhook")">Webhook</MudSelectItem>
                         </MudSelect>
+                    </MudItem>
+                }
+
+                @if (agent.Emailprovider?.ToLower() == "office365")
+                {
+                    <MudItem xs="12">
+                        <MudDivider Class="my-2" />
+                        <MudText Typo="Typo.subtitle1" Class="mt-2 mb-2">Office 365 Verbindung</MudText>
+                    </MudItem>
+
+                    <MudItem xs="12" md="6">
+                        @if (string.IsNullOrEmpty(agent.Office365UserId))
+                        {
+                            @if (AgentId.HasValue)
+                            {
+                                <Office365ConnectButton AgentId="@AgentId.Value" />
+                            }
+                            else
+                            {
+                                <MudAlert Severity="Severity.Info" Class="mb-2">
+                                    Bitte speichern Sie den Agent zuerst, um Office 365 zu verbinden.
+                                </MudAlert>
+                            }
+                        }
+                        else
+                        {
+                            <MudAlert Severity="Severity.Success" Class="mb-2">
+                                <MudIcon Icon="@Icons.Material.Filled.CheckCircle" Class="mr-2" />
+                                Verbunden als: @agent.Office365UserId
+                            </MudAlert>
+                            <MudButton Variant="Variant.Outlined" 
+                                       Color="Color.Error" 
+                                       StartIcon="@Icons.Material.Filled.LinkOff"
+                                       OnClick="DisconnectOffice365">
+                                Verbindung trennen
+                            </MudButton>
+                        }
+                    </MudItem>
+
+                    <MudItem xs="12">
+                        <MudDivider Class="my-2" />
                     </MudItem>
                 }
 
@@ -340,10 +383,11 @@ else
 
     private async Task Save()
     {
-        // Auto-set provider type to polling for IMAP, POP3, and Exchange
+        // Auto-set provider type to polling for IMAP, POP3, Exchange, and Office365
         if (agent.Emailprovider?.ToLower() == "imap" ||
             agent.Emailprovider?.ToLower() == "pop3" ||
-            agent.Emailprovider?.ToLower() == "exchange")
+            agent.Emailprovider?.ToLower() == "exchange" ||
+            agent.Emailprovider?.ToLower() == "office365")
         {
             agent.Emailprovidertype = "polling";
         }
@@ -487,5 +531,46 @@ else
         };
 
         await DialogService.ShowAsync<TestMcpServerDialog>($"Test: {mcpServer.Name}", parameters, options);
+    }
+
+    private async Task DisconnectOffice365()
+    {
+        if (!AgentId.HasValue) return;
+
+        var result = await DialogService.ShowMessageBox(
+            "Office 365 Verbindung trennen",
+            "Sind Sie sicher, dass Sie die Verbindung zu Office 365 trennen möchten? Der Agent kann danach keine E-Mails mehr von diesem Konto abrufen.",
+            yesText: "Trennen",
+            cancelText: "Abbrechen");
+
+        if (result == true)
+        {
+            try
+            {
+                var httpClient = HttpClientFactory.CreateClient();
+                httpClient.BaseAddress = new Uri(NavigationManager.BaseUri);
+                var response = await httpClient.PostAsync($"/api/office365/disconnect/{AgentId.Value}", null);
+                
+                if (response.IsSuccessStatusCode)
+                {
+                    // Clear local agent state
+                    agent.Office365AccessToken = null;
+                    agent.Office365RefreshToken = null;
+                    agent.Office365TokenExpiresAt = null;
+                    agent.Office365UserId = null;
+                    
+                    Snackbar.Add("Office 365 Verbindung wurde getrennt.", Severity.Success);
+                    StateHasChanged();
+                }
+                else
+                {
+                    Snackbar.Add("Fehler beim Trennen der Verbindung.", Severity.Error);
+                }
+            }
+            catch (Exception ex)
+            {
+                Snackbar.Add($"Fehler: {ex.Message}", Severity.Error);
+            }
+        }
     }
 }

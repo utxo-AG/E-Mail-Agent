@@ -11,6 +11,8 @@
 
     <ItemGroup>
         <PackageReference Include="MailKit" Version="4.14.1" />
+        <PackageReference Include="Microsoft.Graph" Version="5.56.0" />
+        <PackageReference Include="Microsoft.Identity.Client" Version="4.61.3" />
         <PackageReference Include="Microsoft.AspNetCore.Diagnostics.EntityFrameworkCore" Version="9.0.10" />
         <PackageReference Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" Version="9.0.10" />
         <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="9.0.10" />

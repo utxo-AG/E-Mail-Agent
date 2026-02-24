@@ -2,6 +2,7 @@ using Microsoft.Extensions.Configuration;
 using UTXO_E_Mail_Agent.EmailProvider.Exchange;
 using UTXO_E_Mail_Agent.EmailProvider.Imap;
 using UTXO_E_Mail_Agent.EmailProvider.Inbound;
+using UTXO_E_Mail_Agent.EmailProvider.Office365;
 using UTXO_E_Mail_Agent.EmailProvider.Pop3;
 using UTXO_E_Mail_Agent.Interfaces;
 using UTXO_E_Mail_Agent_Shared.Models;
@@ -18,6 +19,7 @@ public static class EmailProviderFactory
             "imap" => new ImapClass(config, db),
             "pop3" => new Pop3Class(config,db ),
             "exchange" => new ExchangeClass(config,db),
+            "office365" => new Office365Class(config, db),
             _ => null
         };
     }

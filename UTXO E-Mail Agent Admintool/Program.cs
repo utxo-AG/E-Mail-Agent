@@ -70,6 +70,7 @@ builder.Services.AddScoped<AuthService>();
 builder.Services.AddScoped<PasswordService>();
 builder.Services.AddScoped<EmailService>();
 builder.Services.AddScoped<AgentApiService>();
+builder.Services.AddScoped<Office365AuthService>();
 
 builder.Services.AddAuthorization();
 
