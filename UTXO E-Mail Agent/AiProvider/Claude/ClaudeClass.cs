@@ -384,7 +384,7 @@ public class ClaudeClass : IAiProvider
         }
 
         // Extract JSON from response (Claude can write text before the JSON)
-        var responseClass = ParseAiResponse(fullText);
+        var responseClass = ParseAiResponse(fullText, agent.Defaultlanguage, mailClass.Text);
 
         // Check if we need to generate a document with a second agent
         if (responseClass.MustCreateAttachment &&
@@ -523,7 +523,7 @@ public class ClaudeClass : IAiProvider
     /// <summary>
     /// Extracts JSON from Claude's response. Claude can write text before the JSON.
     /// </summary>
-    private static AiResponseClass ParseAiResponse(string fullText)
+    private static AiResponseClass ParseAiResponse(string fullText, string agentDefaultLanguage, string? emailText)
     {
         Logger.Log($"[ParseAiResponse] Attempting to parse response ({fullText?.Length ?? 0} characters)");
 
@@ -531,11 +531,13 @@ public class ClaudeClass : IAiProvider
         if (string.IsNullOrWhiteSpace(fullText))
         {
             Logger.LogWarning("[ParseAiResponse] Empty response from Claude!");
+            var lang = DetectLanguage(emailText) ?? agentDefaultLanguage ?? "de";
+            var (fallbackText, fallbackSubject) = GetFallbackMessages(lang);
             return new AiResponseClass
             {
-                EmailResponseText = "Ich konnte keine passende Antwort generieren. Bitte versuchen Sie es erneut.",
-                EmailResponseSubject = "RE: Ihre Anfrage",
-                EmailResponseHtml = "<p>Ich konnte keine passende Antwort generieren. Bitte versuchen Sie es erneut.</p>",
+                EmailResponseText = fallbackText,
+                EmailResponseSubject = fallbackSubject,
+                EmailResponseHtml = "<p>" + System.Web.HttpUtility.HtmlEncode(fallbackText) + "</p>",
                 Attachments = Array.Empty<Attachment>()
             };
         }
@@ -600,15 +602,63 @@ public class ClaudeClass : IAiProvider
             Logger.LogError($"[ParseAiResponse] Response content: {fullText.Substring(0, Math.Min(500, fullText.Length))}...");
 
             // Return a default response on error
+            var lang = DetectLanguage(emailText) ?? agentDefaultLanguage ?? "de";
+            var (_, fallbackSubject) = GetFallbackMessages(lang);
             return new AiResponseClass
             {
                 EmailResponseText = fullText.Trim(),
-                EmailResponseSubject = "RE: Ihre Anfrage",
+                EmailResponseSubject = fallbackSubject,
                 EmailResponseHtml = $"<p>{System.Web.HttpUtility.HtmlEncode(fullText.Trim())}</p>",
                 Attachments = Array.Empty<Attachment>(),
                 AiExplanation = $"Parse error: {ex.Message}"
             };
         }
+    }
+
+    /// <summary>
+    /// Detects the language of an email text based on common words.
+    /// Returns a 2-char ISO code (e.g. "de", "en", "fr") or null if uncertain.
+    /// </summary>
+    private static string? DetectLanguage(string? text)
+    {
+        if (string.IsNullOrWhiteSpace(text)) return null;
+
+        var lower = text.ToLowerInvariant();
+
+        var languageIndicators = new Dictionary<string, string[]>
+        {
+            ["en"] = ["dear", "hello", "please", "thank you", "thanks", "regards", "sincerely", "would", "could", "should", "the", "this", "that", "with", "have", "from", "your", "you", "we are", "i am", "looking forward"],
+            ["de"] = ["sehr geehrte", "hallo", "bitte", "danke", "vielen dank", "freundliche grüße", "mit freundlichen", "können", "möchten", "würden", "liebe grüße", "hiermit", "bezüglich", "anbei", "wir haben", "ich bin"],
+            ["fr"] = ["bonjour", "merci", "s'il vous plaît", "cordialement", "madame", "monsieur", "nous avons", "je suis", "veuillez", "cher", "chère", "avec"],
+            ["es"] = ["hola", "gracias", "por favor", "saludos", "estimado", "estimada", "atentamente", "nosotros", "tenemos", "somos", "querido", "querida"],
+            ["it"] = ["buongiorno", "grazie", "per favore", "cordiali saluti", "gentile", "distinti saluti", "abbiamo", "siamo", "vorrei"],
+            ["nl"] = ["geachte", "bedankt", "alstublieft", "met vriendelijke groet", "hartelijk", "wij hebben", "graag"],
+            ["pt"] = ["olá", "obrigado", "obrigada", "por favor", "atenciosamente", "prezado", "prezada", "cordialmente"],
+        };
+
+        var scores = new Dictionary<string, int>();
+        foreach (var (lang, words) in languageIndicators)
+        {
+            scores[lang] = words.Count(word => lower.Contains(word));
+        }
+
+        var best = scores.MaxBy(kv => kv.Value);
+        return best.Value >= 2 ? best.Key : null;
+    }
+
+    private static (string Text, string Subject) GetFallbackMessages(string languageCode)
+    {
+        return languageCode.ToLowerInvariant() switch
+        {
+            "en" => ("I was unable to generate a suitable response. Please try again.", "RE: Your inquiry"),
+            "de" => ("Ich konnte keine passende Antwort generieren. Bitte versuchen Sie es erneut.", "RE: Ihre Anfrage"),
+            "fr" => ("Je n'ai pas pu générer une réponse appropriée. Veuillez réessayer.", "RE: Votre demande"),
+            "es" => ("No pude generar una respuesta adecuada. Por favor, inténtelo de nuevo.", "RE: Su consulta"),
+            "it" => ("Non sono riuscito a generare una risposta adeguata. Per favore, riprovi.", "RE: La sua richiesta"),
+            "nl" => ("Ik kon geen passend antwoord genereren. Probeer het opnieuw.", "RE: Uw aanvraag"),
+            "pt" => ("Não foi possível gerar uma resposta adequada. Por favor, tente novamente.", "RE: Sua consulta"),
+            _ => ("I was unable to generate a suitable response. Please try again.", "RE: Your inquiry"),
+        };
     }
 
     private static string CountryToIso2(string? country)
