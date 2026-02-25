@@ -59,6 +59,7 @@ public class EmailPollingService : BackgroundService
         var agents = await db.Agents
             .Include(a => a.Customer)
             .Include(a => a.Mcpservers)
+            .Include(a => a.Skills)
             .Where(a => a.State == "active" && a.Emailprovidertype == "polling" && (a.ServerId==null || a.ServerId == serverid))
             .ToListAsync();
 

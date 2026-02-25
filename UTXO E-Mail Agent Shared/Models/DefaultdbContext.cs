@@ -33,6 +33,8 @@ public partial class DefaultdbContext : DbContext
 
     public virtual DbSet<Server> Servers { get; set; }
 
+    public virtual DbSet<Skill> Skills { get; set; }
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder
@@ -105,6 +107,18 @@ public partial class DefaultdbContext : DbContext
             entity.Property(e => e.Lastpoll)
                 .HasColumnType("datetime")
                 .HasColumnName("lastpoll");
+            entity.Property(e => e.Office365AccessToken)
+                .HasColumnType("text")
+                .HasColumnName("office365_access_token");
+            entity.Property(e => e.Office365RefreshToken)
+                .HasColumnType("text")
+                .HasColumnName("office365_refresh_token");
+            entity.Property(e => e.Office365TokenExpiresAt)
+                .HasColumnType("datetime")
+                .HasColumnName("office365_token_expires_at");
+            entity.Property(e => e.Office365UserId)
+                .HasMaxLength(255)
+                .HasColumnName("office365_user_id");
             entity.Property(e => e.ServerId).HasColumnName("server_id");
             entity.Property(e => e.Smtppassword)
                 .HasMaxLength(255)
@@ -121,18 +135,6 @@ public partial class DefaultdbContext : DbContext
                 .HasColumnType("enum('active','suspend','deleted')")
                 .HasColumnName("state");
             entity.Property(e => e.Tasktobecompleted).HasColumnName("tasktobecompleted");
-            entity.Property(e => e.Office365AccessToken)
-                .HasColumnType("text")
-                .HasColumnName("office365_access_token");
-            entity.Property(e => e.Office365RefreshToken)
-                .HasColumnType("text")
-                .HasColumnName("office365_refresh_token");
-            entity.Property(e => e.Office365TokenExpiresAt)
-                .HasColumnType("datetime")
-                .HasColumnName("office365_token_expires_at");
-            entity.Property(e => e.Office365UserId)
-                .HasMaxLength(255)
-                .HasColumnName("office365_user_id");
 
             entity.HasOne(d => d.Customer).WithMany(p => p.Agents)
                 .HasForeignKey(d => d.CustomerId)
@@ -412,6 +414,38 @@ public partial class DefaultdbContext : DbContext
             entity.Property(e => e.State)
                 .HasColumnType("enum('active','notactive')")
                 .HasColumnName("state");
+        });
+
+        modelBuilder.Entity<Skill>(entity =>
+        {
+            entity.HasKey(e => e.Id).HasName("PRIMARY");
+
+            entity.ToTable("skills");
+
+            entity.HasIndex(e => e.AgentId, "skills_agents");
+
+            entity.Property(e => e.Id).HasColumnName("id");
+            entity.Property(e => e.AgentId).HasColumnName("agent_id");
+            entity.Property(e => e.Filetype)
+                .HasColumnType("enum('md','zip')")
+                .HasColumnName("filetype");
+            entity.Property(e => e.Skillfiles)
+                .HasColumnType("mediumblob")
+                .HasColumnName("skillfiles");
+            entity.Property(e => e.Skillid)
+                .HasMaxLength(255)
+                .HasColumnName("skillid");
+            entity.Property(e => e.Skillname)
+                .HasMaxLength(255)
+                .HasColumnName("skillname");
+            entity.Property(e => e.State)
+                .HasDefaultValueSql("'active'")
+                .HasColumnType("enum('active','disabled')")
+                .HasColumnName("state");
+
+            entity.HasOne(d => d.Agent).WithMany(p => p.Skills)
+                .HasForeignKey(d => d.AgentId)
+                .HasConstraintName("skills_agents");
         });
 
         OnModelCreatingPartial(modelBuilder);

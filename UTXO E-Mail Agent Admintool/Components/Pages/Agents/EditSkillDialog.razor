@@ -1,0 +1,172 @@
+@inject IDbContextFactory<DefaultdbContext> DbFactory
+
+<MudDialog>
+    <DialogContent>
+        <MudForm @ref="form" @bind-IsValid="@success">
+            <MudGrid>
+                <MudItem xs="12">
+                    <MudTextField Label="Skill Name"
+                                  @bind-Value="editSkill.Skillname"
+                                  Required="true"
+                                  RequiredError="Name is required"
+                                  HelperText="Display name for this skill" />
+                </MudItem>
+
+                <MudItem xs="12">
+                    <MudSelect Label="State" @bind-Value="editSkill.State" Required="true">
+                        <MudSelectItem Value="@("active")">Active</MudSelectItem>
+                        <MudSelectItem Value="@("disabled")">Disabled</MudSelectItem>
+                    </MudSelect>
+                </MudItem>
+
+                @if (Skill == null)
+                {
+                    <MudItem xs="12">
+                        <MudFileUpload T="IBrowserFile"
+                                       Accept=".md,.zip"
+                                       FilesChanged="OnFileSelected"
+                                       MaximumFileCount="1">
+                            <ActivatorContent>
+                                <MudButton Variant="Variant.Filled"
+                                           Color="Color.Primary"
+                                           StartIcon="@Icons.Material.Filled.CloudUpload">
+                                    Upload Skill File (.md or .zip)
+                                </MudButton>
+                            </ActivatorContent>
+                        </MudFileUpload>
+                        @if (!string.IsNullOrEmpty(selectedFileName))
+                        {
+                            <MudAlert Severity="Severity.Info" Class="mt-2">
+                                @selectedFileName (@FormatFileSize(selectedFileSize))
+                            </MudAlert>
+                        }
+                    </MudItem>
+                }
+                else
+                {
+                    <MudItem xs="12">
+                        <MudTextField Label="File Type"
+                                      Value="@Skill.Filetype"
+                                      ReadOnly="true"
+                                      Variant="Variant.Outlined" />
+                    </MudItem>
+
+                    @if (!string.IsNullOrEmpty(Skill.Skillid))
+                    {
+                        <MudItem xs="12">
+                            <MudTextField Label="Anthropic Skill ID"
+                                          Value="@Skill.Skillid"
+                                          ReadOnly="true"
+                                          Variant="Variant.Outlined" />
+                        </MudItem>
+                    }
+                }
+            </MudGrid>
+        </MudForm>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel">Cancel</MudButton>
+        <MudButton Color="Color.Primary" OnClick="Save"
+                   Disabled="@(!success || (Skill == null && fileContent == null))">
+            Save
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter]
+    IMudDialogInstance MudDialog { get; set; } = default!;
+
+    [Parameter]
+    public int AgentId { get; set; }
+
+    [Parameter]
+    public Skill? Skill { get; set; }
+
+    private Skill editSkill = new();
+    private MudForm? form;
+    private bool success;
+    private byte[]? fileContent;
+    private string? selectedFileName;
+    private long selectedFileSize;
+    private string? detectedFiletype;
+
+    protected override void OnInitialized()
+    {
+        if (Skill != null)
+        {
+            editSkill = new Skill
+            {
+                Id = Skill.Id,
+                AgentId = Skill.AgentId,
+                Skillname = Skill.Skillname,
+                State = Skill.State,
+                Filetype = Skill.Filetype,
+                Skillid = Skill.Skillid
+            };
+        }
+        else
+        {
+            editSkill = new Skill
+            {
+                AgentId = AgentId,
+                Skillname = "",
+                State = "active",
+                Filetype = "md"
+            };
+        }
+    }
+
+    private async Task OnFileSelected(IBrowserFile file)
+    {
+        const long maxSize = 10 * 1024 * 1024; // 10 MB
+        selectedFileName = file.Name;
+        selectedFileSize = file.Size;
+
+        var extension = Path.GetExtension(file.Name).ToLowerInvariant();
+        detectedFiletype = extension == ".zip" ? "zip" : "md";
+
+        using var ms = new MemoryStream();
+        await file.OpenReadStream(maxSize).CopyToAsync(ms);
+        fileContent = ms.ToArray();
+    }
+
+    private void Cancel()
+    {
+        MudDialog.Cancel();
+    }
+
+    private async Task Save()
+    {
+        await using var db = await DbFactory.CreateDbContextAsync();
+
+        if (Skill != null)
+        {
+            var existing = await db.Skills.FindAsync(Skill.Id);
+            if (existing != null)
+            {
+                existing.Skillname = editSkill.Skillname;
+                existing.State = editSkill.State;
+                await db.SaveChangesAsync();
+            }
+        }
+        else
+        {
+            editSkill.Skillfiles = fileContent;
+            editSkill.Filetype = detectedFiletype ?? "md";
+            editSkill.Skillid = null;
+
+            db.Skills.Add(editSkill);
+            await db.SaveChangesAsync();
+        }
+
+        MudDialog.Close(DialogResult.Ok(true));
+    }
+
+    private static string FormatFileSize(long bytes)
+    {
+        if (bytes < 1024) return $"{bytes} B";
+        if (bytes < 1024 * 1024) return $"{bytes / 1024.0:F1} KB";
+        return $"{bytes / (1024.0 * 1024.0):F1} MB";
+    }
+}

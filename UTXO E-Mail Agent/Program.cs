@@ -105,6 +105,7 @@ public class Program
                     agent = await db.Agents
                         .Include(a=>a.Customer)
                         .Include(a => a.Mcpservers)
+                        .Include(a => a.Skills)
                         .Where(a => a.Id == request.AgentId.Value && a.State == "active")
                         .FirstOrDefaultAsync();
                 }
@@ -113,6 +114,7 @@ public class Program
                     agent = await db.Agents
                         .Include(a=>a.Customer)
                         .Include(a => a.Mcpservers)
+                        .Include(a => a.Skills)
                         .Where(a => a.State == "active")
                         .FirstOrDefaultAsync();
                 }

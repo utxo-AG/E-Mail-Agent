@@ -7,6 +7,7 @@ using Anthropic.SDK.Common;
 using Anthropic.SDK.Constants;
 using Anthropic.SDK.Extensions;
 using Anthropic.SDK.Messaging;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Newtonsoft.Json;
 using UTXO_E_Mail_Agent_Shared.Models;
@@ -15,6 +16,8 @@ using UTXO_E_Mail_Agent.EmailProvider.Inbound.Classes;
 using UTXO_E_Mail_Agent.Interfaces;
 using UTXO_E_Mail_Agent.McpServers;
 using UTXO_E_Mail_Agent.Services;
+using SdkSkill = Anthropic.SDK.Messaging.Skill;
+using DbSkill = UTXO_E_Mail_Agent_Shared.Models.Skill;
 
 namespace UTXO_E_Mail_Agent.AiProvider.Claude;
 
@@ -40,15 +43,51 @@ public class ClaudeClass : IAiProvider
 
         var client = new AnthropicClient(_apikey, httpClient);
 
+        // Built-in Anthropic skills
+        var containerSkills = new List<SdkSkill>
+        {
+            new SdkSkill { Type = "anthropic", SkillId = "pdf", Version = "latest" },
+            new SdkSkill { Type = "anthropic", SkillId = "pptx", Version = "latest" },
+            new SdkSkill { Type = "anthropic", SkillId = "xlsx", Version = "latest" },
+            new SdkSkill { Type = "anthropic", SkillId = "docx", Version = "latest" },
+        };
+
+        // Register custom skills from agent configuration (max 4 custom to stay within 8 total limit)
+        var activeCustomSkills = agent.Skills
+            .Where(s => s.State == "active")
+            .Take(4)
+            .ToList();
+
+        foreach (var dbSkill in activeCustomSkills)
+        {
+            if (string.IsNullOrEmpty(dbSkill.Skillid))
+            {
+                try
+                {
+                    var skillId = await UploadSkillToAnthropicAsync(client, dbSkill);
+                    dbSkill.Skillid = skillId;
+                    await SaveSkillIdToDatabase(dbSkill.Id, skillId);
+                    Logger.Log($"[Skills] Uploaded custom skill '{dbSkill.Skillname}' -> {skillId}", agent.Id);
+                }
+                catch (Exception ex)
+                {
+                    Logger.LogError($"[Skills] Failed to upload skill '{dbSkill.Skillname}': {ex.Message}", agent.Id);
+                    continue;
+                }
+            }
+
+            containerSkills.Add(new SdkSkill
+            {
+                Type = "custom",
+                SkillId = dbSkill.Skillid,
+                Version = "latest"
+            });
+            Logger.Log($"[Skills] Registered custom skill: {dbSkill.Skillname} ({dbSkill.Skillid})", agent.Id);
+        }
+
         var container = new Container
         {
-            Skills = new List<Skill>
-            {
-                new Skill { Type = "anthropic", SkillId = "pdf", Version = "latest" },
-                new Skill { Type = "anthropic", SkillId = "pptx", Version = "latest" },
-                new Skill { Type = "anthropic", SkillId = "xlsx", Version = "latest" },
-                new Skill { Type = "anthropic", SkillId = "docx", Version = "latest" },
-            }
+            Skills = containerSkills
         };
 
         // Built-in Tools
@@ -747,5 +786,56 @@ public class ClaudeClass : IAiProvider
             ".avi" => "video/x-msvideo",
             _ => "application/octet-stream"
         };
+    }
+
+    /// <summary>
+    /// Uploads a skill file to Anthropic and returns the assigned Skill ID.
+    /// </summary>
+    private async Task<string> UploadSkillToAnthropicAsync(AnthropicClient client, DbSkill dbSkill)
+    {
+        if (dbSkill.Skillfiles == null || dbSkill.Skillfiles.Length == 0)
+            throw new InvalidOperationException($"Skill '{dbSkill.Skillname}' has no file content.");
+
+        if (dbSkill.Filetype == "zip")
+        {
+            var tempPath = Path.GetTempFileName() + ".zip";
+            try
+            {
+                await File.WriteAllBytesAsync(tempPath, dbSkill.Skillfiles);
+                var response = await client.Skills.CreateSkillFromZipAsync(dbSkill.Skillname, tempPath);
+                return response.Id;
+            }
+            finally
+            {
+                if (File.Exists(tempPath))
+                    File.Delete(tempPath);
+            }
+        }
+
+        // Default: single .md file
+        var stream = new MemoryStream(dbSkill.Skillfiles);
+        var files = new List<(string filename, Stream stream, string mimeType)>
+        {
+            ($"{dbSkill.Skillname}/SKILL.md", stream, "text/markdown")
+        };
+        var mdResponse = await client.Skills.CreateSkillFromStreamsAsync(dbSkill.Skillname, files);
+        return mdResponse.Id;
+    }
+
+    /// <summary>
+    /// Saves the Anthropic-assigned Skill ID back to the database.
+    /// </summary>
+    private async Task SaveSkillIdToDatabase(int skillDbId, string anthropicSkillId)
+    {
+        var optionsBuilder = new DbContextOptionsBuilder<DefaultdbContext>();
+        optionsBuilder.UseMySql(_connectionString, ServerVersion.AutoDetect(_connectionString));
+
+        await using var db = new DefaultdbContext(optionsBuilder.Options);
+        var skill = await db.Skills.FindAsync(skillDbId);
+        if (skill != null)
+        {
+            skill.Skillid = anthropicSkillId;
+            await db.SaveChangesAsync();
+        }
     }
 }

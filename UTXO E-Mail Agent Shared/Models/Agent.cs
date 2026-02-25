@@ -49,7 +49,6 @@ public partial class Agent
 
     public int? ServerId { get; set; }
 
-    // Office 365 OAuth Fields
     public string? Office365AccessToken { get; set; }
 
     public string? Office365RefreshToken { get; set; }
@@ -67,4 +66,6 @@ public partial class Agent
     public virtual ICollection<Mcpserver> Mcpservers { get; set; } = new List<Mcpserver>();
 
     public virtual Server? Server { get; set; }
+
+    public virtual ICollection<Skill> Skills { get; set; } = new List<Skill>();
 }

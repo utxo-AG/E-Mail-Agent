@@ -324,6 +324,74 @@ else
                 Add MCP Server
             </MudButton>
         </MudPaper>
+
+        <MudPaper Class="pa-4 mt-4">
+            <MudText Typo="Typo.h5" Class="mb-4">Custom Skills</MudText>
+
+            @if (skills == null)
+            {
+                <MudProgressCircular Indeterminate="true" />
+            }
+            else if (skills.Count == 0)
+            {
+                <MudAlert Severity="Severity.Info" Class="mb-4">No custom skills configured for this agent.</MudAlert>
+            }
+            else
+            {
+                <MudTable Items="@skills" Hover="true" Striped="true" Dense="true" Class="mb-4">
+                    <HeaderContent>
+                        <MudTh>Name</MudTh>
+                        <MudTh>State</MudTh>
+                        <MudTh>File Type</MudTh>
+                        <MudTh>Anthropic Skill ID</MudTh>
+                        <MudTh>Actions</MudTh>
+                    </HeaderContent>
+                    <RowTemplate>
+                        <MudTd>@context.Skillname</MudTd>
+                        <MudTd>
+                            <MudChip T="string"
+                                     Color="@(context.State == "active" ? Color.Success : Color.Default)"
+                                     Size="Size.Small">
+                                @context.State
+                            </MudChip>
+                        </MudTd>
+                        <MudTd>@context.Filetype.ToUpperInvariant()</MudTd>
+                        <MudTd>
+                            <MudText Typo="Typo.caption">
+                                @(string.IsNullOrEmpty(context.Skillid) ? "Not uploaded yet" : context.Skillid)
+                            </MudText>
+                        </MudTd>
+                        <MudTd>
+                            <MudTooltip Text="@(context.State == "active" ? "Disable" : "Enable")">
+                                <MudIconButton Icon="@(context.State == "active" ? Icons.Material.Filled.ToggleOn : Icons.Material.Filled.ToggleOff)"
+                                               Color="@(context.State == "active" ? Color.Success : Color.Default)"
+                                               Size="Size.Small"
+                                               OnClick="@(() => ToggleSkillState(context))" />
+                            </MudTooltip>
+                            <MudTooltip Text="Edit">
+                                <MudIconButton Icon="@Icons.Material.Filled.Edit"
+                                               Color="Color.Primary"
+                                               Size="Size.Small"
+                                               OnClick="@(() => EditSkill(context))" />
+                            </MudTooltip>
+                            <MudTooltip Text="Delete">
+                                <MudIconButton Icon="@Icons.Material.Filled.Delete"
+                                               Color="Color.Error"
+                                               Size="Size.Small"
+                                               OnClick="@(() => DeleteSkill(context))" />
+                            </MudTooltip>
+                        </MudTd>
+                    </RowTemplate>
+                </MudTable>
+            }
+
+            <MudButton Variant="Variant.Filled"
+                       Color="Color.Primary"
+                       StartIcon="@Icons.Material.Filled.Add"
+                       OnClick="CreateSkill">
+                Add Custom Skill
+            </MudButton>
+        </MudPaper>
     }
 }
 
@@ -338,6 +406,7 @@ else
     private MudForm? form;
     private bool success;
     private List<Mcpserver>? mcpServers;
+    private List<Skill>? skills;
     private bool isLoading = true;
 
     protected override async Task OnInitializedAsync()
@@ -346,6 +415,7 @@ else
         {
             await LoadAgent();
             await LoadMcpServers();
+            await LoadSkills();
         }
         else
         {
@@ -531,6 +601,102 @@ else
         };
 
         await DialogService.ShowAsync<TestMcpServerDialog>($"Test: {mcpServer.Name}", parameters, options);
+    }
+
+    private async Task LoadSkills()
+    {
+        if (!AgentId.HasValue) return;
+
+        await using var db = await DbFactory.CreateDbContextAsync();
+        skills = await db.Skills
+            .Where(s => s.AgentId == AgentId.Value)
+            .AsNoTracking()
+            .ToListAsync();
+    }
+
+    private async Task CreateSkill()
+    {
+        if (!AgentId.HasValue) return;
+
+        var parameters = new DialogParameters<EditSkillDialog>
+        {
+            { x => x.AgentId, AgentId.Value },
+            { x => x.Skill, null }
+        };
+
+        var options = new DialogOptions
+        {
+            CloseButton = true,
+            MaxWidth = MaxWidth.Medium,
+            FullWidth = true
+        };
+
+        var dialog = await DialogService.ShowAsync<EditSkillDialog>("Add Custom Skill", parameters, options);
+        var result = await dialog.Result;
+
+        if (result != null && !result.Canceled)
+        {
+            await LoadSkills();
+        }
+    }
+
+    private async Task EditSkill(Skill skill)
+    {
+        if (!AgentId.HasValue) return;
+
+        var parameters = new DialogParameters<EditSkillDialog>
+        {
+            { x => x.AgentId, AgentId.Value },
+            { x => x.Skill, skill }
+        };
+
+        var options = new DialogOptions
+        {
+            CloseButton = true,
+            MaxWidth = MaxWidth.Medium,
+            FullWidth = true
+        };
+
+        var dialog = await DialogService.ShowAsync<EditSkillDialog>("Edit Custom Skill", parameters, options);
+        var result = await dialog.Result;
+
+        if (result != null && !result.Canceled)
+        {
+            await LoadSkills();
+        }
+    }
+
+    private async Task DeleteSkill(Skill skill)
+    {
+        var result = await DialogService.ShowMessageBox(
+            "Confirm Delete",
+            $"Are you sure you want to delete skill '{skill.Skillname}'?",
+            yesText: "Delete",
+            cancelText: "Cancel");
+
+        if (result == true)
+        {
+            await using var db = await DbFactory.CreateDbContextAsync();
+            var skillToDelete = await db.Skills.FindAsync(skill.Id);
+            if (skillToDelete != null)
+            {
+                db.Skills.Remove(skillToDelete);
+                await db.SaveChangesAsync();
+                await LoadSkills();
+            }
+        }
+    }
+
+    private async Task ToggleSkillState(Skill skill)
+    {
+        await using var db = await DbFactory.CreateDbContextAsync();
+        var existing = await db.Skills.FindAsync(skill.Id);
+        if (existing != null)
+        {
+            existing.State = existing.State == "active" ? "disabled" : "active";
+            await db.SaveChangesAsync();
+            await LoadSkills();
+        }
     }
 
     private async Task DisconnectOffice365()
