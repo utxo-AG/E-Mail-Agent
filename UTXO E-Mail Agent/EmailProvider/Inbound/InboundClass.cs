@@ -27,29 +27,40 @@ public class InboundClass : IEmailProvider
 
     public async Task<ListNewEmailsClass[]?> GetEmailsAsync(Agent agent)
     {
+        var requestUrl = _apiUrl + $"emails?limit=50&offset=0&type=received&status=unread&time_range=1h&address={agent.Emailaddress}";
+        
         using var httpClient = new HttpClient();
-        using var request = new HttpRequestMessage(new HttpMethod("GET"), _apiUrl + $"emails?limit=50&offset=0&type=received&status=unread&time_range=1h&address={agent.Emailaddress}");
-        request.Headers.TryAddWithoutValidation("Authorization", $"Bearer {_bearerToken}");
+        httpClient.DefaultRequestHeaders.Add("User-Agent", "UTXO-EmailAgent/1.0");
+        httpClient.DefaultRequestHeaders.Add("Accept", "*/*");
+        httpClient.DefaultRequestHeaders.TryAddWithoutValidation("Authorization", $"Bearer {_bearerToken}");
 
-        var response = await httpClient.SendAsync(request);
+        var response = await httpClient.GetAsync(requestUrl);
 
         if (response.IsSuccessStatusCode)
         {
             var content = await response.Content.ReadAsStringAsync();
             var res = JsonConvert.DeserializeObject<ListEmailsFromInboundClass>(content);
             
-            if (res!=null && res.Data.Any())
+            if (res != null && res.Data != null && res.Data.Any())
             {
                 foreach (var listNewEmailsClass in res.Data.OrEmptyIfNull())
                 {
-                   var m=await (from a in _db.Conversations
-                           where a.AgentId==agent.Id && a.Messageid==listNewEmailsClass.Id
-                               select a).AsNoTracking().FirstOrDefaultAsync();
-                   if (m!=null)
-                       listNewEmailsClass.SetAlreadyRead();
+                    var m = await (from a in _db.Conversations
+                            where a.AgentId == agent.Id && a.Messageid == listNewEmailsClass.Id
+                            select a).AsNoTracking().FirstOrDefaultAsync();
+                    if (m != null)
+                    {
+                        listNewEmailsClass.SetAlreadyRead();
+                    }
                 }
+                
                 return res.ToListNewEmailsClass();
             }
+        }
+        else
+        {
+            var errorContent = await response.Content.ReadAsStringAsync();
+            Logger.LogError($"[Inbound] GetEmailsAsync: API error - Status: {response.StatusCode}, Response: {errorContent}");
         }
 
         return null;
@@ -57,21 +68,29 @@ public class InboundClass : IEmailProvider
 
     public async Task<MailClass?> GetMail(ListNewEmailsClass email, Agent agent)
     {
+        var requestUrl = _apiUrl + $"emails/{email.Id}";
+        
         using var httpClient = new HttpClient();
-        using var request = new HttpRequestMessage(new HttpMethod("GET"), _apiUrl + $"emails/{email.Id}");
-        request.Headers.TryAddWithoutValidation("Authorization", $"Bearer {_bearerToken}");
+        httpClient.DefaultRequestHeaders.Add("User-Agent", "UTXO-EmailAgent/1.0");
+        httpClient.DefaultRequestHeaders.Add("Accept", "*/*");
+        httpClient.DefaultRequestHeaders.TryAddWithoutValidation("Authorization", $"Bearer {_bearerToken}");
 
-        var response = await httpClient.SendAsync(request);
+        var response = await httpClient.GetAsync(requestUrl);
 
         if (response.IsSuccessStatusCode)
         {
             var content = await response.Content.ReadAsStringAsync();
             var res = JsonConvert.DeserializeObject<GetEmailByIdFromInboundClass>(content);
             
-            if (res!=null)
+            if (res != null)
             {
                 return res.ToMailsClass();
             }
+        }
+        else
+        {
+            var errorContent = await response.Content.ReadAsStringAsync();
+            Logger.LogError($"[Inbound] GetMail: API error for email '{email.Id}' - Status: {response.StatusCode}, Response: {errorContent}");
         }
 
         return null;

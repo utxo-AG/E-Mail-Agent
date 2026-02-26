@@ -67,6 +67,9 @@ public class EmailPollingService : BackgroundService
 
         foreach (var agent in agents)
         {
+            // Wait 1 second between agents to avoid potential rate limiting
+            await Task.Delay(1000);
+            
             try
             {
                 // Skip agent if it was polled less than 60 seconds ago (prevents duplicate processing on multiple servers)
@@ -100,6 +103,10 @@ public class EmailPollingService : BackgroundService
                     foreach (var email in emails)
                     {
                         Logger.Log($"[EmailPollingService] Email from: {email.From}, Subject: {email.Subject}", agent.Id);
+                        
+                        // Wait 1 second before fetching email details
+                        await Task.Delay(1000);
+                        
                         var mail = await provider.GetMail(email, agent);
 
                         if (mail == null)
