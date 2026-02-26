@@ -487,7 +487,7 @@ public class ClaudeClass : IAiProvider
             Logger.Log("[JSON Attachments] No attachments in JSON response", agent.Id);
         }
 
-        // Add downloaded skill files as attachments
+        // Add downloaded skill files as attachments (or update existing ones from JSON)
         if (allDownloadedFiles.Any())
         {
             var existingAttachments = responseClass.Attachments?.ToList() ?? new List<Attachment>();
@@ -501,15 +501,32 @@ public class ClaudeClass : IAiProvider
                     string fileName = System.IO.Path.GetFileName(filePath) ?? filePath;
                     string contentType = GetContentTypeFromExtension(filePath);
 
-                    existingAttachments.Add(new Attachment
-                    {
-                        Filename = fileName,
-                        Content = base64Content,
-                        ContentType = contentType,
-                        Path = filePath
-                    });
+                    // Check if an attachment with this filename already exists (from JSON response)
+                    var existingAtt = existingAttachments.FirstOrDefault(a => 
+                        string.Equals(a.Filename, fileName, StringComparison.OrdinalIgnoreCase) ||
+                        string.Equals(a.Path, fileName, StringComparison.OrdinalIgnoreCase));
 
-                    Logger.Log("[Attachment] Added skill file: " + fileName + " (" + contentType + ")", agent.Id);
+                    if (existingAtt != null)
+                    {
+                        // Update existing attachment with content
+                        existingAtt.Content = base64Content;
+                        existingAtt.ContentType = contentType;
+                        existingAtt.Path = filePath;
+                        existingAtt.Filename = fileName;
+                        Logger.Log("[Attachment] Updated existing attachment with skill file: " + fileName, agent.Id);
+                    }
+                    else
+                    {
+                        // Add new attachment
+                        existingAttachments.Add(new Attachment
+                        {
+                            Filename = fileName,
+                            Content = base64Content,
+                            ContentType = contentType,
+                            Path = filePath
+                        });
+                        Logger.Log("[Attachment] Added skill file: " + fileName + " (" + contentType + ")", agent.Id);
+                    }
                 }
                 catch (Exception ex)
                 {
@@ -547,6 +564,18 @@ public class ClaudeClass : IAiProvider
                     }
                 }
             }
+
+            // Filter out attachments without content (can't be sent)
+            var validAttachments = responseClass.Attachments
+                .Where(a => !string.IsNullOrEmpty(a.Content))
+                .ToArray();
+            
+            if (validAttachments.Length < responseClass.Attachments.Length)
+            {
+                Logger.Log($"[Attachment] Filtered out {responseClass.Attachments.Length - validAttachments.Length} attachment(s) without content", agent.Id);
+            }
+            
+            responseClass.Attachments = validAttachments;
         }
 
         return responseClass;
