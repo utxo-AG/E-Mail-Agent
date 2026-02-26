@@ -41,6 +41,33 @@
                             <MudAlert Severity="Severity.Info" Class="mt-2">
                                 @selectedFileName (@FormatFileSize(selectedFileSize))
                             </MudAlert>
+                            
+                            @if (validationResult != null)
+                            {
+                                @if (validationResult.IsValid)
+                                {
+                                    <MudAlert Severity="@(validationResult.Warning ? Severity.Warning : Severity.Success)" Class="mt-2">
+                                        @if (!string.IsNullOrEmpty(validationResult.Info))
+                                        {
+                                            @validationResult.Info
+                                        }
+                                        else
+                                        {
+                                            <text>✓ Datei ist ein gültiger Skill</text>
+                                        }
+                                        @if (validationResult.Warning && !string.IsNullOrEmpty(validationResult.ErrorMessage))
+                                        {
+                                            <br/><small>@validationResult.ErrorMessage</small>
+                                        }
+                                    </MudAlert>
+                                }
+                                else
+                                {
+                                    <MudAlert Severity="Severity.Error" Class="mt-2">
+                                        @validationResult.ErrorMessage
+                                    </MudAlert>
+                                }
+                            }
                         }
                     </MudItem>
                 }
@@ -74,7 +101,7 @@
         }
         <MudButton OnClick="Cancel" Disabled="@isUploading">Cancel</MudButton>
         <MudButton Color="Color.Primary" OnClick="Save"
-                   Disabled="@(!success || (Skill == null && fileContent == null) || isUploading)">
+                   Disabled="@(!success || (Skill == null && fileContent == null) || isUploading || (validationResult != null && !validationResult.IsValid))">
             @(isUploading ? "Uploading..." : "Save")
         </MudButton>
     </DialogActions>
@@ -97,6 +124,7 @@
     private string? selectedFileName;
     private long selectedFileSize;
     private string? detectedFiletype;
+    private SkillValidationResult? validationResult;
 
     protected override void OnInitialized()
     {
@@ -129,6 +157,7 @@
         const long maxSize = 10 * 1024 * 1024; // 10 MB
         selectedFileName = file.Name;
         selectedFileSize = file.Size;
+        validationResult = null;
 
         var extension = Path.GetExtension(file.Name).ToLowerInvariant();
         detectedFiletype = extension == ".zip" ? "zip" : "md";
@@ -136,6 +165,15 @@
         using var ms = new MemoryStream();
         await file.OpenReadStream(maxSize).CopyToAsync(ms);
         fileContent = ms.ToArray();
+
+        // Validate the skill immediately
+        var tempSkill = new Skill
+        {
+            Skillfiles = fileContent,
+            Filetype = detectedFiletype,
+            Skillname = editSkill.Skillname ?? "temp"
+        };
+        validationResult = SkillUploadService.ValidateSkill(tempSkill);
     }
 
     private void Cancel()

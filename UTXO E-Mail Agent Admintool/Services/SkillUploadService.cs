@@ -1,3 +1,6 @@
+using System.IO.Compression;
+using System.Text;
+using System.Text.RegularExpressions;
 using Anthropic.SDK;
 using UTXO_E_Mail_Agent_Shared.Models;
 
@@ -10,6 +13,9 @@ public class SkillUploadService
 {
     private readonly IConfiguration _configuration;
     private readonly ILogger<SkillUploadService> _logger;
+    
+    private const int MinFileSize = 10;           // Minimum 10 bytes
+    private const int MaxFileSize = 10 * 1024 * 1024;  // Maximum 10 MB
 
     public SkillUploadService(IConfiguration configuration, ILogger<SkillUploadService> logger)
     {
@@ -18,10 +24,189 @@ public class SkillUploadService
     }
 
     /// <summary>
+    /// Validates the skill file before uploading.
+    /// </summary>
+    public SkillValidationResult ValidateSkill(Skill skill)
+    {
+        if (skill.Skillfiles == null || skill.Skillfiles.Length == 0)
+        {
+            return new SkillValidationResult { IsValid = false, ErrorMessage = "Die Datei ist leer." };
+        }
+
+        if (skill.Skillfiles.Length < MinFileSize)
+        {
+            return new SkillValidationResult { IsValid = false, ErrorMessage = "Die Datei ist zu klein (mindestens 10 Bytes erforderlich)." };
+        }
+
+        if (skill.Skillfiles.Length > MaxFileSize)
+        {
+            return new SkillValidationResult { IsValid = false, ErrorMessage = "Die Datei ist zu groß (maximal 10 MB erlaubt)." };
+        }
+
+        if (skill.Filetype == "zip")
+        {
+            return ValidateZipSkill(skill.Skillfiles);
+        }
+        else
+        {
+            return ValidateMarkdownSkill(skill.Skillfiles);
+        }
+    }
+
+    private SkillValidationResult ValidateMarkdownSkill(byte[] fileContent)
+    {
+        // Check if it's valid UTF-8 text
+        string content;
+        try
+        {
+            content = Encoding.UTF8.GetString(fileContent);
+        }
+        catch
+        {
+            return new SkillValidationResult 
+            { 
+                IsValid = false, 
+                ErrorMessage = "Die Datei ist kein gültiger UTF-8 Text. Bitte laden Sie eine Markdown-Datei hoch." 
+            };
+        }
+
+        // Check for binary content (null bytes indicate binary file)
+        if (content.Contains('\0'))
+        {
+            return new SkillValidationResult 
+            { 
+                IsValid = false, 
+                ErrorMessage = "Die Datei scheint eine Binärdatei zu sein, keine Markdown-Datei." 
+            };
+        }
+
+        // Check if it contains at least one markdown header
+        if (!Regex.IsMatch(content, @"^#{1,6}\s+.+", RegexOptions.Multiline))
+        {
+            return new SkillValidationResult 
+            { 
+                IsValid = false, 
+                ErrorMessage = "Die Datei enthält keine Markdown-Überschriften (# Header). Skills benötigen mindestens eine Überschrift.",
+                Warning = true
+            };
+        }
+
+        // Check minimum content length (at least some meaningful content)
+        var textOnly = Regex.Replace(content, @"\s+", " ").Trim();
+        if (textOnly.Length < 50)
+        {
+            return new SkillValidationResult 
+            { 
+                IsValid = false, 
+                ErrorMessage = "Die Datei enthält zu wenig Inhalt. Ein Skill sollte mindestens 50 Zeichen Text enthalten." 
+            };
+        }
+
+        return new SkillValidationResult { IsValid = true };
+    }
+
+    private SkillValidationResult ValidateZipSkill(byte[] fileContent)
+    {
+        try
+        {
+            using var zipStream = new MemoryStream(fileContent);
+            using var archive = new ZipArchive(zipStream, ZipArchiveMode.Read);
+
+            if (archive.Entries.Count == 0)
+            {
+                return new SkillValidationResult 
+                { 
+                    IsValid = false, 
+                    ErrorMessage = "Das ZIP-Archiv ist leer." 
+                };
+            }
+
+            // Look for SKILL.md (case-insensitive, can be in any folder)
+            var skillMdEntry = archive.Entries
+                .FirstOrDefault(e => e.Name.Equals("SKILL.md", StringComparison.OrdinalIgnoreCase));
+
+            if (skillMdEntry == null)
+            {
+                var mdFiles = archive.Entries.Where(e => e.Name.EndsWith(".md", StringComparison.OrdinalIgnoreCase)).ToList();
+                if (mdFiles.Any())
+                {
+                    return new SkillValidationResult 
+                    { 
+                        IsValid = false, 
+                        ErrorMessage = $"Das ZIP enthält keine SKILL.md Datei. Gefundene MD-Dateien: {string.Join(", ", mdFiles.Select(f => f.Name))}. Bitte benennen Sie die Hauptdatei in SKILL.md um." 
+                    };
+                }
+                return new SkillValidationResult 
+                { 
+                    IsValid = false, 
+                    ErrorMessage = "Das ZIP enthält keine SKILL.md Datei. Skills müssen eine SKILL.md als Hauptdatei enthalten." 
+                };
+            }
+
+            // Validate the SKILL.md content
+            using var entryStream = skillMdEntry.Open();
+            using var reader = new StreamReader(entryStream, Encoding.UTF8);
+            var content = reader.ReadToEnd();
+
+            if (string.IsNullOrWhiteSpace(content))
+            {
+                return new SkillValidationResult 
+                { 
+                    IsValid = false, 
+                    ErrorMessage = "Die SKILL.md Datei im ZIP ist leer." 
+                };
+            }
+
+            if (!Regex.IsMatch(content, @"^#{1,6}\s+.+", RegexOptions.Multiline))
+            {
+                return new SkillValidationResult 
+                { 
+                    IsValid = false, 
+                    ErrorMessage = "Die SKILL.md enthält keine Markdown-Überschriften (# Header).",
+                    Warning = true
+                };
+            }
+
+            return new SkillValidationResult 
+            { 
+                IsValid = true,
+                Info = $"ZIP enthält {archive.Entries.Count} Datei(en), SKILL.md gefunden."
+            };
+        }
+        catch (InvalidDataException)
+        {
+            return new SkillValidationResult 
+            { 
+                IsValid = false, 
+                ErrorMessage = "Die Datei ist kein gültiges ZIP-Archiv." 
+            };
+        }
+        catch (Exception ex)
+        {
+            return new SkillValidationResult 
+            { 
+                IsValid = false, 
+                ErrorMessage = $"Fehler beim Lesen des ZIP-Archivs: {ex.Message}" 
+            };
+        }
+    }
+
+    /// <summary>
     /// Uploads a skill to Anthropic and returns the assigned Skill ID.
     /// </summary>
     public async Task<SkillUploadResult> UploadSkillAsync(Skill skill)
     {
+        // Pre-validation
+        var validation = ValidateSkill(skill);
+        if (!validation.IsValid)
+        {
+            return new SkillUploadResult
+            {
+                Success = false,
+                ErrorMessage = validation.ErrorMessage
+            };
+        }
+
         var apiKey = _configuration["Claude:ApiKey"];
         if (string.IsNullOrEmpty(apiKey))
         {
@@ -29,15 +214,6 @@ public class SkillUploadService
             {
                 Success = false,
                 ErrorMessage = "Claude API Key is not configured. Please set Claude:ApiKey in appsettings.json."
-            };
-        }
-
-        if (skill.Skillfiles == null || skill.Skillfiles.Length == 0)
-        {
-            return new SkillUploadResult
-            {
-                Success = false,
-                ErrorMessage = "Skill has no file content."
             };
         }
 
@@ -102,4 +278,12 @@ public class SkillUploadResult
     public bool Success { get; set; }
     public string? SkillId { get; set; }
     public string? ErrorMessage { get; set; }
+}
+
+public class SkillValidationResult
+{
+    public bool IsValid { get; set; }
+    public string? ErrorMessage { get; set; }
+    public string? Info { get; set; }
+    public bool Warning { get; set; }  // True if validation passed but with warnings
 }
