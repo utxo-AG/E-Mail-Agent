@@ -41,3 +41,6 @@ appsettings.Production.json
 *.p12
 credentials.json
 secrets.json
+## Generated skill output files
+SkillOutput/
+*/SkillOutput/

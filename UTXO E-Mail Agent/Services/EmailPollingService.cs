@@ -133,6 +133,26 @@ public class EmailPollingService : BackgroundService
                                 {
                                     Logger.Log($"[EmailPollingService] No reply sent (forwarded or no response required)", agent.Id);
                                 }
+
+                                // Cleanup: Delete temporary attachment files after sending
+                                if (aiResponse.Attachments != null)
+                                {
+                                    foreach (var att in aiResponse.Attachments)
+                                    {
+                                        if (!string.IsNullOrEmpty(att.Path) && File.Exists(att.Path))
+                                        {
+                                            try
+                                            {
+                                                File.Delete(att.Path);
+                                                Logger.Log($"[Cleanup] Deleted temporary file: {att.Path}", agent.Id);
+                                            }
+                                            catch (Exception ex)
+                                            {
+                                                Logger.LogWarning($"[Cleanup] Could not delete file {att.Path}: {ex.Message}", agent.Id);
+                                            }
+                                        }
+                                    }
+                                }
                             }
                             catch (Exception ex)
                             {
