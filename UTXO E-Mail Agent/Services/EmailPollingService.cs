@@ -102,77 +102,80 @@ public class EmailPollingService : BackgroundService
                         Logger.Log($"[EmailPollingService] Email from: {email.From}, Subject: {email.Subject}", agent.Id);
                         var mail = await provider.GetMail(email, agent);
 
-                        if (mail != null)
+                        if (mail == null)
                         {
-                            try
+                            Logger.LogWarning($"[EmailPollingService] GetMail returned null for email '{email.Subject}' - skipping", agent.Id);
+                            continue;
+                        }
+
+                        try
+                        {
+                            // Log email content as additional data
+                            var emailData = $"From: {mail.From}\nSubject: {mail.Subject}\nDate: {mail.CreatedAt}\n\nContent:\n{mail.Text}";
+                            Logger.Log($"[EmailPollingService] Processing email: {mail.Subject}", agent.Id, emailData);
+
+                            // Process mail with AI
+                            var processor = new ProcessMailsClass(db, _configuration);
+                            var aiResponse = await processor.ProcessMailAsync(mail, agent);
+
+                            Logger.Log($"[EmailPollingService] AI Response generated", agent.Id, aiResponse.AiExplanation);
+
+                            // Only send reply if there's actual content and recipient hasn't already been emailed via send_email tool
+                            if (!string.IsNullOrEmpty(aiResponse.EmailResponseText) || !string.IsNullOrEmpty(aiResponse.EmailResponseHtml))
                             {
-                                // Log email content as additional data
-                                var emailData = $"From: {mail.From}\nSubject: {mail.Subject}\nDate: {mail.CreatedAt}\n\nContent:\n{mail.Text}";
-                                Logger.Log($"[EmailPollingService] Processing email: {mail.Subject}", agent.Id, emailData);
-
-                                // Process mail with AI
-                                var processor = new ProcessMailsClass(db, _configuration);
-                                var aiResponse = await processor.ProcessMailAsync(mail, agent);
-
-                                Logger.Log($"[EmailPollingService] AI Response generated", agent.Id, aiResponse.AiExplanation);
-
-                                // Only send reply if there's actual content and recipient hasn't already been emailed via send_email tool
-                                if (!string.IsNullOrEmpty(aiResponse.EmailResponseText) || !string.IsNullOrEmpty(aiResponse.EmailResponseHtml))
+                                if (aiResponse.AlreadySentTo.Contains(mail.From))
                                 {
-                                    if (aiResponse.AlreadySentTo.Contains(mail.From))
-                                    {
-                                        Logger.Log($"[EmailPollingService] Skipping reply to {mail.From} - already sent via send_email tool", agent.Id);
-                                    }
-                                    else
-                                    {
-                                        await provider.SendReplyResponseEmail(aiResponse, mail, agent, aiResponse.Conversation);
-                                        Logger.Log($"[EmailPollingService] Reply sent to {mail.From}", agent.Id, aiResponse.EmailResponseText);
-                                    }
+                                    Logger.Log($"[EmailPollingService] Skipping reply to {mail.From} - already sent via send_email tool", agent.Id);
                                 }
                                 else
                                 {
-                                    Logger.Log($"[EmailPollingService] No reply sent (forwarded or no response required)", agent.Id);
+                                    await provider.SendReplyResponseEmail(aiResponse, mail, agent, aiResponse.Conversation);
+                                    Logger.Log($"[EmailPollingService] Reply sent to {mail.From}", agent.Id, aiResponse.EmailResponseText);
                                 }
+                            }
+                            else
+                            {
+                                Logger.Log($"[EmailPollingService] No reply sent (forwarded or no response required)", agent.Id);
+                            }
 
-                                // Cleanup: Delete temporary attachment files after sending
-                                if (aiResponse.Attachments != null)
+                            // Cleanup: Delete temporary attachment files after sending
+                            if (aiResponse.Attachments != null)
+                            {
+                                foreach (var att in aiResponse.Attachments)
                                 {
-                                    foreach (var att in aiResponse.Attachments)
+                                    if (!string.IsNullOrEmpty(att.Path) && File.Exists(att.Path))
                                     {
-                                        if (!string.IsNullOrEmpty(att.Path) && File.Exists(att.Path))
+                                        try
                                         {
-                                            try
-                                            {
-                                                File.Delete(att.Path);
-                                                Logger.Log($"[Cleanup] Deleted temporary file: {att.Path}", agent.Id);
-                                            }
-                                            catch (Exception ex)
-                                            {
-                                                Logger.LogWarning($"[Cleanup] Could not delete file {att.Path}: {ex.Message}", agent.Id);
-                                            }
+                                            File.Delete(att.Path);
+                                            Logger.Log($"[Cleanup] Deleted temporary file: {att.Path}", agent.Id);
+                                        }
+                                        catch (Exception ex)
+                                        {
+                                            Logger.LogWarning($"[Cleanup] Could not delete file {att.Path}: {ex.Message}", agent.Id);
                                         }
                                     }
                                 }
                             }
-                            catch (Exception ex)
+                        }
+                        catch (Exception ex)
+                        {
+                            Logger.LogError($"[EmailPollingService] Error processing email '{mail.Subject}': {ex.Message}", agent.Id, ex.StackTrace);
+
+                            // Mark email as unread so it gets picked up again next time
+                            Logger.Log($"[EmailPollingService] Marking email as unread for retry", agent.Id);
+                            await provider.MarkAsUnreadAsync(email, agent);
+
+                            // Remove the conversation record that was created before the error
+                            var conversation = await db.Conversations
+                                .Where(c => c.AgentId == agent.Id && c.Messageid == mail.Id)
+                                .OrderByDescending(c => c.Id)
+                                .FirstOrDefaultAsync();
+                            if (conversation != null)
                             {
-                                Logger.LogError($"[EmailPollingService] Error processing email '{mail.Subject}': {ex.Message}", agent.Id, ex.StackTrace);
-
-                                // Mark email as unread so it gets picked up again next time
-                                Logger.Log($"[EmailPollingService] Marking email as unread for retry", agent.Id);
-                                await provider.MarkAsUnreadAsync(email, agent);
-
-                                // Remove the conversation record that was created before the error
-                                var conversation = await db.Conversations
-                                    .Where(c => c.AgentId == agent.Id && c.Messageid == mail.Id)
-                                    .OrderByDescending(c => c.Id)
-                                    .FirstOrDefaultAsync();
-                                if (conversation != null)
-                                {
-                                    db.Conversations.Remove(conversation);
-                                    await db.SaveChangesAsync();
-                                    Logger.Log($"[EmailPollingService] Removed conversation {conversation.Id} due to processing error", agent.Id);
-                                }
+                                db.Conversations.Remove(conversation);
+                                await db.SaveChangesAsync();
+                                Logger.Log($"[EmailPollingService] Removed conversation {conversation.Id} due to processing error", agent.Id);
                             }
                         }
                     }
