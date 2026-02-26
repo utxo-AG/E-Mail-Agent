@@ -71,6 +71,7 @@ builder.Services.AddScoped<PasswordService>();
 builder.Services.AddScoped<EmailService>();
 builder.Services.AddScoped<AgentApiService>();
 builder.Services.AddScoped<Office365AuthService>();
+builder.Services.AddScoped<SkillUploadService>();
 
 builder.Services.AddAuthorization();
 

@@ -583,23 +583,52 @@ public class ClaudeClass : IAiProvider
 
         try
         {
-            // First try to find a ```json block
-            var jsonBlockMatch = Regex.Match(fullText, @"```json\s*([\s\S]*?)\s*```");
-            if (jsonBlockMatch.Success)
+            // Try multiple patterns to find JSON block (handles various markdown formats)
+            var jsonPatterns = new[]
             {
-                Logger.Log("[ParseAiResponse] Found JSON block in markdown");
-                var parsed = JsonConvert.DeserializeObject<AiResponseClass>(jsonBlockMatch.Groups[1].Value);
-                if (parsed != null)
+                @"```json\s*([\s\S]*?)\s*```",           // Standard ```json ... ```
+                @"```JSON\s*([\s\S]*?)\s*```",           // Uppercase JSON
+                @"```\s*\n?\s*(\{[\s\S]*?\})\s*```",     // Just ``` with JSON inside
+                @"`json\s*([\s\S]*?)\s*`",               // Single backticks
+            };
+
+            foreach (var pattern in jsonPatterns)
+            {
+                var jsonBlockMatch = Regex.Match(fullText, pattern, RegexOptions.IgnoreCase);
+                if (jsonBlockMatch.Success)
                 {
-                    // Save text before JSON as AiExplanation
-                    var beforeJson = fullText[..fullText.IndexOf("```json", StringComparison.Ordinal)].Trim();
-                    if (!string.IsNullOrEmpty(beforeJson))
-                        parsed.AiExplanation = beforeJson;
-                    return parsed;
+                    var jsonContent = jsonBlockMatch.Groups[1].Value.Trim();
+                    Logger.Log($"[ParseAiResponse] Found JSON block with pattern: {pattern.Substring(0, Math.Min(20, pattern.Length))}...");
+                    
+                    try
+                    {
+                        var parsed = JsonConvert.DeserializeObject<AiResponseClass>(jsonContent);
+                        if (parsed != null && !string.IsNullOrEmpty(parsed.EmailResponseText))
+                        {
+                            // Save text before JSON as AiExplanation
+                            var matchIndex = fullText.IndexOf(jsonBlockMatch.Value, StringComparison.Ordinal);
+                            if (matchIndex > 0)
+                            {
+                                var beforeJson = fullText[..matchIndex].Trim();
+                                if (!string.IsNullOrEmpty(beforeJson))
+                                {
+                                    Logger.Log($"[ParseAiResponse] Saving {beforeJson.Length} chars as AiExplanation");
+                                    parsed.AiExplanation = beforeJson;
+                                }
+                            }
+                            Logger.Log("[ParseAiResponse] Successfully parsed JSON from markdown block");
+                            return parsed;
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Logger.Log($"[ParseAiResponse] Pattern matched but JSON parse failed: {ex.Message}");
+                    }
                 }
             }
 
-            // Fallback: Find last complete JSON object (search from end)
+            // Fallback: Find last complete JSON object that contains EmailResponseText
+            Logger.Log("[ParseAiResponse] No markdown block found, searching for raw JSON object...");
             var lastBrace = fullText.LastIndexOf('}');
             if (lastBrace >= 0)
             {
@@ -618,7 +647,7 @@ public class ClaudeClass : IAiProvider
                             var parsed = JsonConvert.DeserializeObject<AiResponseClass>(jsonCandidate);
                             if (parsed != null && !string.IsNullOrEmpty(parsed.EmailResponseText))
                             {
-                                Logger.Log("[ParseAiResponse] Found valid JSON object");
+                                Logger.Log("[ParseAiResponse] Found valid JSON object via brace matching");
                                 var beforeJson = fullText[..i].Trim();
                                 if (!string.IsNullOrEmpty(beforeJson))
                                     parsed.AiExplanation = beforeJson;
@@ -630,26 +659,48 @@ public class ClaudeClass : IAiProvider
                 }
             }
 
-            // Last fallback: Parse entire text as JSON
+            // Last fallback: Try to parse entire text as JSON (might be clean JSON response)
             Logger.Log("[ParseAiResponse] Attempting to parse entire text as JSON");
-            return JsonConvert.DeserializeObject<AiResponseClass>(fullText.Trim())
-                   ?? new AiResponseClass { EmailResponseText = fullText.Trim() };
+            try
+            {
+                var directParse = JsonConvert.DeserializeObject<AiResponseClass>(fullText.Trim());
+                if (directParse != null && !string.IsNullOrEmpty(directParse.EmailResponseText))
+                {
+                    return directParse;
+                }
+            }
+            catch { /* Not valid JSON */ }
+
+            // Ultimate fallback: Return error message instead of raw thinking text
+            Logger.LogError("[ParseAiResponse] Could not extract valid JSON from response!");
+            Logger.LogError($"[ParseAiResponse] Response preview: {fullText.Substring(0, Math.Min(300, fullText.Length))}...");
+            
+            var fallbackLang = DetectLanguage(emailText) ?? agentDefaultLanguage ?? "de";
+            var (fallbackText, fallbackSubject) = GetFallbackMessages(fallbackLang);
+            return new AiResponseClass
+            {
+                EmailResponseText = fallbackText,
+                EmailResponseSubject = fallbackSubject,
+                EmailResponseHtml = $"<p>{System.Web.HttpUtility.HtmlEncode(fallbackText)}</p>",
+                Attachments = Array.Empty<Attachment>(),
+                AiExplanation = $"[Parse Error] Could not extract JSON. Raw response: {fullText.Substring(0, Math.Min(500, fullText.Length))}..."
+            };
         }
         catch (Exception ex)
         {
             Logger.LogError($"[ParseAiResponse] Failed to parse response: {ex.Message}");
             Logger.LogError($"[ParseAiResponse] Response content: {fullText.Substring(0, Math.Min(500, fullText.Length))}...");
 
-            // Return a default response on error
+            // Return a fallback message instead of exposing raw AI thinking
             var lang = DetectLanguage(emailText) ?? agentDefaultLanguage ?? "de";
-            var (_, fallbackSubject) = GetFallbackMessages(lang);
+            var (fallbackText, fallbackSubject) = GetFallbackMessages(lang);
             return new AiResponseClass
             {
-                EmailResponseText = fullText.Trim(),
+                EmailResponseText = fallbackText,
                 EmailResponseSubject = fallbackSubject,
-                EmailResponseHtml = $"<p>{System.Web.HttpUtility.HtmlEncode(fullText.Trim())}</p>",
+                EmailResponseHtml = $"<p>{System.Web.HttpUtility.HtmlEncode(fallbackText)}</p>",
                 Attachments = Array.Empty<Attachment>(),
-                AiExplanation = $"Parse error: {ex.Message}"
+                AiExplanation = $"[Parse Error] {ex.Message}\n\nRaw response: {fullText.Substring(0, Math.Min(500, fullText.Length))}..."
             };
         }
     }

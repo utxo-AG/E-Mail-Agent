@@ -1,4 +1,6 @@
 @inject IDbContextFactory<DefaultdbContext> DbFactory
+@inject SkillUploadService SkillUploadService
+@inject ISnackbar Snackbar
 
 <MudDialog>
     <DialogContent>
@@ -65,10 +67,15 @@
         </MudForm>
     </DialogContent>
     <DialogActions>
-        <MudButton OnClick="Cancel">Cancel</MudButton>
+        @if (isUploading)
+        {
+            <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+            <MudText Typo="Typo.body2">@uploadStatus</MudText>
+        }
+        <MudButton OnClick="Cancel" Disabled="@isUploading">Cancel</MudButton>
         <MudButton Color="Color.Primary" OnClick="Save"
-                   Disabled="@(!success || (Skill == null && fileContent == null))">
-            Save
+                   Disabled="@(!success || (Skill == null && fileContent == null) || isUploading)">
+            @(isUploading ? "Uploading..." : "Save")
         </MudButton>
     </DialogActions>
 </MudDialog>
@@ -136,12 +143,16 @@
         MudDialog.Cancel();
     }
 
+    private bool isUploading;
+    private string? uploadStatus;
+
     private async Task Save()
     {
         await using var db = await DbFactory.CreateDbContextAsync();
 
         if (Skill != null)
         {
+            // Editing existing skill - just update name and state
             var existing = await db.Skills.FindAsync(Skill.Id);
             if (existing != null)
             {
@@ -149,18 +160,43 @@
                 existing.State = editSkill.State;
                 await db.SaveChangesAsync();
             }
+            MudDialog.Close(DialogResult.Ok(true));
         }
         else
         {
+            // New skill - save to DB first, then upload to Anthropic
             editSkill.Skillfiles = fileContent;
             editSkill.Filetype = detectedFiletype ?? "md";
             editSkill.Skillid = null;
 
             db.Skills.Add(editSkill);
             await db.SaveChangesAsync();
-        }
 
-        MudDialog.Close(DialogResult.Ok(true));
+            // Now upload to Anthropic
+            isUploading = true;
+            uploadStatus = "Uploading skill to Anthropic...";
+            StateHasChanged();
+
+            var result = await SkillUploadService.UploadSkillAsync(editSkill);
+
+            if (result.Success)
+            {
+                // Update the skill with the Anthropic ID
+                editSkill.Skillid = result.SkillId;
+                await db.SaveChangesAsync();
+                
+                Snackbar.Add($"Skill '{editSkill.Skillname}' uploaded successfully!", Severity.Success);
+                MudDialog.Close(DialogResult.Ok(true));
+            }
+            else
+            {
+                // Upload failed - skill is saved locally but not on Anthropic
+                Snackbar.Add($"Skill saved locally but upload failed: {result.ErrorMessage}", Severity.Warning);
+                MudDialog.Close(DialogResult.Ok(true));
+            }
+
+            isUploading = false;
+        }
     }
 
     private static string FormatFileSize(long bytes)
