@@ -53,6 +53,14 @@ public class SkillUploadService
         }
     }
 
+    // Allowed frontmatter keys according to Anthropic API
+    private static readonly HashSet<string> AllowedFrontmatterKeys = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "name", "description", "license", "allowed-tools", "compatibility",
+        "metadata", "argument-hint", "user-invocable", "disable-model-invocation",
+        "when_to_use", "version", "model", "context", "agent"
+    };
+
     private SkillValidationResult ValidateMarkdownSkill(byte[] fileContent)
     {
         // Check if it's valid UTF-8 text
@@ -80,6 +88,13 @@ public class SkillUploadService
             };
         }
 
+        // Validate frontmatter if present
+        var frontmatterValidation = ValidateFrontmatter(content);
+        if (!frontmatterValidation.IsValid)
+        {
+            return frontmatterValidation;
+        }
+
         // Check if it contains at least one markdown header
         if (!Regex.IsMatch(content, @"^#{1,6}\s+.+", RegexOptions.Multiline))
         {
@@ -102,7 +117,69 @@ public class SkillUploadService
             };
         }
 
-        return new SkillValidationResult { IsValid = true };
+        return new SkillValidationResult 
+        { 
+            IsValid = true,
+            Info = frontmatterValidation.Info
+        };
+    }
+
+    private SkillValidationResult ValidateFrontmatter(string content)
+    {
+        // Check if file starts with frontmatter (---)
+        var frontmatterMatch = Regex.Match(content, @"^---\s*\n([\s\S]*?)\n---", RegexOptions.Multiline);
+        
+        if (!frontmatterMatch.Success)
+        {
+            // No frontmatter is OK, but we'll note it
+            return new SkillValidationResult 
+            { 
+                IsValid = true,
+                Info = "Kein Frontmatter gefunden (optional)"
+            };
+        }
+
+        var frontmatterContent = frontmatterMatch.Groups[1].Value;
+        var invalidKeys = new List<string>();
+        var foundKeys = new List<string>();
+
+        // Parse YAML-like frontmatter (simple key: value pairs)
+        var lines = frontmatterContent.Split('\n');
+        foreach (var line in lines)
+        {
+            var trimmed = line.Trim();
+            if (string.IsNullOrEmpty(trimmed) || trimmed.StartsWith("#"))
+                continue;
+
+            // Match top-level keys (not indented)
+            var keyMatch = Regex.Match(line, @"^([a-zA-Z_-]+)\s*:");
+            if (keyMatch.Success)
+            {
+                var key = keyMatch.Groups[1].Value;
+                foundKeys.Add(key);
+                
+                if (!AllowedFrontmatterKeys.Contains(key))
+                {
+                    invalidKeys.Add(key);
+                }
+            }
+        }
+
+        if (invalidKeys.Any())
+        {
+            return new SkillValidationResult 
+            { 
+                IsValid = false,
+                ErrorMessage = $"Ungültige Frontmatter-Keys: '{string.Join("', '", invalidKeys)}'. " +
+                              $"Erlaubte Keys sind: {string.Join(", ", AllowedFrontmatterKeys.OrderBy(k => k))}"
+            };
+        }
+
+        return new SkillValidationResult 
+        { 
+            IsValid = true,
+            Info = $"Frontmatter OK ({string.Join(", ", foundKeys)})"
+        };
     }
 
     private SkillValidationResult ValidateZipSkill(byte[] fileContent)
@@ -157,6 +234,17 @@ public class SkillUploadService
                 };
             }
 
+            // Validate frontmatter
+            var frontmatterValidation = ValidateFrontmatter(content);
+            if (!frontmatterValidation.IsValid)
+            {
+                return new SkillValidationResult 
+                { 
+                    IsValid = false, 
+                    ErrorMessage = $"SKILL.md Frontmatter-Fehler: {frontmatterValidation.ErrorMessage}"
+                };
+            }
+
             if (!Regex.IsMatch(content, @"^#{1,6}\s+.+", RegexOptions.Multiline))
             {
                 return new SkillValidationResult 
@@ -170,7 +258,7 @@ public class SkillUploadService
             return new SkillValidationResult 
             { 
                 IsValid = true,
-                Info = $"ZIP enthält {archive.Entries.Count} Datei(en), SKILL.md gefunden."
+                Info = $"ZIP enthält {archive.Entries.Count} Datei(en), SKILL.md gefunden. {frontmatterValidation.Info}"
             };
         }
         catch (InvalidDataException)
