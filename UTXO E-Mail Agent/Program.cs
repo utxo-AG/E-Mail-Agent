@@ -42,7 +42,8 @@ public class Program
 
         // Add services
         builder.Services.AddDbContext<DefaultdbContext>(options =>
-            options.UseMySql(_connectionString, ServerVersion.AutoDetect(_connectionString)));
+            options.UseMySql(_connectionString, ServerVersion.AutoDetect(_connectionString),
+                mysqlOptions => mysqlOptions.UseQuerySplittingBehavior(QuerySplittingBehavior.SplitQuery)));
 
         // Add CORS for Admintool access
         builder.Services.AddCors(options =>

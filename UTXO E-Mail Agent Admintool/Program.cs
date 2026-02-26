@@ -35,7 +35,8 @@ var connectionString = builder.Configuration.GetConnectionString("DefaultConnect
 
 // Add DbContextFactory for Blazor components (replaces AddDbContext for better Blazor Server support)
 builder.Services.AddDbContextFactory<DefaultdbContext>(options =>
-    options.UseMySql(connectionString, ServerVersion.AutoDetect(connectionString)));
+    options.UseMySql(connectionString, ServerVersion.AutoDetect(connectionString),
+        mysqlOptions => mysqlOptions.UseQuerySplittingBehavior(QuerySplittingBehavior.SplitQuery)));
 
 // Also register a scoped DbContext for services that need direct injection (like AuthService)
 builder.Services.AddScoped(sp => sp.GetRequiredService<IDbContextFactory<DefaultdbContext>>().CreateDbContext());

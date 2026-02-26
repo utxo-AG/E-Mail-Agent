@@ -1,0 +1,24 @@
+{
+  "name": "SaschaTest",
+  "description": "Ein NFT erstellt für Sascha Tobler von RST Datentechnik GmbH",
+  "image": "ipfs://sj83uhdjajjhsuiu3372b2bdhsjhwegvsgajhsdbhasd",
+  "attributes": [
+    {
+      "trait_type": "Color",
+      "value": "black"
+    },
+    {
+      "trait_type": "Weight",
+      "value": 80,
+      "display_type": "number"
+    },
+    {
+      "trait_type": "Rarity",
+      "value": 5,
+      "display_type": "number",
+      "max_value": 10
+    }
+  ],
+  "external_url": "https://rst-datentechnik.de",
+  "background_color": "000000"
+}

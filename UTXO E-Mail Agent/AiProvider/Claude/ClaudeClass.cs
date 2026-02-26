@@ -879,7 +879,8 @@ public class ClaudeClass : IAiProvider
     private async Task SaveSkillIdToDatabase(int skillDbId, string anthropicSkillId)
     {
         var optionsBuilder = new DbContextOptionsBuilder<DefaultdbContext>();
-        optionsBuilder.UseMySql(_connectionString, ServerVersion.AutoDetect(_connectionString));
+        optionsBuilder.UseMySql(_connectionString, ServerVersion.AutoDetect(_connectionString),
+            mysqlOptions => mysqlOptions.UseQuerySplittingBehavior(QuerySplittingBehavior.SplitQuery));
 
         await using var db = new DefaultdbContext(optionsBuilder.Options);
         var skill = await db.Skills.FindAsync(skillDbId);
