@@ -18,6 +18,8 @@ public class AiResponseClass
     public string EmailResponseHtml { get; set; } = string.Empty;
     public string EmailResponseSubject { get; set; } = string.Empty;
     public string? AiExplanation { get; set; }  // Text before the JSON (optional)
+    
+    [Newtonsoft.Json.JsonConverter(typeof(AttachmentArrayConverter))]
     public Attachment[] Attachments { get; set; }
 
     // Document generation fields - if true, a second agent will create the document
