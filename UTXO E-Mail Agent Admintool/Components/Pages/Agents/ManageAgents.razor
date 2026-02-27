@@ -1,4 +1,5 @@
 @page "/agents/manage"
+@page "/agents/manage/{CustomerId:int}"
 @rendermode InteractiveServer
 @using UTXO_E_Mail_Agent_Shared.Models
 @using Microsoft.AspNetCore.Authorization
@@ -8,9 +9,36 @@
 @inject IDialogService DialogService
 @inject NavigationManager NavigationManager
 
-<PageTitle>Manage Agents</PageTitle>
+<PageTitle>@(filterCustomer != null ? $"Agents - {GetCustomerDisplayName()}" : "Manage Agents")</PageTitle>
 
-<MudText Typo="Typo.h3" Class="mb-4">Manage Agents</MudText>
+<MudText Typo="Typo.h3" Class="mb-4">
+    @(filterCustomer != null ? $"Agents for {GetCustomerDisplayName()}" : "Manage Agents")
+</MudText>
+
+<div class="mb-4">
+    @if (filterCustomer != null)
+    {
+        <MudButton Variant="Variant.Filled" Color="Color.Default"
+                   StartIcon="@Icons.Material.Filled.ArrowBack"
+                   OnClick="@(() => NavigationManager.NavigateTo("/clients/manage"))"
+                   Class="mr-2">
+            Back to Clients
+        </MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary"
+                   StartIcon="@Icons.Material.Filled.Add"
+                   OnClick="@(() => NavigationManager.NavigateTo($"/agents/create/{CustomerId}"))">
+            Create Agent
+        </MudButton>
+    }
+    else
+    {
+        <MudButton Variant="Variant.Filled" Color="Color.Primary"
+                   StartIcon="@Icons.Material.Filled.Add"
+                   OnClick="OpenCreateAgentDialog">
+            New Agent
+        </MudButton>
+    }
+</div>
 
 <MudTable Hover="true" Bordered="true" Striped="true" Elevation="0" RowsPerPage="15"
           HorizontalScrollbar="true" T="AgentWithCustomer" Dense="true"
@@ -104,8 +132,43 @@
 </MudTable>
 
 @code {
+    [Parameter]
+    public int? CustomerId { get; set; }
+    
     private MudTable<AgentWithCustomer>? table;
     private string searchString = "";
+    private Customer? filterCustomer;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (CustomerId.HasValue)
+        {
+            await using var db = await DbFactory.CreateDbContextAsync();
+            filterCustomer = await db.Customers
+                .Where(c => c.Id == CustomerId.Value)
+                .AsNoTracking()
+                .FirstOrDefaultAsync();
+        }
+        else
+        {
+            filterCustomer = null;
+        }
+        
+        if (table != null)
+        {
+            await table.ReloadServerData();
+        }
+    }
+    
+    private string GetCustomerDisplayName()
+    {
+        if (filterCustomer == null) return "";
+        
+        if (!string.IsNullOrEmpty(filterCustomer.Companyname))
+            return filterCustomer.Companyname;
+        
+        return $"{filterCustomer.Firstname} {filterCustomer.Lastname}";
+    }
 
     // Helper class to combine Agent with Customer and Conversation stats
     private class AgentWithCustomer
@@ -126,6 +189,12 @@
             .Include(a => a.Customer)
                 .ThenInclude(c => c.Package)
             .AsNoTracking();
+
+        // Apply customer filter if specified
+        if (CustomerId.HasValue)
+        {
+            query = query.Where(a => a.CustomerId == CustomerId.Value);
+        }
 
         // Apply search filter
         if (!string.IsNullOrEmpty(searchString))
@@ -215,12 +284,18 @@
 
     private void EditAgent(Agent agent)
     {
-        NavigationManager.NavigateTo($"/agents/edit/{agent.CustomerId}/{agent.Id}");
+        var returnUrl = CustomerId.HasValue 
+            ? $"/agents/manage/{CustomerId}" 
+            : "/agents/manage";
+        NavigationManager.NavigateTo($"/agents/edit/{agent.CustomerId}/{agent.Id}?returnUrl={Uri.EscapeDataString(returnUrl)}");
     }
 
     private void ViewConversations(Agent agent)
     {
-        NavigationManager.NavigateTo($"/agents/{agent.Id}/conversations");
+        var returnUrl = CustomerId.HasValue 
+            ? $"/agents/manage/{CustomerId}" 
+            : "/agents/manage";
+        NavigationManager.NavigateTo($"/agents/{agent.Id}/conversations?returnUrl={Uri.EscapeDataString(returnUrl)}");
     }
 
     private async Task OpenChatDialog(Agent agent)
@@ -282,5 +357,37 @@
             "azure" => "Azure",
             _ => char.ToUpper(providerName[0]) + providerName.Substring(1).ToLower() // Fallback: Capitalize first letter
         };
+    }
+    
+    private async Task OpenCreateAgentDialog()
+    {
+        // Load customers for selection
+        await using var db = await DbFactory.CreateDbContextAsync();
+        var customers = await db.Customers
+            .Where(c => c.State != "deleted")
+            .OrderBy(c => c.Lastname)
+            .ThenBy(c => c.Firstname)
+            .AsNoTracking()
+            .ToListAsync();
+        
+        var parameters = new DialogParameters<SelectCustomerDialog>
+        {
+            { x => x.Customers, customers }
+        };
+        
+        var options = new DialogOptions
+        {
+            CloseButton = true,
+            MaxWidth = MaxWidth.Small,
+            FullWidth = true
+        };
+        
+        var dialog = await DialogService.ShowAsync<SelectCustomerDialog>("Select Customer", parameters, options);
+        var result = await dialog.Result;
+        
+        if (result is { Canceled: false, Data: int customerId })
+        {
+            NavigationManager.NavigateTo($"/agents/create/{customerId}?returnUrl={Uri.EscapeDataString("/agents/manage")}");
+        }
     }
 }

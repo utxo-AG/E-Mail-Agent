@@ -403,6 +403,7 @@ else
     public int? AgentId { get; set; }
 
     private Agent agent = new();
+    private string? returnUrl;
     private MudForm? form;
     private bool success;
     private List<Mcpserver>? mcpServers;
@@ -411,6 +412,11 @@ else
 
     protected override async Task OnInitializedAsync()
     {
+        // Parse returnUrl from query string
+        var uri = new Uri(NavigationManager.Uri);
+        var query = System.Web.HttpUtility.ParseQueryString(uri.Query);
+        returnUrl = query["returnUrl"];
+        
         if (AgentId.HasValue)
         {
             await LoadAgent();
@@ -448,7 +454,14 @@ else
 
     private void Cancel()
     {
-        NavigationManager.NavigateTo("/clients/manage");
+        NavigationManager.NavigateTo(GetReturnUrl());
+    }
+    
+    private string GetReturnUrl()
+    {
+        if (!string.IsNullOrEmpty(returnUrl) && returnUrl.StartsWith("/"))
+            return returnUrl;
+        return $"/agents/manage/{CustomerId}";
     }
 
     private async Task Save()
@@ -499,7 +512,7 @@ else
             await db.SaveChangesAsync();
         }
 
-        NavigationManager.NavigateTo("/clients/manage");
+        NavigationManager.NavigateTo(GetReturnUrl());
     }
 
     private async Task LoadMcpServers()
@@ -704,10 +717,10 @@ else
         if (!AgentId.HasValue) return;
 
         var result = await DialogService.ShowMessageBox(
-            "Office 365 Verbindung trennen",
-            "Sind Sie sicher, dass Sie die Verbindung zu Office 365 trennen möchten? Der Agent kann danach keine E-Mails mehr von diesem Konto abrufen.",
-            yesText: "Trennen",
-            cancelText: "Abbrechen");
+            "Disconnect Office 365",
+            "Are you sure you want to disconnect from Office 365? The agent will no longer be able to retrieve emails from this account.",
+            yesText: "Disconnect",
+            cancelText: "Cancel");
 
         if (result == true)
         {

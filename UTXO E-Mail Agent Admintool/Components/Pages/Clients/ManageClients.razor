@@ -6,6 +6,7 @@
 @attribute [Authorize]
 @inject IDbContextFactory<DefaultdbContext> DbFactory
 @inject IDialogService DialogService
+@inject NavigationManager NavigationManager
 
 <PageTitle>Manage Clients</PageTitle>
 
@@ -60,7 +61,7 @@
                     <MudIconButton Icon="@Icons.Material.Filled.People"
                                    Color="Color.Info"
                                    Size="Size.Small"
-                                   OnClick="@(() => OpenAgentsDialog(context))" />
+                                   OnClick="@(() => NavigateToAgents(context))" />
                 </MudTooltip>
                 <MudTooltip Text="Delete Client">
                     <MudIconButton Icon="@Icons.Material.Filled.Delete"
@@ -148,21 +149,9 @@
         }
     }
 
-    private async Task OpenAgentsDialog(Customer customer)
+    private void NavigateToAgents(Customer customer)
     {
-        var parameters = new DialogParameters<ClientAgentsDialog>
-        {
-            { x => x.CustomerId, customer.Id }
-        };
-
-        var options = new DialogOptions
-        {
-            CloseButton = true,
-            MaxWidth = MaxWidth.Large,
-            FullWidth = true
-        };
-
-        await DialogService.ShowAsync<ClientAgentsDialog>($"Agents for {customer.Firstname} {customer.Lastname}", parameters, options);
+        NavigationManager.NavigateTo($"/agents/manage/{customer.Id}");
     }
 
     private async Task DeleteClient(Customer customer)

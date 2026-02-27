@@ -88,6 +88,14 @@
 
     private MudTable<Conversation>? table;
     private string searchString = "";
+    private string? returnUrl;
+
+    protected override void OnInitialized()
+    {
+        var uri = new Uri(NavigationManager.Uri);
+        var query = System.Web.HttpUtility.ParseQueryString(uri.Query);
+        returnUrl = query["returnUrl"];
+    }
 
     private async Task<TableData<Conversation>> LoadConversationsServerData(TableState state, CancellationToken cancellationToken)
     {
@@ -131,7 +139,10 @@
 
     private void GoBack()
     {
-        NavigationManager.NavigateTo("/agents/manage");
+        if (!string.IsNullOrEmpty(returnUrl) && returnUrl.StartsWith("/"))
+            NavigationManager.NavigateTo(returnUrl);
+        else
+            NavigationManager.NavigateTo("/agents/manage");
     }
 
     private async Task OpenDetailsDialog(Conversation conversation)

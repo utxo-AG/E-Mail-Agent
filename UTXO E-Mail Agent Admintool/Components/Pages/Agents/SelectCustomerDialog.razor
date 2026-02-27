@@ -1,0 +1,67 @@
+@using UTXO_E_Mail_Agent_Shared.Models
+
+<MudDialog>
+    <DialogContent>
+        <MudAutocomplete T="Customer"
+                         Label="Customer"
+                         @bind-Value="selectedCustomer"
+                         SearchFunc="SearchCustomers"
+                         ToStringFunc="@(c => c == null ? "" : GetCustomerDisplayName(c))"
+                         Variant="Variant.Outlined"
+                         Dense="true"
+                         ShowProgressIndicator="true"
+                         Class="mt-2" />
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel">Cancel</MudButton>
+        <MudButton Color="Color.Primary" 
+                   Disabled="@(selectedCustomer == null)"
+                   OnClick="Submit">
+            Select
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter]
+    private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    [Parameter]
+    public List<Customer> Customers { get; set; } = new();
+
+    private Customer? selectedCustomer;
+
+    private Task<IEnumerable<Customer>> SearchCustomers(string? value, CancellationToken token)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return Task.FromResult(Customers.Take(20));
+
+        var results = Customers
+            .Where(c => 
+                (c.Firstname?.Contains(value, StringComparison.OrdinalIgnoreCase) ?? false) ||
+                (c.Lastname?.Contains(value, StringComparison.OrdinalIgnoreCase) ?? false) ||
+                (c.Companyname?.Contains(value, StringComparison.OrdinalIgnoreCase) ?? false) ||
+                (c.Emailaddress?.Contains(value, StringComparison.OrdinalIgnoreCase) ?? false))
+            .Take(20);
+
+        return Task.FromResult(results);
+    }
+
+    private string GetCustomerDisplayName(Customer customer)
+    {
+        if (!string.IsNullOrEmpty(customer.Companyname))
+            return $"{customer.Companyname} ({customer.Firstname} {customer.Lastname})";
+        
+        return $"{customer.Firstname} {customer.Lastname}";
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+
+    private void Submit()
+    {
+        if (selectedCustomer != null)
+        {
+            MudDialog.Close(DialogResult.Ok(selectedCustomer.Id));
+        }
+    }
+}
