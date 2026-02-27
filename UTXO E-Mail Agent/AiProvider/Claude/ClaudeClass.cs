@@ -226,7 +226,7 @@ public class ClaudeClass : IAiProvider
 
         // Tool-Use-Loop
         const int maxIterations = 20;
-        MessageResponse response = null;
+        MessageResponse? response = null;
         var allDownloadedFiles = new List<string>(); // Collect files from all iterations
         var sentEmailRecipients = new HashSet<string>(StringComparer.OrdinalIgnoreCase); // Track send_email recipients
         var outputDirectory = Path.Combine(Directory.GetCurrentDirectory(), "SkillOutput");
@@ -398,7 +398,7 @@ public class ClaudeClass : IAiProvider
         Logger.Log("----------------------------------------------", agent.Id);
         Logger.Log("All Content:", agent.Id);
         Logger.Log("----------------------------------------------", agent.Id);
-        foreach (var content in response.Content)
+        foreach (var content in response!.Content)
         {
             Logger.Log($"Type: {content.GetType().Name}", agent.Id);
 

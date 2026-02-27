@@ -318,7 +318,7 @@ public class SkillUploadService
                 var tempPath = Path.GetTempFileName() + ".zip";
                 try
                 {
-                    await File.WriteAllBytesAsync(tempPath, skill.Skillfiles);
+                    await File.WriteAllBytesAsync(tempPath, skill.Skillfiles!);
                     var response = await client.Skills.CreateSkillFromZipAsync(skill.Skillname, tempPath);
                     skillId = response.Id;
                 }
@@ -331,7 +331,7 @@ public class SkillUploadService
             else
             {
                 // Single .md file upload
-                var stream = new MemoryStream(skill.Skillfiles);
+                var stream = new MemoryStream(skill.Skillfiles!);
                 var files = new List<(string filename, Stream stream, string mimeType)>
                 {
                     ($"{skill.Skillname}/SKILL.md", stream, "text/markdown")

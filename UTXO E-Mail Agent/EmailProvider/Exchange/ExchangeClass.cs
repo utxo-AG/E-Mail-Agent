@@ -24,7 +24,7 @@ public class ExchangeClass : IEmailProvider
         throw new NotImplementedException();
     }
 
-    public async Task SendReplyResponseEmail(AiResponseClass emailResponse, MailClass mail, Agent agent, Conversation? conversation)
+    public Task SendReplyResponseEmail(AiResponseClass emailResponse, MailClass mail, Agent agent, Conversation? conversation)
     {
         throw new NotImplementedException();
     }
