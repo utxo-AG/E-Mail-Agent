@@ -17,8 +17,9 @@ public class ProcessMailsClass(DefaultdbContext db, IConfiguration configuration
     /// </summary>
     /// <param name="mail">The email to process</param>
     /// <param name="agent">The agent with configuration</param>
+    /// <param name="existingConversation">Optional existing conversation entry (for pre-claimed emails)</param>
     /// <returns>The generated response from the AI provider</returns>
-    public async Task<AiResponseClass> ProcessMailAsync(MailClass mail, Agent agent)
+    public async Task<AiResponseClass> ProcessMailAsync(MailClass mail, Agent agent, Conversation? existingConversation = null)
     {
         // Select AI provider based on agent configuration
         var aiProvider = AiProviderFactory.GetProvider(agent, _configuration);
@@ -33,19 +34,26 @@ public class ProcessMailsClass(DefaultdbContext db, IConfiguration configuration
         var systemPrompt = BuildSystemPrompt(mail, agent);
         systemPrompt += GetMcpServerInformations(agent);
         
-        var conversation=new Conversation
+        // Use existing conversation or create new one
+        var conversation = existingConversation ?? new Conversation
         {
-            Subject = mail.Subject,
+            Subject = mail.Subject ?? "(No Subject)",
             Text = mail.Text,
             Htmltext = mail.Html,
             AgentId = agent.Id,
-            Emailfrom = mail.From,
-            Messageid = mail.Id,
-            Prompt = systemPrompt,
+            Emailfrom = mail.From ?? "(Unknown)",
+            Messageid = mail.Id ?? Guid.NewGuid().ToString(),
             Emailreceived = DateTime.Now,
         };
-        await _db.Conversations.AddAsync(conversation);
-        await _db.SaveChangesAsync();
+        
+        // Update prompt (always set, as it wasn't set during claim)
+        conversation.Prompt = systemPrompt;
+        
+        if (existingConversation == null)
+        {
+            await _db.Conversations.AddAsync(conversation);
+            await _db.SaveChangesAsync();
+        }
         
         // Call the AI provider
         var response = await aiProvider.GenerateResponse(systemPrompt, prompt, mail, agent, conversation);
