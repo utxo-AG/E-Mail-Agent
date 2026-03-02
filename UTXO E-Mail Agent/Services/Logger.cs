@@ -42,7 +42,7 @@ public static class Logger
     /// <summary>
     /// Log a message to console and database (async version)
     /// </summary>
-    public static async Task LogAsync(string message, int? agentId = null, string? additionalData = null)
+    public static async Task LogAsync(string message, int? agentId = null, string? additionalData = null, bool writeToDatabase=true)
     {
         // Always write to console
         Console.WriteLine(message);
