@@ -136,7 +136,7 @@ public class ClaudeClass : IAiProvider
             new Function("code_execution", "code_execution_20250825",
                 new Dictionary<string, object> { { "name", "code_execution" } }),
             ServerTools.GetWebSearchTool(5, null, null,
-                new UserLocation() { City = agent.Customer.City, Country = CountryToIso2(agent.Customer.Country) }),
+                new UserLocation() { City = agent.Customer.City, Country = GlobalFunctions.CountryToIso2(agent.Customer.Country) }),
             // new Function("bash", "bash_20250124",
             //     new Dictionary<string, object> { { "name", "bash" } })
         };
@@ -192,7 +192,7 @@ public class ClaudeClass : IAiProvider
 
         foreach (var mcpServer in agent.Mcpservers.OrEmptyIfNull())
         {
-            var toolName = SanitizeToolName(mcpServer.Name);
+            var toolName = GlobalFunctions.SanitizeToolName(mcpServer.Name);
 
             // Extract {placeholder} names from URL to create proper schema properties
             var urlPlaceholders = Regex.Matches(mcpServer.Url, @"\{(\w+)\}")
@@ -556,7 +556,7 @@ public class ClaudeClass : IAiProvider
                     var fileBytes = await File.ReadAllBytesAsync(filePath);
                     var base64Content = Convert.ToBase64String(fileBytes);
                     string fileName = System.IO.Path.GetFileName(filePath) ?? filePath;
-                    string contentType = GetContentTypeFromExtension(filePath);
+                    string contentType = GlobalFunctions.GetContentTypeFromExtension(filePath);
 
                     // Check if an attachment with this filename already exists (from JSON response)
                     var existingAtt = existingAttachments.FirstOrDefault(a => 
@@ -609,7 +609,7 @@ public class ClaudeClass : IAiProvider
                         var fileBytes = await File.ReadAllBytesAsync(att.Path);
                         att.Content = Convert.ToBase64String(fileBytes);
                         if (string.IsNullOrEmpty(att.ContentType))
-                            att.ContentType = GetContentTypeFromExtension(att.Path);
+                            att.ContentType = GlobalFunctions.GetContentTypeFromExtension(att.Path);
                         if (string.IsNullOrEmpty(att.Filename))
                             att.Filename = System.IO.Path.GetFileName(att.Path) ?? att.Path;
 
@@ -638,8 +638,6 @@ public class ClaudeClass : IAiProvider
         return responseClass;
     }
 
-    private static string SanitizeToolName(string name) => GlobalFunctions.SanitizeToolName(name);
-
     /// <summary>
     /// Extracts JSON from Claude's response. Claude can write text before the JSON.
     /// </summary>
@@ -651,8 +649,8 @@ public class ClaudeClass : IAiProvider
         if (string.IsNullOrWhiteSpace(fullText))
         {
             Logger.LogWarning("[ParseAiResponse] Empty response from Claude!");
-            var lang = DetectLanguage(emailText) ?? agentDefaultLanguage ?? "de";
-            var (fallbackText, fallbackSubject) = GetFallbackMessages(lang);
+            var lang = GlobalFunctions.DetectLanguage(emailText) ?? agentDefaultLanguage ?? "de";
+            var (fallbackText, fallbackSubject) = GlobalFunctions.GetFallbackMessages(lang);
             return new AiResponseClass
             {
                 EmailResponseText = fallbackText,
@@ -756,8 +754,8 @@ public class ClaudeClass : IAiProvider
             Logger.LogError("[ParseAiResponse] Could not extract valid JSON from response!");
             Logger.LogError($"[ParseAiResponse] Response preview: {fullText.Substring(0, Math.Min(300, fullText.Length))}...");
             
-            var fallbackLang = DetectLanguage(emailText) ?? agentDefaultLanguage ?? "de";
-            var (fallbackText, fallbackSubject) = GetFallbackMessages(fallbackLang);
+            var fallbackLang = GlobalFunctions.DetectLanguage(emailText) ?? agentDefaultLanguage ?? "de";
+            var (fallbackText, fallbackSubject) = GlobalFunctions.GetFallbackMessages(fallbackLang);
             return new AiResponseClass
             {
                 EmailResponseText = fallbackText,
@@ -773,8 +771,8 @@ public class ClaudeClass : IAiProvider
             Logger.LogError($"[ParseAiResponse] Response content: {fullText.Substring(0, Math.Min(500, fullText.Length))}...");
 
             // Return a fallback message instead of exposing raw AI thinking
-            var lang = DetectLanguage(emailText) ?? agentDefaultLanguage ?? "de";
-            var (fallbackText, fallbackSubject) = GetFallbackMessages(lang);
+            var lang = GlobalFunctions.DetectLanguage(emailText) ?? agentDefaultLanguage ?? "de";
+            var (fallbackText, fallbackSubject) = GlobalFunctions.GetFallbackMessages(lang);
             return new AiResponseClass
             {
                 EmailResponseText = fallbackText,
@@ -785,14 +783,6 @@ public class ClaudeClass : IAiProvider
             };
         }
     }
-
-    private static string? DetectLanguage(string? text) => GlobalFunctions.DetectLanguage(text);
-
-    private static (string Text, string Subject) GetFallbackMessages(string languageCode) => GlobalFunctions.GetFallbackMessages(languageCode);
-
-    private static string CountryToIso2(string? country) => GlobalFunctions.CountryToIso2(country);
-
-    private static string GetContentTypeFromExtension(string filePath) => GlobalFunctions.GetContentTypeFromExtension(filePath);
 
     /// <summary>
     /// Uploads a skill file to Anthropic and returns the assigned Skill ID.
