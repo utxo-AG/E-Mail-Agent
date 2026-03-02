@@ -15,6 +15,8 @@ public partial class DefaultdbContext : DbContext
 
     public virtual DbSet<Agent> Agents { get; set; }
 
+    public virtual DbSet<Apikey> Apikeys { get; set; }
+
     public virtual DbSet<Conversation> Conversations { get; set; }
 
     public virtual DbSet<ConversationAttachment> ConversationAttachments { get; set; }
@@ -145,6 +147,28 @@ public partial class DefaultdbContext : DbContext
                 .HasForeignKey(d => d.ServerId)
                 .OnDelete(DeleteBehavior.SetNull)
                 .HasConstraintName("agents_server");
+        });
+
+        modelBuilder.Entity<Apikey>(entity =>
+        {
+            entity.HasKey(e => e.Id).HasName("PRIMARY");
+
+            entity.ToTable("apikeys");
+
+            entity.Property(e => e.Id).HasColumnName("id");
+            entity.Property(e => e.Apikey1)
+                .HasMaxLength(255)
+                .HasColumnName("apikey");
+            entity.Property(e => e.Created)
+                .HasColumnType("datetime")
+                .HasColumnName("created");
+            entity.Property(e => e.CustomerId).HasColumnName("customer_id");
+            entity.Property(e => e.Expires)
+                .HasColumnType("datetime")
+                .HasColumnName("expires");
+            entity.Property(e => e.State)
+                .HasColumnType("enum('active','deleted','expired','blocked')")
+                .HasColumnName("state");
         });
 
         modelBuilder.Entity<Conversation>(entity =>
