@@ -57,6 +57,8 @@ public partial class Agent
 
     public string? Office365UserId { get; set; }
 
+    public bool Useconversationhistory { get; set; }
+
     public virtual ICollection<Conversation> Conversations { get; set; } = new List<Conversation>();
 
     public virtual Customer Customer { get; set; } = null!;

@@ -230,6 +230,15 @@ else
                     </MudSelect>
                 </MudItem>
 
+                <MudItem xs="12" md="6">
+                    <MudSwitch T="bool" @bind-Value="agent.Useconversationhistory" 
+                               Label="Use Conversation History"
+                               Color="Color.Primary" />
+                    <MudText Typo="Typo.caption" Class="mt-1">
+                        When enabled, the AI will remember previous emails from the same sender (up to 10 messages).
+                    </MudText>
+                </MudItem>
+
                 <MudItem xs="12">
                     <MudTextField Label="Task to be Completed"
                                   @bind-Value="agent.Tasktobecompleted"
@@ -496,6 +505,7 @@ else
                 existingAgent.Aiprovider = agent.Aiprovider;
                 existingAgent.Aimodel = agent.Aimodel;
                 existingAgent.Tasktobecompleted = agent.Tasktobecompleted;
+                existingAgent.Useconversationhistory = agent.Useconversationhistory;
                 existingAgent.Smtpserver = agent.Smtpserver;
                 existingAgent.Smtpport = agent.Smtpport;
                 existingAgent.Smtpusername = agent.Smtpusername;

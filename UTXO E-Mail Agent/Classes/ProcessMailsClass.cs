@@ -55,13 +55,28 @@ public class ProcessMailsClass(DefaultdbContext db, IConfiguration configuration
             await _db.SaveChangesAsync();
         }
         
+        // Load conversation history if enabled
+        List<Conversation>? conversationHistory = null;
+        if (agent.Useconversationhistory && !string.IsNullOrEmpty(mail.From))
+        {
+            conversationHistory = await _db.Conversations
+                .Where(c => c.AgentId == agent.Id && c.Emailfrom == mail.From && c.Id != conversation.Id)
+                .OrderBy(c => c.Emailreceived)
+                .Take(10) // Limit to last 10 conversations to avoid token overflow
+                .AsNoTracking()
+                .ToListAsync();
+            
+            Logger.Log($"[ProcessMail] Loading conversation history: {conversationHistory.Count} previous emails from {mail.From}", agent.Id);
+        }
+        
         // Call the AI provider
-        var response = await aiProvider.GenerateResponse(systemPrompt, prompt, mail, agent, conversation);
+        var response = await aiProvider.GenerateResponse(systemPrompt, prompt, mail, agent, conversation, conversationHistory);
 
         conversation.Agentresponsetext = response.EmailResponseText;
         conversation.Agentresponsehtml = response.EmailResponseHtml;
         conversation.Agentresponsesubject = response.EmailResponseSubject;
         conversation.Aiexplanation = response.AiExplanation;
+        conversation.Aifullresponse = response.FullResponse;
 
         foreach (var attachment in response.Attachments.OrEmptyIfNull())
         {

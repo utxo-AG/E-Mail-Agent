@@ -135,6 +135,7 @@ public partial class DefaultdbContext : DbContext
                 .HasColumnType("enum('active','suspend','deleted')")
                 .HasColumnName("state");
             entity.Property(e => e.Tasktobecompleted).HasColumnName("tasktobecompleted");
+            entity.Property(e => e.Useconversationhistory).HasColumnName("useconversationhistory");
 
             entity.HasOne(d => d.Customer).WithMany(p => p.Agents)
                 .HasForeignKey(d => d.CustomerId)
@@ -164,6 +165,7 @@ public partial class DefaultdbContext : DbContext
                 .HasColumnName("agentresponsesubject");
             entity.Property(e => e.Agentresponsetext).HasColumnName("agentresponsetext");
             entity.Property(e => e.Aiexplanation).HasColumnName("aiexplanation");
+            entity.Property(e => e.Aifullresponse).HasColumnName("aifullresponse");
             entity.Property(e => e.ConversationreferenceId).HasColumnName("conversationreference_id");
             entity.Property(e => e.Emailfrom)
                 .HasMaxLength(255)

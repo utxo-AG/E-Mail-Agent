@@ -18,6 +18,7 @@ public class AiResponseClass
     public string EmailResponseHtml { get; set; } = string.Empty;
     public string EmailResponseSubject { get; set; } = string.Empty;
     public string? AiExplanation { get; set; }  // Text before the JSON (optional)
+    public string? FullResponse { get; set; }  // Complete AI response for conversation history
     
     [Newtonsoft.Json.JsonConverter(typeof(AttachmentArrayConverter))]
     public Attachment[] Attachments { get; set; }

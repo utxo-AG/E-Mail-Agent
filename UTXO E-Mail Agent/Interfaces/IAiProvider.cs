@@ -5,5 +5,5 @@ namespace UTXO_E_Mail_Agent.Interfaces;
 
 public interface IAiProvider
 {
-    public Task<AiResponseClass> GenerateResponse(string systemPrompt, string prompt, MailClass mailClass, Agent agent, Conversation conversation);
+    public Task<AiResponseClass> GenerateResponse(string systemPrompt, string prompt, MailClass mailClass, Agent agent, Conversation conversation, List<Conversation>? conversationHistory = null);
 }

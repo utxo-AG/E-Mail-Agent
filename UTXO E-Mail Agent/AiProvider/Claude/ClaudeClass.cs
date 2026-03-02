@@ -74,7 +74,7 @@ public class ClaudeClass : IAiProvider
         throw new InvalidOperationException("Retry logic failed unexpectedly");
     }
 
-    public async Task<AiResponseClass> GenerateResponse(string systemPrompt, string prompt, MailClass mailClass, Agent agent, Conversation conversation)
+    public async Task<AiResponseClass> GenerateResponse(string systemPrompt, string prompt, MailClass mailClass, Agent agent, Conversation conversation, List<Conversation>? conversationHistory = null)
     {
         var httpClient = new HttpClient
         {
@@ -244,11 +244,33 @@ public class ClaudeClass : IAiProvider
             Logger.Log($"[MCP] Registered tool: {toolName} -> {mcpServer.Call.ToUpper()} {mcpServer.Url}", agent.Id);
         }
 
-        var messages = new List<Message>
+        var messages = new List<Message>();
+        
+        // Add conversation history if provided
+        if (conversationHistory != null && conversationHistory.Count > 0)
         {
-            new Message(RoleType.User,
-                $"E-Mail Subject: {mailClass.Subject} {Environment.NewLine} E-Mail Text:{mailClass.Text} {Environment.NewLine} E-Mail Text (HTML) {mailClass.Html}")
-        };
+            Logger.Log($"[Claude] Using conversation history: {conversationHistory.Count} previous emails", agent.Id);
+            
+            foreach (var prevConv in conversationHistory)
+            {
+                // Add user message (previous email)
+                var userContent = $"E-Mail Subject: {prevConv.Subject} {Environment.NewLine} E-Mail Text:{prevConv.Text}";
+                messages.Add(new Message(RoleType.User, userContent));
+                
+                // Add assistant response if available (prefer full response for complete context)
+                var assistantResponse = !string.IsNullOrEmpty(prevConv.Aifullresponse) 
+                    ? prevConv.Aifullresponse 
+                    : prevConv.Agentresponsetext;
+                if (!string.IsNullOrEmpty(assistantResponse))
+                {
+                    messages.Add(new Message(RoleType.Assistant, assistantResponse));
+                }
+            }
+        }
+        
+        // Add current email
+        messages.Add(new Message(RoleType.User,
+            $"E-Mail Subject: {mailClass.Subject} {Environment.NewLine} E-Mail Text:{mailClass.Text} {Environment.NewLine} E-Mail Text (HTML) {mailClass.Html}"));
 
         var effectiveModel = ModelFallbackCache.GetModel(agent.Aimodel);
         if (effectiveModel != agent.Aimodel)
@@ -456,6 +478,9 @@ public class ClaudeClass : IAiProvider
 
         // Extract JSON from response (Claude can write text before the JSON)
         var responseClass = ParseAiResponse(fullText, agent.Defaultlanguage, mailClass.Text);
+        
+        // Store full AI response for conversation history
+        responseClass.FullResponse = fullText;
 
         // Check if we need to generate a document with a second agent
         if (responseClass.MustCreateAttachment &&

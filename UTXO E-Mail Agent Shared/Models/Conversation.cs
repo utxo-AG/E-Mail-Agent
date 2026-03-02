@@ -33,6 +33,8 @@ public partial class Conversation
 
     public string? Aiexplanation { get; set; }
 
+    public string? Aifullresponse { get; set; }
+
     public virtual Agent Agent { get; set; } = null!;
 
     public virtual ICollection<ConversationAttachment> ConversationAttachments { get; set; } = new List<ConversationAttachment>();
