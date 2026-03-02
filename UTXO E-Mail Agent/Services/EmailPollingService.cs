@@ -169,7 +169,7 @@ public class EmailPollingService : BackgroundService
                             // Only send reply if there's actual content and recipient hasn't already been emailed via send_email tool
                             if (!string.IsNullOrEmpty(aiResponse.EmailResponseText) || !string.IsNullOrEmpty(aiResponse.EmailResponseHtml))
                             {
-                                if (aiResponse.AlreadySentTo.Contains(mail.From))
+                                if (!string.IsNullOrEmpty(mail.From) && aiResponse.AlreadySentTo.Contains(mail.From))
                                 {
                                     await Logger.LogAsync($"[EmailPollingService] Skipping reply to {mail.From} - already sent via send_email tool", agent.Id);
                                 }

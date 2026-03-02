@@ -1,4 +1,5 @@
 using System.Text;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using UTXO_E_Mail_Agent.Factory;
 using UTXO_E_Mail_Agent_Shared.Models;
