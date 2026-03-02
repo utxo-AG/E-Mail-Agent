@@ -18,11 +18,43 @@ public class ClaudeGenerateDocumentsClass
 {
     private readonly string _apiKey;
     private readonly int _agentId;
+    private const int MaxRetries = 3;
+    private static readonly int[] RetryDelaysMs = { 2000, 5000, 10000 };
 
     public ClaudeGenerateDocumentsClass(string apiKey, int agentId)
     {
         _apiKey = apiKey;
         _agentId = agentId;
+    }
+
+    /// <summary>
+    /// Executes API call with retry logic for transient errors
+    /// </summary>
+    private async Task<MessageResponse> ExecuteWithRetryAsync(AnthropicClient client, MessageParameters parameters)
+    {
+        for (int attempt = 0; attempt <= MaxRetries; attempt++)
+        {
+            try
+            {
+                return await client.Messages.GetClaudeMessageAsync(parameters);
+            }
+            catch (Exception ex) when (
+                ex.Message.Contains("Internal server error", StringComparison.OrdinalIgnoreCase) ||
+                ex.Message.Contains("api_error", StringComparison.OrdinalIgnoreCase))
+            {
+                if (attempt == MaxRetries)
+                {
+                    Logger.Log($"[DocumentGenerator] API failed after {MaxRetries + 1} attempts: {ex.Message}", _agentId);
+                    throw;
+                }
+                
+                var delayMs = RetryDelaysMs[attempt];
+                Logger.Log($"[DocumentGenerator] Internal server error, retrying in {delayMs}ms (attempt {attempt + 1}/{MaxRetries + 1})", _agentId);
+                await Task.Delay(delayMs);
+            }
+        }
+        
+        throw new InvalidOperationException("Retry logic failed unexpectedly");
     }
 
     /// <summary>
@@ -106,7 +138,7 @@ Antworte NUR mit dem erstellten Dokument, keine zusätzlichen Erklärungen.";
         try
         {
             Logger.Log("[DocumentGenerator] Calling Claude API...", _agentId);
-            var response = await client.Messages.GetClaudeMessageAsync(parameters);
+            var response = await ExecuteWithRetryAsync(client, parameters);
 
             // Log container info
             if (response.Container != null)

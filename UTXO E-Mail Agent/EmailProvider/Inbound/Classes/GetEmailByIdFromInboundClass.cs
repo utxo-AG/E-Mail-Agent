@@ -84,7 +84,8 @@ public class SingleOrArrayConverter : JsonConverter<string[]>
         public From ReturnPath { get; set; }
 
         [JsonProperty("received", NullValueHandling = NullValueHandling.Ignore)]
-        public string Received { get; set; }
+        [JsonConverter(typeof(SingleOrArrayConverter))]
+        public string[] Received { get; set; }
 
         [JsonProperty("received-spf", NullValueHandling = NullValueHandling.Ignore)]
         public string ReceivedSpf { get; set; }

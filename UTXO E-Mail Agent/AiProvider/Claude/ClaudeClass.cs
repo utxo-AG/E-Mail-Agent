@@ -26,12 +26,52 @@ public class ClaudeClass : IAiProvider
     private readonly string _apikey;
     private readonly string _connectionString;
     private readonly IConfiguration _configuration;
+    private const int MaxRetries = 3;
+    private static readonly int[] RetryDelaysMs = { 2000, 5000, 10000 }; // Exponential backoff
 
     public ClaudeClass(string apikey, string connectionString, IConfiguration configuration)
     {
         _apikey = apikey;
         _connectionString = connectionString;
         _configuration = configuration;
+    }
+
+    /// <summary>
+    /// Executes API call with retry logic for transient errors (500, overloaded)
+    /// </summary>
+    private async Task<MessageResponse> ExecuteWithRetryAsync(
+        AnthropicClient client, 
+        MessageParameters parameters, 
+        int? agentId = null)
+    {
+        for (int attempt = 0; attempt <= MaxRetries; attempt++)
+        {
+            try
+            {
+                return await client.Messages.GetClaudeMessageAsync(parameters);
+            }
+            catch (Exception ex) when (
+                ex.Message.Contains("Internal server error", StringComparison.OrdinalIgnoreCase) ||
+                ex.Message.Contains("api_error", StringComparison.OrdinalIgnoreCase))
+            {
+                if (attempt == MaxRetries)
+                {
+                    Logger.Log($"[Claude API] Failed after {MaxRetries + 1} attempts: {ex.Message}", agentId);
+                    throw;
+                }
+                
+                var delayMs = RetryDelaysMs[attempt];
+                Logger.Log($"[Claude API] Internal server error, retrying in {delayMs}ms (attempt {attempt + 1}/{MaxRetries + 1})", agentId);
+                await Task.Delay(delayMs);
+            }
+            catch (Exception ex) when (ex.Message.Contains("overloaded", StringComparison.OrdinalIgnoreCase))
+            {
+                ModelFallbackCache.RecordOverload();
+                throw; // Re-throw for overload handling
+            }
+        }
+        
+        throw new InvalidOperationException("Retry logic failed unexpectedly");
     }
 
     public async Task<AiResponseClass> GenerateResponse(string systemPrompt, string prompt, MailClass mailClass, Agent agent, Conversation conversation)
@@ -235,15 +275,7 @@ public class ClaudeClass : IAiProvider
         for (int iteration = 0; iteration < maxIterations; iteration++)
         {
             Logger.Log($"[Skill Download] Iteration {iteration}: Starting download (model: {parameters.Model})", agent.Id);
-            try
-            {
-                response = await client.Messages.GetClaudeMessageAsync(parameters);
-            }
-            catch (Exception ex) when (ex.Message.Contains("overloaded", StringComparison.OrdinalIgnoreCase))
-            {
-                ModelFallbackCache.RecordOverload();
-                throw; // Re-throw so EmailPollingService handles retry
-            }
+            response = await ExecuteWithRetryAsync(client, parameters, agent.Id);
 
             // Download skill files after EACH iteration (before response gets overwritten)
             try
