@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Configuration;
 using UTXO_E_Mail_Agent.AiProvider.Claude;
+using UTXO_E_Mail_Agent.AiProvider.ClaudeCode;
 using UTXO_E_Mail_Agent.Interfaces;
 using UTXO_E_Mail_Agent_Shared.Models;
 
@@ -11,12 +12,18 @@ public static class AiProviderFactory
     {
         return agent.Aiprovider?.ToLower() switch
         {
-            "claude" => new ClaudeClass(
+            "claude" or "anthropic" => new ClaudeClass(
                 configuration["Claude:ApiKey"]
                     ?? throw new InvalidOperationException("Claude:ApiKey not configured in appsettings.json."),
                 configuration.GetConnectionString("DefaultConnection")
                     ?? throw new InvalidOperationException("Connection string 'DefaultConnection' not found in appsettings.json."),
                 configuration),
+            
+            "claudecode" or "claude-code" => new ClaudeCodeClass(
+                configuration["Claude:ApiKey"]
+                    ?? throw new InvalidOperationException("Claude:ApiKey not configured in appsettings.json."),
+                configuration),
+            
             _ => null
         };
     }
