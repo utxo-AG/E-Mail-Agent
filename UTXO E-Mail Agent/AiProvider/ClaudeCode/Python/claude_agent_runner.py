@@ -110,9 +110,8 @@ E-Mail HTML:
         # Add MCP tools if enabled (utxo-http server tools)
         if use_mcp_tools:
             allowed_tools.extend([
-                "mcp__utxo-http__http_request",
-                "mcp__utxo-http__http_get", 
-                "mcp__utxo-http__http_post"
+                "mcp__utxo-http__call_api",
+                "mcp__utxo-http__list_apis"
             ])
         
         log("=" * 60)
@@ -262,24 +261,7 @@ E-Mail HTML:
         else:
             log(f"[Files] Output directory does not exist: {output_dir}")
         
-        # Fallback: Check ~/output/ if no files found (Claude sometimes uses absolute paths)
-        if len(response["files_created"]) == 0:
-            home_output = os.path.join(os.path.expanduser("~"), "output")
-            log(f"[Files] No files in working dir, checking fallback: {home_output}")
-            if os.path.exists(home_output):
-                for root, dirs, files in os.walk(home_output):
-                    log(f"[Files] Fallback checking: {root}")
-                    log(f"[Files] Found {len(files)} file(s), {len(dirs)} subdirectorie(s)")
-                    for file in files:
-                        # Only include common output files (PDF, HTML, images)
-                        ext = os.path.splitext(file)[1].lower()
-                        if ext in ['.pdf', '.html', '.htm', '.png', '.jpg', '.jpeg', '.gif', '.svg', '.csv', '.xlsx', '.docx']:
-                            file_path = os.path.join(root, file)
-                            file_size = os.path.getsize(file_path)
-                            response["files_created"].append(file_path)
-                            log(f"[Files] Fallback found: {file_path} ({file_size} bytes)")
-            else:
-                log(f"[Files] Fallback directory does not exist: {home_output}")
+
         
 
         

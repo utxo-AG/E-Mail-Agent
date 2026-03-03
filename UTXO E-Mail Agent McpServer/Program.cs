@@ -1,88 +1,111 @@
 using System.ComponentModel;
 using System.Text;
 using System.Text.Json;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using ModelContextProtocol.Server;
+using UTXO_E_Mail_Agent_Shared.Models;
 
 // Create and run the MCP server
 var builder = Host.CreateApplicationBuilder(args);
 
+// Add configuration from appsettings.json
+builder.Configuration
+    .SetBasePath(AppContext.BaseDirectory)
+    .AddJsonFile("appsettings.json", optional: true, reloadOnChange: false);
+
 builder.Logging.AddConsole(options => options.LogToStandardErrorThreshold = LogLevel.Trace);
+
+// Get database connection - read from config or environment variable
+var connectionString = builder.Configuration.GetConnectionString("DefaultConnection")
+    ?? Environment.GetEnvironmentVariable("UTXO_DB_CONNECTION") 
+    ?? "server=localhost;database=utxo_email_agent;user=root;password=root";
+
+// Set the connection string for the static ApiTools class
+ApiTools.ConnectionString = connectionString;
+
+builder.Services.AddDbContext<DefaultdbContext>(options =>
+    options.UseMySql(connectionString, ServerVersion.AutoDetect(connectionString)));
 
 builder.Services.AddMcpServer()
     .WithStdioServerTransport()
-    .WithTools<HttpTools>();
+    .WithTools<ApiTools>();
 
 await builder.Build().RunAsync();
 
 /// <summary>
-/// HTTP Tools for making API calls
+/// API Tools - calls configured APIs from database
 /// </summary>
 [McpServerToolType]
-public class HttpTools
+public class ApiTools
 {
+    /// <summary>
+    /// Database connection string - set at startup
+    /// </summary>
+    public static string ConnectionString { get; set; } = "";
+    
     private static readonly HttpClient _httpClient = new()
     {
         Timeout = TimeSpan.FromSeconds(30)
     };
 
     /// <summary>
-    /// Makes an HTTP request to the specified URL
+    /// Calls a configured API endpoint for the specified agent.
+    /// The API configuration (URL, method, auth) is looked up from the database.
     /// </summary>
-    /// <param name="url">The full URL to call (e.g., https://api.example.com/endpoint)</param>
-    /// <param name="method">HTTP method: GET, POST, PUT, DELETE, PATCH</param>
-    /// <param name="body">Optional JSON body for POST/PUT/PATCH requests</param>
-    /// <param name="headers">Optional JSON object with headers (e.g., {"Authorization": "Bearer token", "X-Custom": "value"})</param>
-    /// <returns>JSON object with statusCode, success, body, and error fields</returns>
-    [McpServerTool(Name = "http_request"), Description("Make an HTTP request to any URL. Supports GET, POST, PUT, DELETE, PATCH methods with optional JSON body and custom headers.")]
-    public static async Task<string> HttpRequest(
-        [Description("The full URL to call (e.g., https://api.example.com/endpoint)")] string url,
-        [Description("HTTP method: GET, POST, PUT, DELETE, PATCH")] string method = "GET",
-        [Description("Optional JSON body for POST/PUT/PATCH requests")] string? body = null,
-        [Description("Optional JSON object with headers (e.g., {\"Authorization\": \"Bearer token\"})")] string? headers = null)
+    [McpServerTool(Name = "call_api"), Description("Call a configured API endpoint. The API configuration (URL, method, authentication) is retrieved from the database based on agent_id and api_name.")]
+    public static async Task<string> CallApi(
+        [Description("The agent ID that owns this API configuration")] int agentId,
+        [Description("The name of the API to call (as configured in the system)")] string apiName,
+        [Description("Optional JSON data to send for POST/PUT/PATCH requests")] string? data = null)
     {
         try
         {
-            var httpMethod = method.ToUpperInvariant() switch
+            var optionsBuilder = new DbContextOptionsBuilder<DefaultdbContext>();
+            optionsBuilder.UseMySql(ConnectionString, ServerVersion.AutoDetect(ConnectionString));
+            
+            await using var db = new DefaultdbContext(optionsBuilder.Options);
+            
+            // Look up API configuration
+            var apiConfig = await db.Mcpservers
+                .Where(m => m.AgentId == agentId && m.Name == apiName)
+                .FirstOrDefaultAsync();
+
+            if (apiConfig == null)
+            {
+                return CreateErrorResponse(404, $"API '{apiName}' not found for agent {agentId}");
+            }
+
+            // Determine HTTP method
+            var httpMethod = apiConfig.Call.ToUpperInvariant() switch
             {
                 "GET" => HttpMethod.Get,
                 "POST" => HttpMethod.Post,
                 "PUT" => HttpMethod.Put,
                 "DELETE" => HttpMethod.Delete,
                 "PATCH" => HttpMethod.Patch,
-                _ => throw new ArgumentException($"Unsupported HTTP method: {method}")
+                _ => throw new ArgumentException($"Unsupported HTTP method: {apiConfig.Call}")
             };
 
-            var request = new HttpRequestMessage(httpMethod, url);
+            // Create request
+            var request = new HttpRequestMessage(httpMethod, apiConfig.Url);
 
-            // Add custom headers if provided
-            if (!string.IsNullOrEmpty(headers))
+            // Add Bearer token if configured
+            if (!string.IsNullOrEmpty(apiConfig.Bearer))
             {
-                try
-                {
-                    var headerDict = JsonSerializer.Deserialize<Dictionary<string, string>>(headers);
-                    if (headerDict != null)
-                    {
-                        foreach (var (key, value) in headerDict)
-                        {
-                            request.Headers.TryAddWithoutValidation(key, value);
-                        }
-                    }
-                }
-                catch (JsonException ex)
-                {
-                    return CreateErrorResponse(0, $"Invalid headers JSON: {ex.Message}");
-                }
+                request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", apiConfig.Bearer);
             }
 
             // Add body for POST/PUT/PATCH
-            if (!string.IsNullOrEmpty(body) && (httpMethod == HttpMethod.Post || httpMethod == HttpMethod.Put || httpMethod == HttpMethod.Patch))
+            if (!string.IsNullOrEmpty(data) && (httpMethod == HttpMethod.Post || httpMethod == HttpMethod.Put || httpMethod == HttpMethod.Patch))
             {
-                request.Content = new StringContent(body, Encoding.UTF8, "application/json");
+                request.Content = new StringContent(data, Encoding.UTF8, "application/json");
             }
 
+            // Execute request
             var response = await _httpClient.SendAsync(request);
             var responseBody = await response.Content.ReadAsStringAsync();
 
@@ -90,7 +113,9 @@ public class HttpTools
                 (int)response.StatusCode,
                 response.IsSuccessStatusCode,
                 responseBody,
-                null
+                null,
+                apiConfig.Name,
+                apiConfig.Description
             );
         }
         catch (HttpRequestException ex)
@@ -108,42 +133,51 @@ public class HttpTools
     }
 
     /// <summary>
-    /// Simple GET request helper
+    /// Lists all available API endpoints for a specific agent.
     /// </summary>
-    [McpServerTool(Name = "http_get"), Description("Make a simple HTTP GET request to a URL. Returns the response body.")]
-    public static async Task<string> HttpGet(
-        [Description("The full URL to call")] string url,
-        [Description("Optional Bearer token for Authorization header")] string? bearerToken = null)
+    [McpServerTool(Name = "list_apis"), Description("List all available API endpoints configured for a specific agent.")]
+    public static async Task<string> ListApis(
+        [Description("The agent ID to list APIs for")] int agentId)
     {
-        var headers = bearerToken != null 
-            ? JsonSerializer.Serialize(new Dictionary<string, string> { { "Authorization", $"Bearer {bearerToken}" } })
-            : null;
-        
-        return await HttpRequest(url, "GET", null, headers);
+        try
+        {
+            var optionsBuilder = new DbContextOptionsBuilder<DefaultdbContext>();
+            optionsBuilder.UseMySql(ConnectionString, ServerVersion.AutoDetect(ConnectionString));
+            
+            await using var db = new DefaultdbContext(optionsBuilder.Options);
+            
+            var apis = await db.Mcpservers
+                .Where(m => m.AgentId == agentId)
+                .Select(m => new 
+                {
+                    name = m.Name,
+                    description = m.Description,
+                    method = m.Call.ToUpper(),
+                    hasAuth = !string.IsNullOrEmpty(m.Bearer)
+                })
+                .ToListAsync();
+
+            return JsonSerializer.Serialize(new
+            {
+                agentId,
+                apiCount = apis.Count,
+                apis
+            }, new JsonSerializerOptions { WriteIndented = true });
+        }
+        catch (Exception ex)
+        {
+            return CreateErrorResponse(0, $"Error listing APIs: {ex.Message}");
+        }
     }
 
-    /// <summary>
-    /// Simple POST request helper
-    /// </summary>
-    [McpServerTool(Name = "http_post"), Description("Make an HTTP POST request with a JSON body.")]
-    public static async Task<string> HttpPost(
-        [Description("The full URL to call")] string url,
-        [Description("JSON body to send")] string body,
-        [Description("Optional Bearer token for Authorization header")] string? bearerToken = null)
-    {
-        var headers = bearerToken != null 
-            ? JsonSerializer.Serialize(new Dictionary<string, string> { { "Authorization", $"Bearer {bearerToken}" } })
-            : null;
-        
-        return await HttpRequest(url, "POST", body, headers);
-    }
-
-    private static string CreateResponse(int statusCode, bool success, string? body, string? error)
+    private static string CreateResponse(int statusCode, bool success, string? body, string? error, string? apiName = null, string? apiDescription = null)
     {
         var response = new
         {
             statusCode,
             success,
+            apiName,
+            apiDescription,
             body = TryParseJson(body),
             error
         };
@@ -160,9 +194,6 @@ public class HttpTools
         return CreateResponse(statusCode, false, null, error);
     }
 
-    /// <summary>
-    /// Try to parse body as JSON, return raw string if not valid JSON
-    /// </summary>
     private static object? TryParseJson(string? body)
     {
         if (string.IsNullOrEmpty(body))

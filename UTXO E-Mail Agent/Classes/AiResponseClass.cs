@@ -40,6 +40,12 @@ public class AiResponseClass
     /// </summary>
     public long? AiOutputTokens { get; set; }
     
+    /// <summary>
+    /// Working directory used for this conversation (for cleanup after email is sent)
+    /// </summary>
+    [Newtonsoft.Json.JsonIgnore]
+    public string? WorkingDirectory { get; set; }
+    
     [Newtonsoft.Json.JsonConverter(typeof(AttachmentArrayConverter))]
     public Attachment[] Attachments { get; set; }
 

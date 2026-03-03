@@ -184,23 +184,17 @@ public class EmailPollingService : BackgroundService
                                 await Logger.LogAsync($"[EmailPollingService] No reply sent (forwarded or no response required)", agent.Id);
                             }
 
-                            // Cleanup: Delete temporary attachment files after sending
-                            if (aiResponse.Attachments != null)
+                            // Cleanup: Delete entire working directory after sending
+                            if (!string.IsNullOrEmpty(aiResponse.WorkingDirectory) && Directory.Exists(aiResponse.WorkingDirectory))
                             {
-                                foreach (var att in aiResponse.Attachments)
+                                try
                                 {
-                                    if (!string.IsNullOrEmpty(att.Path) && File.Exists(att.Path))
-                                    {
-                                        try
-                                        {
-                                            File.Delete(att.Path);
-                                            await Logger.LogAsync($"[Cleanup] Deleted temporary file: {att.Path}", agent.Id);
-                                        }
-                                        catch (Exception ex)
-                                        {
-                                            Logger.LogWarning($"[Cleanup] Could not delete file {att.Path}: {ex.Message}", agent.Id);
-                                        }
-                                    }
+                                    Directory.Delete(aiResponse.WorkingDirectory, recursive: true);
+                                    await Logger.LogAsync($"[Cleanup] Deleted working directory: {aiResponse.WorkingDirectory}", agent.Id);
+                                }
+                                catch (Exception ex)
+                                {
+                                    Logger.LogWarning($"[Cleanup] Could not delete working directory {aiResponse.WorkingDirectory}: {ex.Message}", agent.Id);
                                 }
                             }
                         }

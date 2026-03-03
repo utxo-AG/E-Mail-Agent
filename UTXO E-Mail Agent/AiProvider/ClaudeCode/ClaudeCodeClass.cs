@@ -22,11 +22,13 @@ public class ClaudeCodeClass : IAiProvider
     private readonly string _pythonScriptPath;
     private readonly string _workingDirectory;
     private readonly string _mcpServerPath;
+    private readonly IConfiguration _configuration;
     private static bool _mcpServerRegistered = false;
     private static readonly object _mcpLock = new object();
 
     public ClaudeCodeClass(IConfiguration configuration)
     {
+        _configuration = configuration;
         var pythonPath = configuration["Python:Path"];
         _pythonPath = string.IsNullOrEmpty(pythonPath) ? GetDefaultPythonPath() : pythonPath;
         
@@ -127,6 +129,56 @@ public class ClaudeCodeClass : IAiProvider
         
         // Fallback to relative path
         return Path.Combine(AppContext.BaseDirectory, "UTXO E-Mail Agent McpServer.dll");
+    }
+    
+    private static string GetDotnetPath()
+    {
+        // Try to find dotnet based on OS
+        if (OperatingSystem.IsWindows())
+        {
+            var paths = new[]
+            {
+                @"C:\Program Files\dotnet\dotnet.exe",
+                Environment.ExpandEnvironmentVariables(@"%ProgramFiles%\dotnet\dotnet.exe"),
+            };
+            
+            foreach (var path in paths)
+            {
+                if (File.Exists(path)) return path;
+            }
+            
+            return "dotnet"; // Fallback to PATH
+        }
+        else if (OperatingSystem.IsMacOS())
+        {
+            var paths = new[]
+            {
+                "/usr/local/share/dotnet/dotnet",
+                "/opt/homebrew/bin/dotnet",
+            };
+            
+            foreach (var path in paths)
+            {
+                if (File.Exists(path)) return path;
+            }
+            
+            return "dotnet"; // Fallback to PATH
+        }
+        else // Linux
+        {
+            var paths = new[]
+            {
+                "/usr/share/dotnet/dotnet",
+                "/usr/bin/dotnet",
+            };
+            
+            foreach (var path in paths)
+            {
+                if (File.Exists(path)) return path;
+            }
+            
+            return "dotnet"; // Fallback to PATH
+        }
     }
 
     /// <summary>
@@ -275,7 +327,7 @@ public class ClaudeCodeClass : IAiProvider
                 {
                     mcpServers[serverName] = new Dictionary<string, object>
                     {
-                        { "command", "dotnet" },
+                        { "command", GetDotnetPath() },
                         { "args", new[] { _mcpServerPath } }
                     };
 
@@ -317,28 +369,34 @@ public class ClaudeCodeClass : IAiProvider
         }
 
         var sb = new StringBuilder();
-        sb.AppendLine("\n\n--- AVAILABLE HTTP APIS ---");
-        sb.AppendLine("You can use the 'http_request' tool to call these APIs:");
+        sb.AppendLine("\n\n--- VERFÜGBARE APIs ---");
+        sb.AppendLine("Du hast Zugriff auf folgende APIs. Verwende das Tool 'mcp__utxo-http__call_api' um sie aufzurufen.");
         sb.AppendLine();
+        sb.AppendLine("Tool-Aufruf:");
+        sb.AppendLine($"  mcp__utxo-http__call_api(agent_id={agent.Id}, api_name=\"<name>\", data=\"<json>\")");
+        sb.AppendLine();
+        sb.AppendLine("Verfügbare APIs:");
 
         foreach (var mcp in agent.Mcpservers)
         {
-            sb.AppendLine($"### {mcp.Name}");
-            sb.AppendLine($"- **Method**: {mcp.Call.ToUpper()}");
-            sb.AppendLine($"- **URL**: {mcp.Url}");
-            if (!string.IsNullOrEmpty(mcp.Description))
-            {
-                sb.AppendLine($"- **Description**: {mcp.Description}");
-            }
-            if (!string.IsNullOrEmpty(mcp.Bearer))
-            {
-                sb.AppendLine($"- **Authorization**: Bearer token required (use header: {{\"Authorization\": \"Bearer {mcp.Bearer}\"}})");
-            }
-            sb.AppendLine();
+            sb.AppendLine($"  - **{mcp.Name}** ({mcp.Call.ToUpper()}): {mcp.Description}");
         }
 
-        sb.AppendLine("Use the http_request tool with the appropriate URL, method, body, and headers.");
-        sb.AppendLine("--- END AVAILABLE HTTP APIS ---");
+        sb.AppendLine();
+        sb.AppendLine("Beispiele:");
+        var firstApi = agent.Mcpservers.FirstOrDefault();
+        if (firstApi != null)
+        {
+            if (firstApi.Call.Equals("GET", StringComparison.OrdinalIgnoreCase))
+            {
+                sb.AppendLine($"  GET:  mcp__utxo-http__call_api(agent_id={agent.Id}, api_name=\"{firstApi.Name}\")");
+            }
+            else
+            {
+                sb.AppendLine($"  POST: mcp__utxo-http__call_api(agent_id={agent.Id}, api_name=\"{firstApi.Name}\", data=\"{{\\\"key\\\": \\\"value\\\"}}\")");
+            }
+        }
+        sb.AppendLine("--- END VERFÜGBARE APIs ---");
 
         return sb.ToString();
     }
@@ -557,6 +615,9 @@ public class ClaudeCodeClass : IAiProvider
                 
                 responseClass.Attachments = attachments.ToArray();
             }
+
+            // Store working directory for cleanup after email is sent
+            responseClass.WorkingDirectory = convWorkDir;
 
             // Cleanup input file
             try { File.Delete(inputJsonPath); } catch { /* ignore */ }
