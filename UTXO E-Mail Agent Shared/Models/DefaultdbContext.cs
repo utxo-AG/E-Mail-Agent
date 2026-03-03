@@ -79,7 +79,7 @@ public partial class DefaultdbContext : DbContext
                 .HasColumnName("aimodel");
             entity.Property(e => e.Aiprovider)
                 .HasDefaultValueSql("'claude'")
-                .HasColumnType("enum('claude','openai','grok','gemini')")
+                .HasColumnType("enum('claude','openai','grok','gemini','claudecode')")
                 .HasColumnName("aiprovider");
             entity.Property(e => e.CustomerId).HasColumnName("customer_id");
             entity.Property(e => e.Defaultlanguage)
@@ -155,6 +155,8 @@ public partial class DefaultdbContext : DbContext
 
             entity.ToTable("apikeys");
 
+            entity.HasIndex(e => e.CustomerId, "apikeys_customers");
+
             entity.Property(e => e.Id).HasColumnName("id");
             entity.Property(e => e.Apikey1)
                 .HasMaxLength(255)
@@ -169,6 +171,10 @@ public partial class DefaultdbContext : DbContext
             entity.Property(e => e.State)
                 .HasColumnType("enum('active','deleted','expired','blocked')")
                 .HasColumnName("state");
+
+            entity.HasOne(d => d.Customer).WithMany(p => p.Apikeys)
+                .HasForeignKey(d => d.CustomerId)
+                .HasConstraintName("apikeys_customers");
         });
 
         modelBuilder.Entity<Conversation>(entity =>
@@ -188,8 +194,14 @@ public partial class DefaultdbContext : DbContext
                 .HasMaxLength(255)
                 .HasColumnName("agentresponsesubject");
             entity.Property(e => e.Agentresponsetext).HasColumnName("agentresponsetext");
+            entity.Property(e => e.Aicostusd)
+                .HasPrecision(10, 6)
+                .HasColumnName("aicostusd");
+            entity.Property(e => e.Aidurationms).HasColumnName("aidurationms");
             entity.Property(e => e.Aiexplanation).HasColumnName("aiexplanation");
             entity.Property(e => e.Aifullresponse).HasColumnName("aifullresponse");
+            entity.Property(e => e.Aiinputtokens).HasColumnName("aiinputtokens");
+            entity.Property(e => e.Aioutputtokens).HasColumnName("aioutputtokens");
             entity.Property(e => e.ConversationreferenceId).HasColumnName("conversationreference_id");
             entity.Property(e => e.Emailfrom)
                 .HasMaxLength(255)

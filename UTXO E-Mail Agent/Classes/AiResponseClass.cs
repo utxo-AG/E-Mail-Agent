@@ -20,6 +20,26 @@ public class AiResponseClass
     public string? AiExplanation { get; set; }  // Text before the JSON (optional)
     public string? FullResponse { get; set; }  // Complete AI response for conversation history
     
+    /// <summary>
+    /// Total cost of AI processing in USD
+    /// </summary>
+    public decimal? AiCostUsd { get; set; }
+    
+    /// <summary>
+    /// Total duration of AI processing in milliseconds
+    /// </summary>
+    public long? AiDurationMs { get; set; }
+    
+    /// <summary>
+    /// Total input tokens used
+    /// </summary>
+    public long? AiInputTokens { get; set; }
+    
+    /// <summary>
+    /// Total output tokens generated
+    /// </summary>
+    public long? AiOutputTokens { get; set; }
+    
     [Newtonsoft.Json.JsonConverter(typeof(AttachmentArrayConverter))]
     public Attachment[] Attachments { get; set; }
 

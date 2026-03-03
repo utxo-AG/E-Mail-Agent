@@ -19,10 +19,7 @@ public static class AiProviderFactory
                     ?? throw new InvalidOperationException("Connection string 'DefaultConnection' not found in appsettings.json."),
                 configuration),
             
-            "claudecode" or "claude-code" => new ClaudeCodeClass(
-                configuration["Claude:ApiKey"]
-                    ?? throw new InvalidOperationException("Claude:ApiKey not configured in appsettings.json."),
-                configuration),
+            "claudecode" or "claude-code" => new ClaudeCodeClass(configuration),
             
             _ => null
         };

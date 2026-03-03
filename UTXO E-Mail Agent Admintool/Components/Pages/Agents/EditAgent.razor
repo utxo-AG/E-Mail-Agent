@@ -215,8 +215,9 @@ else
                 }
 
                 <MudItem xs="12" md="6">
-                    <MudSelect Label="AI Provider" @bind-Value="agent.Aiprovider" Required="true" Disabled="true">
-                        <MudSelectItem Value="@("claude")">Anthropic Claude</MudSelectItem>
+                    <MudSelect Label="AI Provider" @bind-Value="agent.Aiprovider" Required="true" >
+                        <MudSelectItem Value="@("claude")">Anthropic Claude SDK</MudSelectItem>
+                        <MudSelectItem Value="@("claudecode")">Claude Code</MudSelectItem>
                     </MudSelect>
                 </MudItem>
 

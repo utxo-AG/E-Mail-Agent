@@ -16,4 +16,6 @@ public partial class Apikey
     public DateTime? Expires { get; set; }
 
     public string State { get; set; } = null!;
+
+    public virtual Customer Customer { get; set; } = null!;
 }

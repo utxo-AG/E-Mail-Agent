@@ -37,5 +37,7 @@ public partial class Customer
 
     public virtual ICollection<Agent> Agents { get; set; } = new List<Agent>();
 
+    public virtual ICollection<Apikey> Apikeys { get; set; } = new List<Apikey>();
+
     public virtual Package? Package { get; set; }
 }

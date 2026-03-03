@@ -1,112 +1,346 @@
+using System.Diagnostics;
+using System.IO.Compression;
+using System.Text;
 using System.Text.RegularExpressions;
 using Microsoft.Extensions.Configuration;
 using Newtonsoft.Json;
-using Python.Runtime;
 using UTXO_E_Mail_Agent.Classes;
 using UTXO_E_Mail_Agent.Interfaces;
 using UTXO_E_Mail_Agent.Services;
 using UTXO_E_Mail_Agent_Shared.Models;
+using UTXO_E_Mail_Agent.EmailProvider.Inbound.Classes;
 
 namespace UTXO_E_Mail_Agent.AiProvider.ClaudeCode;
 
 /// <summary>
-/// AI Provider that uses Claude Code SDK via Python.NET
+/// AI Provider that uses Claude Code SDK via Python subprocess
 /// Runs Claude Code locally for agentic email processing
 /// </summary>
 public class ClaudeCodeClass : IAiProvider
 {
-    private readonly string _apiKey;
-    private readonly string _pythonDll;
+    private readonly string _pythonPath;
     private readonly string _pythonScriptPath;
     private readonly string _workingDirectory;
-    private static bool _pythonInitialized = false;
-    private static readonly object _initLock = new object();
+    private readonly string _mcpServerPath;
+    private static bool _mcpServerRegistered = false;
+    private static readonly object _mcpLock = new object();
 
-    public ClaudeCodeClass(string apiKey, IConfiguration configuration)
+    public ClaudeCodeClass(IConfiguration configuration)
     {
-        _apiKey = apiKey;
-        _pythonDll = configuration["Python:DllPath"] ?? GetDefaultPythonDll();
+        var pythonPath = configuration["Python:Path"];
+        _pythonPath = string.IsNullOrEmpty(pythonPath) ? GetDefaultPythonPath() : pythonPath;
+        
         _pythonScriptPath = Path.Combine(AppContext.BaseDirectory, "AiProvider", "ClaudeCode", "Python");
-        _workingDirectory = configuration["ClaudeCode:WorkingDirectory"] ?? Path.Combine(Path.GetTempPath(), "claude_code_work");
+        
+        var workingDir = configuration["ClaudeCode:WorkingDirectory"];
+        _workingDirectory = string.IsNullOrEmpty(workingDir) 
+            ? Path.Combine(Path.GetTempPath(), "claude_code_work") 
+            : workingDir;
+        
+        var mcpPath = configuration["ClaudeCode:McpServerPath"];
+        _mcpServerPath = string.IsNullOrEmpty(mcpPath) ? GetDefaultMcpServerPath() : mcpPath;
         
         // Ensure working directory exists
         Directory.CreateDirectory(_workingDirectory);
     }
-
-    private static string GetDefaultPythonDll()
+    
+    private static string GetDefaultPythonPath()
     {
-        // Try to find Python DLL based on OS
+        // Try to find Python based on OS
         if (OperatingSystem.IsWindows())
         {
-            // Common Windows paths
             var paths = new[]
             {
-                @"C:\Python312\python312.dll",
-                @"C:\Python311\python311.dll",
-                @"C:\Python310\python310.dll",
-                Environment.ExpandEnvironmentVariables(@"%LOCALAPPDATA%\Programs\Python\Python312\python312.dll"),
-                Environment.ExpandEnvironmentVariables(@"%LOCALAPPDATA%\Programs\Python\Python311\python311.dll"),
+                @"C:\Python314\python.exe",
+                @"C:\Python313\python.exe",
+                @"C:\Python312\python.exe",
+                Environment.ExpandEnvironmentVariables(@"%LOCALAPPDATA%\Programs\Python\Python314\python.exe"),
+                Environment.ExpandEnvironmentVariables(@"%LOCALAPPDATA%\Programs\Python\Python313\python.exe"),
+                Environment.ExpandEnvironmentVariables(@"%LOCALAPPDATA%\Programs\Python\Python312\python.exe"),
             };
             
             foreach (var path in paths)
             {
                 if (File.Exists(path)) return path;
             }
+            
+            return "python"; // Fallback to PATH
         }
         else if (OperatingSystem.IsMacOS())
         {
             var paths = new[]
             {
-                "/opt/homebrew/opt/python@3.12/Frameworks/Python.framework/Versions/3.12/lib/libpython3.12.dylib",
-                "/opt/homebrew/opt/python@3.11/Frameworks/Python.framework/Versions/3.11/lib/libpython3.11.dylib",
-                "/usr/local/opt/python@3.12/Frameworks/Python.framework/Versions/3.12/lib/libpython3.12.dylib",
-                "/usr/local/opt/python@3.11/Frameworks/Python.framework/Versions/3.11/lib/libpython3.11.dylib",
+                // Homebrew Intel
+                "/usr/local/bin/python3",
+                "/usr/local/opt/python@3.14/bin/python3.14",
+                "/usr/local/opt/python@3.13/bin/python3.13",
+                "/usr/local/opt/python@3.12/bin/python3.12",
+                // Homebrew ARM (Apple Silicon)
+                "/opt/homebrew/bin/python3",
+                "/opt/homebrew/opt/python@3.14/bin/python3.14",
+                "/opt/homebrew/opt/python@3.13/bin/python3.13",
+                "/opt/homebrew/opt/python@3.12/bin/python3.12",
             };
             
             foreach (var path in paths)
             {
                 if (File.Exists(path)) return path;
             }
+            
+            return "python3"; // Fallback to PATH
         }
         else // Linux
         {
             var paths = new[]
             {
-                "/usr/lib/x86_64-linux-gnu/libpython3.12.so",
-                "/usr/lib/x86_64-linux-gnu/libpython3.11.so",
-                "/usr/lib/x86_64-linux-gnu/libpython3.10.so",
-                "/usr/lib/libpython3.12.so",
-                "/usr/lib/libpython3.11.so",
+                "/usr/bin/python3",
+                "/usr/bin/python3.14",
+                "/usr/bin/python3.13",
+                "/usr/bin/python3.12",
             };
             
             foreach (var path in paths)
             {
                 if (File.Exists(path)) return path;
             }
+            
+            return "python3"; // Fallback to PATH
         }
-
-        throw new FileNotFoundException("Could not find Python DLL. Please set Python:DllPath in configuration.");
+    }
+    
+    private static string GetDefaultMcpServerPath()
+    {
+        // Try to find the MCP server DLL relative to the application
+        var possiblePaths = new[]
+        {
+            Path.Combine(AppContext.BaseDirectory, "UTXO E-Mail Agent McpServer.dll"),
+            Path.Combine(AppContext.BaseDirectory, "..", "UTXO E-Mail Agent McpServer", "bin", "Debug", "net9.0", "UTXO E-Mail Agent McpServer.dll"),
+            Path.Combine(AppContext.BaseDirectory, "..", "UTXO E-Mail Agent McpServer", "bin", "Release", "net9.0", "UTXO E-Mail Agent McpServer.dll"),
+        };
+        
+        foreach (var path in possiblePaths)
+        {
+            var fullPath = Path.GetFullPath(path);
+            if (File.Exists(fullPath))
+                return fullPath;
+        }
+        
+        // Fallback to relative path
+        return Path.Combine(AppContext.BaseDirectory, "UTXO E-Mail Agent McpServer.dll");
     }
 
-    private void InitializePython()
+    /// <summary>
+    /// Installs skills into the conversation working directory.
+    /// The SDK looks for skills in .claude/skills/ relative to the working directory.
+    /// ZIP files are extracted, MD files are copied directly.
+    /// </summary>
+    private void InstallSkillsToWorkingDirectory(Agent agent, string convWorkDir)
     {
-        lock (_initLock)
+        if (agent.Skills == null || agent.Skills.Count == 0)
         {
-            if (_pythonInitialized) return;
+            Logger.Log($"[ClaudeCode] No skills to install for agent {agent.Id}", agent.Id);
+            return;
+        }
+
+        // Create .claude/skills/ directory in the conversation working directory
+        var localSkillsDir = Path.Combine(convWorkDir, ".claude", "skills");
+        Directory.CreateDirectory(localSkillsDir);
+        
+        Logger.Log($"[ClaudeCode] Installing {agent.Skills.Count} skill(s) to {localSkillsDir}", agent.Id);
+
+        foreach (var skill in agent.Skills)
+        {
+            if (skill.Skillfiles == null || skill.Skillfiles.Length == 0)
+            {
+                Logger.Log($"[ClaudeCode] Skill '{skill.Skillname}' has no files, skipping", agent.Id);
+                continue;
+            }
+
+            var skillDir = Path.Combine(localSkillsDir, skill.Skillname);
 
             try
             {
-                Runtime.PythonDLL = _pythonDll;
-                PythonEngine.Initialize();
-                _pythonInitialized = true;
-                Logger.Log($"[ClaudeCode] Python initialized with DLL: {_pythonDll}");
+                // Create skill directory
+                Directory.CreateDirectory(skillDir);
+
+                if (skill.Filetype?.ToLower() == "zip")
+                {
+                    // Extract ZIP file
+                    using var zipStream = new MemoryStream(skill.Skillfiles);
+                    using var archive = new ZipArchive(zipStream, ZipArchiveMode.Read);
+                    
+                    // Detect if ZIP has a root folder that matches skill name (common pattern)
+                    // If so, we need to strip it to avoid: skills/review-summarizer/review-summarizer/SKILL.md
+                    var rootFolder = "";
+                    var firstEntry = archive.Entries.FirstOrDefault(e => !string.IsNullOrEmpty(e.Name));
+                    if (firstEntry != null && firstEntry.FullName.Contains('/'))
+                    {
+                        var potentialRoot = firstEntry.FullName.Split('/')[0];
+                        // Check if all entries start with this root folder
+                        if (archive.Entries.All(e => string.IsNullOrEmpty(e.FullName) || e.FullName.StartsWith(potentialRoot + "/")))
+                        {
+                            rootFolder = potentialRoot + "/";
+                            Logger.Log($"[ClaudeCode] Detected root folder in ZIP: '{potentialRoot}', stripping it", agent.Id);
+                        }
+                    }
+                    
+                    foreach (var entry in archive.Entries)
+                    {
+                        if (string.IsNullOrEmpty(entry.Name)) continue; // Skip directories
+                        
+                        // Strip root folder from path if present
+                        var relativePath = entry.FullName;
+                        if (!string.IsNullOrEmpty(rootFolder) && relativePath.StartsWith(rootFolder))
+                        {
+                            relativePath = relativePath.Substring(rootFolder.Length);
+                        }
+                        
+                        if (string.IsNullOrEmpty(relativePath)) continue;
+                        
+                        var entryPath = Path.Combine(skillDir, relativePath);
+                        var entryDir = Path.GetDirectoryName(entryPath);
+                        if (!string.IsNullOrEmpty(entryDir))
+                        {
+                            Directory.CreateDirectory(entryDir);
+                        }
+                        
+                        entry.ExtractToFile(entryPath, overwrite: true);
+                    }
+                    
+                    Logger.Log($"[ClaudeCode] Extracted ZIP skill '{skill.Skillname}' to {skillDir}", agent.Id);
+                }
+                else
+                {
+                    // Single MD file - write directly as SKILL.md
+                    var skillMdPath = Path.Combine(skillDir, "SKILL.md");
+                    File.WriteAllBytes(skillMdPath, skill.Skillfiles);
+                    Logger.Log($"[ClaudeCode] Installed MD skill '{skill.Skillname}' to {skillMdPath}", agent.Id);
+                }
             }
             catch (Exception ex)
             {
-                Logger.LogError($"[ClaudeCode] Failed to initialize Python: {ex.Message}");
-                throw;
+                Logger.LogError($"[ClaudeCode] Failed to install skill '{skill.Skillname}': {ex.Message}", agent.Id);
             }
         }
+    }
+
+    /// <summary>
+    /// Registers the UTXO MCP Server in Claude Code's settings if the agent has MCP servers configured.
+    /// </summary>
+    private void RegisterMcpServerIfNeeded(Agent agent)
+    {
+        if (agent.Mcpservers == null || agent.Mcpservers.Count == 0)
+        {
+            return;
+        }
+
+        lock (_mcpLock)
+        {
+            if (_mcpServerRegistered)
+            {
+                return;
+            }
+
+            try
+            {
+                var claudeDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".claude");
+                var settingsPath = Path.Combine(claudeDir, "settings.json");
+                
+                Directory.CreateDirectory(claudeDir);
+
+                // Read existing settings or create new
+                Dictionary<string, object>? settings = null;
+                if (File.Exists(settingsPath))
+                {
+                    var existingJson = File.ReadAllText(settingsPath);
+                    settings = System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, object>>(existingJson);
+                }
+                settings ??= new Dictionary<string, object>();
+
+                // Get or create mcpServers section
+                Dictionary<string, object> mcpServers;
+                if (settings.TryGetValue("mcpServers", out var existing) && existing is System.Text.Json.JsonElement jsonElement)
+                {
+                    mcpServers = System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, object>>(jsonElement.GetRawText()) 
+                                 ?? new Dictionary<string, object>();
+                }
+                else
+                {
+                    mcpServers = new Dictionary<string, object>();
+                }
+
+                // Add our MCP server if not already present
+                const string serverName = "utxo-http";
+                if (!mcpServers.ContainsKey(serverName))
+                {
+                    mcpServers[serverName] = new Dictionary<string, object>
+                    {
+                        { "command", "dotnet" },
+                        { "args", new[] { _mcpServerPath } }
+                    };
+
+                    settings["mcpServers"] = mcpServers;
+
+                    // Write back settings
+                    var options = new System.Text.Json.JsonSerializerOptions 
+                    { 
+                        WriteIndented = true 
+                    };
+                    var json = System.Text.Json.JsonSerializer.Serialize(settings, options);
+                    File.WriteAllText(settingsPath, json);
+
+                    Logger.Log($"[ClaudeCode] Registered MCP server 'utxo-http' in {settingsPath}", agent.Id);
+                }
+                else
+                {
+                    Logger.Log($"[ClaudeCode] MCP server 'utxo-http' already registered", agent.Id);
+                }
+
+                _mcpServerRegistered = true;
+            }
+            catch (Exception ex)
+            {
+                Logger.LogError($"[ClaudeCode] Failed to register MCP server: {ex.Message}", agent.Id);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Builds documentation for available API endpoints from the agent's MCP servers.
+    /// This is added to the system prompt so Claude knows which APIs to call.
+    /// </summary>
+    private static string BuildApiDocumentation(Agent agent)
+    {
+        if (agent.Mcpservers == null || agent.Mcpservers.Count == 0)
+        {
+            return string.Empty;
+        }
+
+        var sb = new StringBuilder();
+        sb.AppendLine("\n\n--- AVAILABLE HTTP APIS ---");
+        sb.AppendLine("You can use the 'http_request' tool to call these APIs:");
+        sb.AppendLine();
+
+        foreach (var mcp in agent.Mcpservers)
+        {
+            sb.AppendLine($"### {mcp.Name}");
+            sb.AppendLine($"- **Method**: {mcp.Call.ToUpper()}");
+            sb.AppendLine($"- **URL**: {mcp.Url}");
+            if (!string.IsNullOrEmpty(mcp.Description))
+            {
+                sb.AppendLine($"- **Description**: {mcp.Description}");
+            }
+            if (!string.IsNullOrEmpty(mcp.Bearer))
+            {
+                sb.AppendLine($"- **Authorization**: Bearer token required (use header: {{\"Authorization\": \"Bearer {mcp.Bearer}\"}})");
+            }
+            sb.AppendLine();
+        }
+
+        sb.AppendLine("Use the http_request tool with the appropriate URL, method, body, and headers.");
+        sb.AppendLine("--- END AVAILABLE HTTP APIS ---");
+
+        return sb.ToString();
     }
 
     public async Task<AiResponseClass> GenerateResponse(
@@ -118,13 +352,37 @@ public class ClaudeCodeClass : IAiProvider
         List<Conversation>? conversationHistory = null)
     {
         Logger.Log($"[ClaudeCode] Processing email: {mailClass.Subject}", agent.Id);
+        
+        // Register MCP server if agent has API endpoints configured
+        RegisterMcpServerIfNeeded(agent);
 
         try
         {
-            InitializePython();
-
+            // Create a unique working directory for this conversation
+            var convWorkDir = Path.Combine(_workingDirectory, $"conv_{conversation.Id}");
+            Directory.CreateDirectory(convWorkDir);
+            
+            // Create output directory for generated files (PDF, HTML, etc.)
+            var outputDir = Path.Combine(convWorkDir, "output");
+            Directory.CreateDirectory(outputDir);
+            
+            // Install skills into the conversation working directory
+            // The SDK looks for skills in .claude/skills/ relative to the working directory
+            InstallSkillsToWorkingDirectory(agent, convWorkDir);
+            
             // Build conversation history into system prompt if available
             var fullSystemPrompt = systemPrompt;
+            
+            // Add file output instruction with ABSOLUTE path - Claude ignores relative paths
+            fullSystemPrompt += "\n\n--- WICHTIG: DATEI-AUSGABE ---\n";
+            fullSystemPrompt += $"Wenn du Dateien erstellst (HTML, PDF, Bilder, etc.), speichere sie IMMER im Verzeichnis: {outputDir}\n";
+            fullSystemPrompt += $"Beispiel: '{Path.Combine(outputDir, "report.html")}', '{Path.Combine(outputDir, "report.pdf")}'\n";
+            fullSystemPrompt += "Nur Dateien in diesem Verzeichnis werden als E-Mail-Anhänge erkannt und versendet.\n";
+            fullSystemPrompt += "--- ENDE DATEI-AUSGABE ---\n";
+            
+            // Add API documentation if agent has MCP servers
+            fullSystemPrompt += BuildApiDocumentation(agent);
+            
             if (conversationHistory != null && conversationHistory.Count > 0)
             {
                 fullSystemPrompt += "\n\n--- CONVERSATION HISTORY ---\n";
@@ -142,36 +400,89 @@ public class ClaudeCodeClass : IAiProvider
                 Logger.Log($"[ClaudeCode] Added {conversationHistory.Count} previous conversations to context", agent.Id);
             }
 
-            // Create a unique working directory for this conversation
-            var convWorkDir = Path.Combine(_workingDirectory, $"conv_{conversation.Id}");
-            Directory.CreateDirectory(convWorkDir);
-
-            string resultJson;
-            
-            using (Py.GIL())
+            // Prepare input data as JSON file (easier than command line args for large data)
+            var inputData = new
             {
-                // Add script path to Python path
-                dynamic sys = Py.Import("sys");
-                sys.path.append(_pythonScriptPath);
+                system_prompt = fullSystemPrompt,
+                user_prompt = prompt,
+                email_subject = mailClass.Subject ?? "(No Subject)",
+                email_text = mailClass.Text ?? "",
+                email_html = mailClass.Html,
+                email_from = mailClass.From ?? "(Unknown)",
+                working_directory = convWorkDir,
+                max_turns = 20,
+                use_mcp_tools = agent.Mcpservers != null && agent.Mcpservers.Count > 0
+            };
 
-                // Import our runner module
-                dynamic runner = Py.Import("claude_agent_runner");
+            var inputJsonPath = Path.Combine(convWorkDir, "input.json");
+            var inputJson = JsonConvert.SerializeObject(inputData, Formatting.Indented);
+            await File.WriteAllTextAsync(inputJsonPath, inputJson);
 
-                // Call the email agent function
-                resultJson = runner.run_email_agent(
-                    fullSystemPrompt,
-                    prompt,
-                    mailClass.Subject ?? "(No Subject)",
-                    mailClass.Text ?? "",
-                    mailClass.Html,
-                    mailClass.From ?? "(Unknown)",
-                    convWorkDir,
-                    20,  // max_turns
-                    _apiKey
-                );
+            var scriptPath = Path.Combine(_pythonScriptPath, "claude_agent_runner.py");
+            
+            Logger.Log($"[ClaudeCode] Running Python script: {_pythonPath} {scriptPath}", agent.Id);
+            Logger.Log($"[ClaudeCode] Input file: {inputJsonPath}", agent.Id);
+
+            // Run Python script as subprocess
+            var psi = new ProcessStartInfo
+            {
+                FileName = _pythonPath,
+                Arguments = $"\"{scriptPath}\" \"{inputJsonPath}\"",
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false,
+                CreateNoWindow = true,
+                WorkingDirectory = convWorkDir,
+            };
+
+            var outputBuilder = new StringBuilder();
+            var errorBuilder = new StringBuilder();
+
+            using var process = Process.Start(psi);
+            if (process == null)
+            {
+                throw new Exception("Failed to start Python process");
             }
 
-            Logger.Log($"[ClaudeCode] Received response from Python", agent.Id);
+            // Read output and error streams
+            var outputTask = Task.Run(async () =>
+            {
+                while (!process.StandardOutput.EndOfStream)
+                {
+                    var line = await process.StandardOutput.ReadLineAsync();
+                    if (line != null)
+                    {
+                        outputBuilder.AppendLine(line);
+                    }
+                }
+            });
+
+            var errorTask = Task.Run(async () =>
+            {
+                while (!process.StandardError.EndOfStream)
+                {
+                    var line = await process.StandardError.ReadLineAsync();
+                    if (line != null)
+                    {
+                        errorBuilder.AppendLine(line);
+                        Logger.Log($"[ClaudeCode][stderr] {line}", agent.Id);
+                    }
+                }
+            });
+
+            await process.WaitForExitAsync();
+            await Task.WhenAll(outputTask, errorTask);
+
+            var resultJson = outputBuilder.ToString().Trim();
+            
+            Logger.Log($"[ClaudeCode] Process exited with code: {process.ExitCode}", agent.Id);
+
+            if (process.ExitCode != 0)
+            {
+                var errorMsg = errorBuilder.ToString();
+                Logger.LogError($"[ClaudeCode] Python script failed: {errorMsg}", agent.Id);
+                throw new Exception($"Python script failed with exit code {process.ExitCode}: {errorMsg}");
+            }
 
             // Parse the Python response
             var pythonResult = JsonConvert.DeserializeObject<ClaudeCodePythonResponse>(resultJson);
@@ -203,6 +514,14 @@ public class ClaudeCodeClass : IAiProvider
 
             // Store full response for conversation history
             responseClass.FullResponse = pythonResult.FullResponse ?? pythonResult.ResponseText;
+            
+            // Store cost, duration and token usage
+            responseClass.AiCostUsd = pythonResult.TotalCostUsd;
+            responseClass.AiDurationMs = pythonResult.TotalDurationMs;
+            responseClass.AiInputTokens = pythonResult.TotalInputTokens;
+            responseClass.AiOutputTokens = pythonResult.TotalOutputTokens;
+            
+            Logger.Log($"[ClaudeCode] Cost: ${pythonResult.TotalCostUsd:F4}, Duration: {pythonResult.TotalDurationMs}ms, Tokens: {pythonResult.TotalInputTokens} in / {pythonResult.TotalOutputTokens} out", agent.Id);
 
             // Process any files created by Claude Code
             if (pythonResult.FilesCreated != null && pythonResult.FilesCreated.Count > 0)
@@ -231,27 +550,28 @@ public class ClaudeCodeClass : IAiProvider
                         }
                         catch (Exception ex)
                         {
-                            Logger.LogWarning($"[ClaudeCode] Could not read file {filePath}: {ex.Message}", agent.Id);
+                            Logger.LogError($"[ClaudeCode] Failed to read file {filePath}: {ex.Message}", agent.Id);
                         }
                     }
                 }
-
+                
                 responseClass.Attachments = attachments.ToArray();
             }
 
-            // Cleanup working directory (optional - keep for debugging)
-            // Directory.Delete(convWorkDir, true);
+            // Cleanup input file
+            try { File.Delete(inputJsonPath); } catch { /* ignore */ }
 
+            Logger.Log($"[ClaudeCode] Response generated successfully", agent.Id);
             return responseClass;
         }
         catch (Exception ex)
         {
             Logger.LogError($"[ClaudeCode] Exception: {ex.Message}", agent.Id);
             Logger.LogError($"[ClaudeCode] Stack: {ex.StackTrace}", agent.Id);
-
+            
             var lang = GlobalFunctions.DetectLanguage(mailClass.Text) ?? agent.Defaultlanguage ?? "de";
             var (fallbackText, fallbackSubject) = GlobalFunctions.GetFallbackMessages(lang);
-
+            
             return new AiResponseClass
             {
                 EmailResponseText = fallbackText,
@@ -263,147 +583,92 @@ public class ClaudeCodeClass : IAiProvider
         }
     }
 
-    /// <summary>
-    /// Extracts JSON response from Claude Code output
-    /// </summary>
-    private static AiResponseClass ParseAiResponse(string fullText, string agentDefaultLanguage, string? emailText)
+    private AiResponseClass ParseAiResponse(string fullResponse, string? defaultLanguage, string? emailText)
     {
-        Logger.Log($"[ClaudeCode.ParseAiResponse] Parsing response ({fullText?.Length ?? 0} characters)");
-
-        if (string.IsNullOrWhiteSpace(fullText))
+        // Try to extract structured response from the full response
+        var responseClass = new AiResponseClass
         {
-            var lang = GlobalFunctions.DetectLanguage(emailText) ?? agentDefaultLanguage ?? "de";
-            var (fallbackText, fallbackSubject) = GlobalFunctions.GetFallbackMessages(lang);
-            return new AiResponseClass
-            {
-                EmailResponseText = fallbackText,
-                EmailResponseSubject = fallbackSubject,
-                EmailResponseHtml = $"<p>{System.Web.HttpUtility.HtmlEncode(fallbackText)}</p>",
-                Attachments = Array.Empty<Attachment>()
-            };
-        }
+            Attachments = Array.Empty<Attachment>()
+        };
 
-        try
+        // Look for EMAIL_RESPONSE markers
+        var responseMatch = Regex.Match(fullResponse, @"<EMAIL_RESPONSE>([\s\S]*?)</EMAIL_RESPONSE>", RegexOptions.IgnoreCase);
+        if (responseMatch.Success)
         {
-            // Try to find JSON block in response
-            var jsonPatterns = new[]
+            var emailContent = responseMatch.Groups[1].Value.Trim();
+            
+            // Extract subject
+            var subjectMatch = Regex.Match(emailContent, @"<SUBJECT>([\s\S]*?)</SUBJECT>", RegexOptions.IgnoreCase);
+            if (subjectMatch.Success)
             {
-                @"```json\s*([\s\S]*?)\s*```",
-                @"```JSON\s*([\s\S]*?)\s*```",
-                @"```\s*\n?\s*(\{[\s\S]*?\})\s*```",
-            };
-
-            foreach (var pattern in jsonPatterns)
-            {
-                var match = Regex.Match(fullText, pattern, RegexOptions.IgnoreCase);
-                if (match.Success)
-                {
-                    var jsonContent = match.Groups[1].Value.Trim();
-                    try
-                    {
-                        var parsed = JsonConvert.DeserializeObject<AiResponseClass>(jsonContent);
-                        if (parsed != null && !string.IsNullOrEmpty(parsed.EmailResponseText))
-                        {
-                            var matchIndex = fullText.IndexOf(match.Value, StringComparison.Ordinal);
-                            if (matchIndex > 0)
-                            {
-                                parsed.AiExplanation = fullText[..matchIndex].Trim();
-                            }
-                            return parsed;
-                        }
-                    }
-                    catch { /* Continue to next pattern */ }
-                }
+                responseClass.EmailResponseSubject = subjectMatch.Groups[1].Value.Trim();
             }
-
-            // Fallback: try to find raw JSON object
-            var lastBrace = fullText.LastIndexOf('}');
-            if (lastBrace >= 0)
+            
+            // Extract body
+            var bodyMatch = Regex.Match(emailContent, @"<BODY>([\s\S]*?)</BODY>", RegexOptions.IgnoreCase);
+            if (bodyMatch.Success)
             {
-                var depth = 0;
-                for (int i = lastBrace; i >= 0; i--)
-                {
-                    if (fullText[i] == '}') depth++;
-                    else if (fullText[i] == '{') depth--;
-
-                    if (depth == 0)
-                    {
-                        var jsonCandidate = fullText[i..(lastBrace + 1)];
-                        try
-                        {
-                            var parsed = JsonConvert.DeserializeObject<AiResponseClass>(jsonCandidate);
-                            if (parsed != null && !string.IsNullOrEmpty(parsed.EmailResponseText))
-                            {
-                                parsed.AiExplanation = fullText[..i].Trim();
-                                return parsed;
-                            }
-                        }
-                        catch { /* Not valid JSON */ }
-                    }
-                }
+                responseClass.EmailResponseText = bodyMatch.Groups[1].Value.Trim();
             }
-
-            // Ultimate fallback
-            var fallbackLang = GlobalFunctions.DetectLanguage(emailText) ?? agentDefaultLanguage ?? "de";
-            var (fallbackText, fallbackSubject) = GlobalFunctions.GetFallbackMessages(fallbackLang);
-            return new AiResponseClass
+            else
             {
-                EmailResponseText = fallbackText,
-                EmailResponseSubject = fallbackSubject,
-                EmailResponseHtml = $"<p>{System.Web.HttpUtility.HtmlEncode(fallbackText)}</p>",
-                Attachments = Array.Empty<Attachment>(),
-                AiExplanation = $"[Parse Error] Could not extract JSON. Raw: {fullText[..Math.Min(500, fullText.Length)]}..."
-            };
-        }
-        catch (Exception ex)
-        {
-            var lang = GlobalFunctions.DetectLanguage(emailText) ?? agentDefaultLanguage ?? "de";
-            var (fallbackText, fallbackSubject) = GlobalFunctions.GetFallbackMessages(lang);
-            return new AiResponseClass
-            {
-                EmailResponseText = fallbackText,
-                EmailResponseSubject = fallbackSubject,
-                EmailResponseHtml = $"<p>{System.Web.HttpUtility.HtmlEncode(fallbackText)}</p>",
-                Attachments = Array.Empty<Attachment>(),
-                AiExplanation = $"[Parse Exception] {ex.Message}"
-            };
-        }
-    }
-
-    /// <summary>
-    /// Shutdown Python engine (call on application exit)
-    /// </summary>
-    public static void Shutdown()
-    {
-        lock (_initLock)
-        {
-            if (_pythonInitialized)
-            {
-                PythonEngine.Shutdown();
-                _pythonInitialized = false;
-                Logger.Log("[ClaudeCode] Python engine shutdown");
+                // If no BODY tag, use the content without SUBJECT
+                responseClass.EmailResponseText = Regex.Replace(emailContent, @"<SUBJECT>[\s\S]*?</SUBJECT>", "", RegexOptions.IgnoreCase).Trim();
             }
         }
+        else
+        {
+            // No structured response, use the full response
+            responseClass.EmailResponseText = fullResponse;
+            responseClass.EmailResponseSubject = "Re: Your inquiry";
+        }
+
+        // Generate HTML from text
+        if (!string.IsNullOrEmpty(responseClass.EmailResponseText))
+        {
+            responseClass.EmailResponseHtml = $"<p>{System.Web.HttpUtility.HtmlEncode(responseClass.EmailResponseText).Replace("\n", "<br/>")}</p>";
+        }
+
+        // Extract explanation if present
+        var explanationMatch = Regex.Match(fullResponse, @"<EXPLANATION>([\s\S]*?)</EXPLANATION>", RegexOptions.IgnoreCase);
+        if (explanationMatch.Success)
+        {
+            responseClass.AiExplanation = explanationMatch.Groups[1].Value.Trim();
+        }
+
+        return responseClass;
     }
 }
 
 /// <summary>
-/// Response structure from Python claude_agent_runner
+/// Response structure from the Python Claude Code runner
 /// </summary>
-internal class ClaudeCodePythonResponse
+public class ClaudeCodePythonResponse
 {
     [JsonProperty("success")]
     public bool Success { get; set; }
-
+    
     [JsonProperty("response_text")]
     public string? ResponseText { get; set; }
-
+    
     [JsonProperty("full_response")]
     public string? FullResponse { get; set; }
-
+    
     [JsonProperty("files_created")]
     public List<string>? FilesCreated { get; set; }
-
+    
+    [JsonProperty("total_cost_usd")]
+    public decimal TotalCostUsd { get; set; }
+    
+    [JsonProperty("total_duration_ms")]
+    public long TotalDurationMs { get; set; }
+    
+    [JsonProperty("total_input_tokens")]
+    public long TotalInputTokens { get; set; }
+    
+    [JsonProperty("total_output_tokens")]
+    public long TotalOutputTokens { get; set; }
+    
     [JsonProperty("error")]
     public string? Error { get; set; }
 }

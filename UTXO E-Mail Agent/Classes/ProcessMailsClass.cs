@@ -78,6 +78,10 @@ public class ProcessMailsClass(DefaultdbContext db, IConfiguration configuration
         conversation.Agentresponsesubject = response.EmailResponseSubject;
         conversation.Aiexplanation = response.AiExplanation;
         conversation.Aifullresponse = response.FullResponse;
+        conversation.Aicostusd = response.AiCostUsd;
+        conversation.Aidurationms = response.AiDurationMs;
+        conversation.Aiinputtokens = response.AiInputTokens;
+        conversation.Aioutputtokens = response.AiOutputTokens;
 
         foreach (var attachment in response.Attachments.OrEmptyIfNull())
         {

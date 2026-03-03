@@ -76,6 +76,11 @@ public class ClaudeClass : IAiProvider
 
     public async Task<AiResponseClass> GenerateResponse(string systemPrompt, string prompt, MailClass mailClass, Agent agent, Conversation conversation, List<Conversation>? conversationHistory = null)
     {
+        // Start tracking duration and tokens
+        var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+        long totalInputTokens = 0;
+        long totalOutputTokens = 0;
+        
         var httpClient = new HttpClient
         {
             Timeout = TimeSpan.FromMinutes(10)
@@ -298,6 +303,13 @@ public class ClaudeClass : IAiProvider
         {
             Logger.Log($"[Skill Download] Iteration {iteration}: Starting download (model: {parameters.Model})", agent.Id);
             response = await ExecuteWithRetryAsync(client, parameters, agent.Id);
+            
+            // Track token usage from this response
+            if (response.Usage != null)
+            {
+                totalInputTokens += response.Usage.InputTokens;
+                totalOutputTokens += response.Usage.OutputTokens;
+            }
 
             // Download skill files after EACH iteration (before response gets overwritten)
             try
@@ -635,7 +647,37 @@ public class ClaudeClass : IAiProvider
             responseClass.Attachments = validAttachments;
         }
 
+        // Stop tracking and set usage metrics
+        stopwatch.Stop();
+        responseClass.AiDurationMs = stopwatch.ElapsedMilliseconds;
+        responseClass.AiInputTokens = totalInputTokens;
+        responseClass.AiOutputTokens = totalOutputTokens;
+        responseClass.AiCostUsd = CalculateCost(agent.Aimodel ?? "claude-sonnet-4-20250514", totalInputTokens, totalOutputTokens);
+        
+        Logger.Log($"[Claude API] Cost: ${responseClass.AiCostUsd:F4}, Duration: {responseClass.AiDurationMs}ms, Tokens: {totalInputTokens} in / {totalOutputTokens} out", agent.Id);
+
         return responseClass;
+    }
+    
+    /// <summary>
+    /// Calculate cost based on model pricing (per million tokens)
+    /// Prices as of March 2026
+    /// </summary>
+    private static decimal CalculateCost(string model, long inputTokens, long outputTokens)
+    {
+        // Pricing per million tokens (input, output)
+        var (inputPrice, outputPrice) = model.ToLower() switch
+        {
+            var m when m.Contains("opus") => (15.00m, 75.00m),      // Claude Opus 4
+            var m when m.Contains("sonnet") => (3.00m, 15.00m),     // Claude Sonnet 4
+            var m when m.Contains("haiku") => (0.25m, 1.25m),       // Claude Haiku 3.5
+            _ => (3.00m, 15.00m)                                      // Default to Sonnet pricing
+        };
+        
+        var inputCost = (inputTokens / 1_000_000m) * inputPrice;
+        var outputCost = (outputTokens / 1_000_000m) * outputPrice;
+        
+        return inputCost + outputCost;
     }
 
     /// <summary>

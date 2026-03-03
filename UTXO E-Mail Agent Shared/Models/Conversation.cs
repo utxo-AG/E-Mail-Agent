@@ -35,6 +35,14 @@ public partial class Conversation
 
     public string? Aifullresponse { get; set; }
 
+    public decimal? Aicostusd { get; set; }
+
+    public long? Aidurationms { get; set; }
+
+    public long? Aiinputtokens { get; set; }
+
+    public long? Aioutputtokens { get; set; }
+
     public virtual Agent Agent { get; set; } = null!;
 
     public virtual ICollection<ConversationAttachment> ConversationAttachments { get; set; } = new List<ConversationAttachment>();

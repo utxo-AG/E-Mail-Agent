@@ -120,28 +120,40 @@ public class SkillUploadService
         return new SkillValidationResult 
         { 
             IsValid = true,
-            Info = frontmatterValidation.Info
+            Info = frontmatterValidation.Info,
+            ExtractedSkillName = frontmatterValidation.ExtractedSkillName
         };
     }
 
     private SkillValidationResult ValidateFrontmatter(string content)
     {
         // Check if file starts with frontmatter (---)
+        // Frontmatter MUST be at the very beginning of the file
+        if (!content.TrimStart().StartsWith("---"))
+        {
+            return new SkillValidationResult 
+            { 
+                IsValid = false,
+                ErrorMessage = "SKILL.md muss mit YAML Frontmatter beginnen (---). " +
+                              "Beispiel:\n---\nname: skill-name\ndescription: Skill description\n---"
+            };
+        }
+        
         var frontmatterMatch = Regex.Match(content, @"^---\s*\n([\s\S]*?)\n---", RegexOptions.Multiline);
         
         if (!frontmatterMatch.Success)
         {
-            // No frontmatter is OK, but we'll note it
             return new SkillValidationResult 
             { 
-                IsValid = true,
-                Info = "Kein Frontmatter gefunden (optional)"
+                IsValid = false,
+                ErrorMessage = "Ungültiges Frontmatter-Format. Das Frontmatter muss mit --- beginnen und enden."
             };
         }
 
         var frontmatterContent = frontmatterMatch.Groups[1].Value;
         var invalidKeys = new List<string>();
         var foundKeys = new List<string>();
+        string? extractedName = null;
 
         // Parse YAML-like frontmatter (simple key: value pairs)
         var lines = frontmatterContent.Split('\n');
@@ -152,11 +164,19 @@ public class SkillUploadService
                 continue;
 
             // Match top-level keys (not indented)
-            var keyMatch = Regex.Match(line, @"^([a-zA-Z_-]+)\s*:");
+            var keyMatch = Regex.Match(line, @"^([a-zA-Z_-]+)\s*:\s*(.*)$");
             if (keyMatch.Success)
             {
                 var key = keyMatch.Groups[1].Value;
+                var value = keyMatch.Groups[2].Value.Trim();
                 foundKeys.Add(key);
+                
+                // Extract the skill name
+                if (key.Equals("name", StringComparison.OrdinalIgnoreCase))
+                {
+                    // Remove quotes if present
+                    extractedName = value.Trim('"', '\'', ' ');
+                }
                 
                 if (!AllowedFrontmatterKeys.Contains(key))
                 {
@@ -175,10 +195,35 @@ public class SkillUploadService
             };
         }
 
+        // Required keys: name and description
+        var requiredKeys = new[] { "name", "description" };
+        var missingKeys = requiredKeys.Where(k => !foundKeys.Any(fk => fk.Equals(k, StringComparison.OrdinalIgnoreCase))).ToList();
+        
+        if (missingKeys.Any())
+        {
+            return new SkillValidationResult 
+            { 
+                IsValid = false,
+                ErrorMessage = $"Erforderliche Frontmatter-Keys fehlen: '{string.Join("', '", missingKeys)}'. " +
+                              "Jeder Skill benötigt mindestens 'name' und 'description'."
+            };
+        }
+
+        // Validate extracted name format
+        if (string.IsNullOrWhiteSpace(extractedName))
+        {
+            return new SkillValidationResult 
+            { 
+                IsValid = false,
+                ErrorMessage = "Der 'name' Wert im Frontmatter ist leer."
+            };
+        }
+
         return new SkillValidationResult 
         { 
             IsValid = true,
-            Info = $"Frontmatter OK ({string.Join(", ", foundKeys)})"
+            Info = $"Frontmatter OK ({string.Join(", ", foundKeys)})",
+            ExtractedSkillName = extractedName
         };
     }
 
@@ -258,7 +303,8 @@ public class SkillUploadService
             return new SkillValidationResult 
             { 
                 IsValid = true,
-                Info = $"ZIP enthält {archive.Entries.Count} Datei(en), SKILL.md gefunden. {frontmatterValidation.Info}"
+                Info = $"ZIP enthält {archive.Entries.Count} Datei(en), SKILL.md gefunden. {frontmatterValidation.Info}",
+                ExtractedSkillName = frontmatterValidation.ExtractedSkillName
             };
         }
         catch (InvalidDataException)
@@ -374,4 +420,5 @@ public class SkillValidationResult
     public string? ErrorMessage { get; set; }
     public string? Info { get; set; }
     public bool Warning { get; set; }  // True if validation passed but with warnings
+    public string? ExtractedSkillName { get; set; }  // Name extracted from frontmatter
 }
