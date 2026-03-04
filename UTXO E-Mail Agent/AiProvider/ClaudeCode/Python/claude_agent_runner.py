@@ -15,12 +15,10 @@ try:
         AssistantMessage,
         ClaudeAgentOptions,
         ClaudeSDKClient,
-        PermissionResultAllow,
         ResultMessage,
         TextBlock,
         ToolUseBlock,
         ToolResultBlock,
-        ToolPermissionContext,
         UserMessage,
         SystemMessage,
     )
@@ -41,31 +39,6 @@ def log(msg: str):
     print(msg, file=sys.stderr, flush=True)
 
 
-async def allow_all_tools(
-    tool_name: str,
-    input_data: dict,
-    context: ToolPermissionContext
-) -> PermissionResultAllow:
-    """
-    Permission callback that allows all tools automatically.
-    This prevents Claude Code from prompting for interactive permission.
-    Also logs tool usage for debugging.
-    """
-    # Log tool usage
-    tool_usage_log.append({
-        "tool": tool_name,
-        "input": input_data
-    })
-    
-    log(f"[Permission] Allowing tool: {tool_name}")
-    
-    # Log full input for file/bash operations
-    if tool_name in ["Write", "Edit", "Bash", "MultiEdit"]:
-        log(f"[Permission] Tool input: {json.dumps(input_data, indent=2, default=str)}")
-    
-    return PermissionResultAllow()
-
-
 async def run_email_agent_async(
     system_prompt: str,
     user_prompt: str,
@@ -75,11 +48,13 @@ async def run_email_agent_async(
     email_from: str,
     working_directory: str,
     max_turns: int = 20,
-    use_mcp_tools: bool = False
+    model: Optional[str] = None
 ) -> dict:
     """
     Run Claude Code agent to process an email and generate a response.
     Uses the API key stored by Claude Code CLI (in ~/.claude/).
+    
+    Supported models: claude-sonnet-4-20250514, claude-opus-4-5-20251101, etc.
     """
     
     # Build the full prompt
@@ -105,20 +80,14 @@ E-Mail HTML:
         
         # Build allowed tools list
         # Skills are loaded from ~/.claude/skills/ (global) or .claude/skills/ (project)
+        # Bash is always enabled - Claude uses curl for API calls with parameters from system prompt
         allowed_tools = ["Read", "Write", "Edit", "Bash", "WebFetch", "Glob", "Grep", "MultiEdit", "Skill"]
-        
-        # Add MCP tools if enabled (utxo-http server tools)
-        if use_mcp_tools:
-            allowed_tools.extend([
-                "mcp__utxo-http__call_api",
-                "mcp__utxo-http__list_apis"
-            ])
         
         log("=" * 60)
         log("[Config] Starting Claude Code session")
         log(f"[Config] Working directory: {working_directory}")
+        log(f"[Config] Model: {model or 'default'}")
         log(f"[Config] Allowed tools: {allowed_tools}")
-        log(f"[Config] MCP tools enabled: {use_mcp_tools}")
         log(f"[Config] Max turns: {max_turns}")
         
         # Check for skills in working directory
@@ -142,16 +111,16 @@ E-Mail HTML:
         log(full_prompt[:500] + "..." if len(full_prompt) > 500 else full_prompt)
         log("=" * 60)
         
-        # Configure Claude Agent options with permission callback
+        # Configure Claude Agent options
         # setting_sources is required to load Skills from filesystem!
         options = ClaudeAgentOptions(
             system_prompt=system_prompt,
             max_turns=max_turns,
             allowed_tools=allowed_tools,
             cwd=working_directory,
-            can_use_tool=allow_all_tools,
-            permission_mode="default",  # Use default mode with our callback
-            setting_sources=["user", "project"]  # Required to load Skills from ~/.claude/skills/ and .claude/skills/
+            permission_mode="default",
+            setting_sources=["user", "project"],  # Required to load Skills from ~/.claude/skills/ and .claude/skills/
+            model=model  # Pass model (e.g. claude-sonnet-4-20250514, claude-opus-4-5-20251101)
         )
         
         # Collect response parts
@@ -300,7 +269,7 @@ def run_email_agent(
     email_from: str,
     working_directory: str,
     max_turns: int = 20,
-    use_mcp_tools: bool = False
+    model: Optional[str] = None
 ) -> dict:
     """Synchronous wrapper for the async function."""
     return asyncio.run(run_email_agent_async(
@@ -312,7 +281,7 @@ def run_email_agent(
         email_from=email_from,
         working_directory=working_directory,
         max_turns=max_turns,
-        use_mcp_tools=use_mcp_tools
+        model=model
     ))
 
 
@@ -357,7 +326,7 @@ def main():
         email_from=input_data.get("email_from", ""),
         working_directory=input_data.get("working_directory", "."),
         max_turns=input_data.get("max_turns", 20),
-        use_mcp_tools=input_data.get("use_mcp_tools", False)
+        model=input_data.get("model")
     )
     
     log(f"[End] Success: {result['success']}")

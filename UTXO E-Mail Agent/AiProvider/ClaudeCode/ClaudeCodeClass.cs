@@ -370,32 +370,50 @@ public class ClaudeCodeClass : IAiProvider
 
         var sb = new StringBuilder();
         sb.AppendLine("\n\n--- VERFÜGBARE APIs ---");
-        sb.AppendLine("Du hast Zugriff auf folgende APIs. Verwende das Tool 'mcp__utxo-http__call_api' um sie aufzurufen.");
+        sb.AppendLine("Du hast Zugriff auf folgende APIs. Verwende curl via Bash um sie aufzurufen.");
         sb.AppendLine();
-        sb.AppendLine("Tool-Aufruf:");
-        sb.AppendLine($"  mcp__utxo-http__call_api(agent_id={agent.Id}, api_name=\"<name>\", data=\"<json>\")");
-        sb.AppendLine();
-        sb.AppendLine("Verfügbare APIs:");
 
-        foreach (var mcp in agent.Mcpservers)
+        foreach (var api in agent.Mcpservers)
         {
-            sb.AppendLine($"  - **{mcp.Name}** ({mcp.Call.ToUpper()}): {mcp.Description}");
+            sb.AppendLine($"### {api.Name}");
+            sb.AppendLine($"- **Beschreibung:** {api.Description}");
+            sb.AppendLine($"- **URL:** {api.Url}");
+            sb.AppendLine($"- **Methode:** {api.Call.ToUpper()}");
+            
+            // Build curl example
+            var curlCmd = new StringBuilder("curl -s");
+            
+            // Add method if not GET
+            if (!api.Call.Equals("GET", StringComparison.OrdinalIgnoreCase))
+            {
+                curlCmd.Append($" -X {api.Call.ToUpper()}");
+            }
+            
+            // Add Bearer token if present
+            if (!string.IsNullOrEmpty(api.Bearer))
+            {
+                sb.AppendLine($"- **Authentifizierung:** Bearer Token (bereits konfiguriert)");
+                curlCmd.Append($" -H \"Authorization: Bearer {api.Bearer}\"");
+            }
+            
+            // Add Content-Type for POST/PUT/PATCH
+            if (api.Call.Equals("POST", StringComparison.OrdinalIgnoreCase) ||
+                api.Call.Equals("PUT", StringComparison.OrdinalIgnoreCase) ||
+                api.Call.Equals("PATCH", StringComparison.OrdinalIgnoreCase))
+            {
+                curlCmd.Append(" -H \"Content-Type: application/json\"");
+                curlCmd.Append(" -d '<JSON_DATA>'");
+            }
+            
+            curlCmd.Append($" \"{api.Url}\"");
+            
+            sb.AppendLine($"- **curl-Befehl:**");
+            sb.AppendLine($"  ```");
+            sb.AppendLine($"  {curlCmd}");
+            sb.AppendLine($"  ```");
+            sb.AppendLine();
         }
 
-        sb.AppendLine();
-        sb.AppendLine("Beispiele:");
-        var firstApi = agent.Mcpservers.FirstOrDefault();
-        if (firstApi != null)
-        {
-            if (firstApi.Call.Equals("GET", StringComparison.OrdinalIgnoreCase))
-            {
-                sb.AppendLine($"  GET:  mcp__utxo-http__call_api(agent_id={agent.Id}, api_name=\"{firstApi.Name}\")");
-            }
-            else
-            {
-                sb.AppendLine($"  POST: mcp__utxo-http__call_api(agent_id={agent.Id}, api_name=\"{firstApi.Name}\", data=\"{{\\\"key\\\": \\\"value\\\"}}\")");
-            }
-        }
         sb.AppendLine("--- END VERFÜGBARE APIs ---");
 
         return sb.ToString();
@@ -469,7 +487,7 @@ public class ClaudeCodeClass : IAiProvider
                 email_from = mailClass.From ?? "(Unknown)",
                 working_directory = convWorkDir,
                 max_turns = 20,
-                use_mcp_tools = agent.Mcpservers != null && agent.Mcpservers.Count > 0
+                model = agent.Aimodel  // Pass model to Claude Code SDK
             };
 
             var inputJsonPath = Path.Combine(convWorkDir, "input.json");
