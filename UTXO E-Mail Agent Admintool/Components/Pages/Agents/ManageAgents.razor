@@ -54,6 +54,7 @@
     </ToolBarContent>
     <HeaderContent>
         <MudTh>Id</MudTh>
+        <MudTh>Agent Name</MudTh>
         <MudTh>Email Address</MudTh>
         <MudTh>Client</MudTh>
         <MudTh>State</MudTh>
@@ -65,6 +66,7 @@
 
     <RowTemplate>
         <MudTd>@context.Agent.Id</MudTd>
+        <MudTd>@context.Agent.Agentname</MudTd>
         <MudTd>@context.Agent.Emailaddress</MudTd>
         <MudTd>
             @if (context.Customer != null)

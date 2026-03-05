@@ -22,6 +22,13 @@ else
         <MudForm @ref="form" @bind-IsValid="@success">
             <MudGrid>
                 <MudItem xs="12" md="6">
+                    <MudTextField Label="Agent Name"
+                                  @bind-Value="agent.Agentname"
+                                  Required="true"
+                                  RequiredError="Agent name is required" />
+                </MudItem>
+
+                <MudItem xs="12" md="6">
                     <MudTextField Label="Email Address"
                                   @bind-Value="agent.Emailaddress"
                                   Required="true"
