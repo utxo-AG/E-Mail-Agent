@@ -9,6 +9,8 @@ public partial class Agent
 
     public int CustomerId { get; set; }
 
+    public string Agentname { get; set; } = null!;
+
     public string Emailaddress { get; set; } = null!;
 
     public string State { get; set; } = null!;

@@ -73,6 +73,10 @@ public partial class DefaultdbContext : DbContext
             entity.HasIndex(e => e.ServerId, "agents_server");
 
             entity.Property(e => e.Id).HasColumnName("id");
+            entity.Property(e => e.Agentname)
+                .HasMaxLength(255)
+                .HasDefaultValueSql("''")
+                .HasColumnName("agentname");
             entity.Property(e => e.Aimodel)
                 .HasMaxLength(255)
                 .HasDefaultValueSql("'claude-sonnet-4-20250514'")
