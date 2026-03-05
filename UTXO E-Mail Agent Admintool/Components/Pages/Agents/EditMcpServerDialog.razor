@@ -113,7 +113,7 @@
 
         if (McpServer != null)
         {
-            // Update existing MCP server
+            // Update existing API server
             var existing = await db.Mcpservers.FindAsync(McpServer.Id);
             if (existing != null)
             {
@@ -128,7 +128,7 @@
         }
         else
         {
-            // Create new MCP server
+            // Create new API server
             db.Mcpservers.Add(editServer);
             await db.SaveChangesAsync();
         }

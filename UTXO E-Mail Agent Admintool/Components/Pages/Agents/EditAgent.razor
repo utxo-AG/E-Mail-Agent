@@ -267,7 +267,7 @@ else
     @if (AgentId.HasValue)
     {
         <MudPaper Class="pa-4 mt-4">
-            <MudText Typo="Typo.h5" Class="mb-4">MCP Servers</MudText>
+            <MudText Typo="Typo.h5" Class="mb-4">API Servers</MudText>
 
             @if (mcpServers == null)
             {
@@ -275,7 +275,7 @@ else
             }
             else if (mcpServers.Count == 0)
             {
-                <MudAlert Severity="Severity.Info" Class="mb-4">No MCP servers configured for this agent.</MudAlert>
+                <MudAlert Severity="Severity.Info" Class="mb-4">No API servers configured for this agent.</MudAlert>
             }
             else
             {
@@ -331,7 +331,7 @@ else
                        Color="Color.Primary"
                        StartIcon="@Icons.Material.Filled.Add"
                        OnClick="CreateMcpServer">
-                Add MCP Server
+                Add API Server
             </MudButton>
         </MudPaper>
 
@@ -554,7 +554,7 @@ else
             FullWidth = true
         };
 
-        var dialog = await DialogService.ShowAsync<EditMcpServerDialog>("Add MCP Server", parameters, options);
+        var dialog = await DialogService.ShowAsync<EditMcpServerDialog>("Add API Server", parameters, options);
         var result = await dialog.Result;
 
         if (result != null && !result.Canceled)
@@ -580,7 +580,7 @@ else
             FullWidth = true
         };
 
-        var dialog = await DialogService.ShowAsync<EditMcpServerDialog>("Edit MCP Server", parameters, options);
+        var dialog = await DialogService.ShowAsync<EditMcpServerDialog>("Edit API Server", parameters, options);
         var result = await dialog.Result;
 
         if (result != null && !result.Canceled)
@@ -593,7 +593,7 @@ else
     {
         var result = await DialogService.ShowMessageBox(
             "Confirm Delete",
-            $"Are you sure you want to delete MCP server '{mcpServer.Name}'?",
+            $"Are you sure you want to delete API server '{mcpServer.Name}'?",
             yesText: "Delete",
             cancelText: "Cancel");
 

@@ -166,8 +166,8 @@ Clients can be assigned packages that define:
 - Provider-specific settings (host, port, username, password)
 - State management (active/inactive)
 
-### MCP Servers
-Each agent can have custom MCP servers configured:
+### API Servers
+Each agent can have custom API servers configured:
 - Server name and description
 - Enabled/disabled state
 - HTTP method (POST, GET, DELETE, UPDATE)
@@ -187,7 +187,7 @@ Each agent can have custom MCP servers configured:
 - Email content and AI responses
 
 ### MCP Request Testing
-Test MCP server endpoints directly from the interface:
+Test API server endpoints directly from the interface:
 - Select server and agent
 - Execute request
 - View response

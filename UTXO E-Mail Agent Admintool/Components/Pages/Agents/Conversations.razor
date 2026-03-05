@@ -69,7 +69,7 @@
                                Size="Size.Small"
                                OnClick="@(() => OpenDetailsDialog(context))" />
             </MudTooltip>
-            <MudTooltip Text="MCP Server Requests">
+            <MudTooltip Text="API Server Requests">
                 <MudIconButton Icon="@Icons.Material.Filled.Cloud"
                                Color="Color.Info"
                                Size="Size.Small"
@@ -176,6 +176,6 @@
             FullWidth = true
         };
 
-        await DialogService.ShowAsync<McpRequestsDialog>("MCP Server Requests", parameters, options);
+        await DialogService.ShowAsync<McpRequestsDialog>("API Server Requests", parameters, options);
     }
 }
