@@ -320,17 +320,59 @@ public class Program
         .Produces(StatusCodes.Status400BadRequest);
 
         // Send email endpoint (used by AI agents for forwarding/sending emails)
-        app.MapPost("/api/send_email", async (SendEmailRequest request, IConfiguration config) =>
+        app.MapPost("/api/send_email", async (SendEmailRequest request, DefaultdbContext db, IConfiguration config) =>
         {
             try
             {
-                Logger.Log($"[API] send_email called: to={request.To}, subject={request.Subject}");
+                // Validate agent
+                if (string.IsNullOrEmpty(request.AgentName))
+                {
+                    return Results.BadRequest(new { success = false, error = "AgentName is required" });
+                }
                 
+                var agentNameLower = request.AgentName.ToLower();
+                var agent = await db.Agents
+                    .Where(a => a.Agentname.ToLower() == agentNameLower && a.State == "active")
+                    .FirstOrDefaultAsync();
+                
+                if (agent == null)
+                {
+                    return Results.BadRequest(new { success = false, error = $"Agent '{request.AgentName}' not found" });
+                }
+                
+                Logger.Log($"[API] send_email called by agent '{agent.Agentname}': to={request.To}, subject={request.Subject}", agent.Id);
+                
+                // Use agent's email address as from, or override if specified
+                var fromAddress = request.From ?? agent.Emailaddress;
+                
+                // Get the appropriate email provider for this agent
+                var provider = EmailProviderFactory.GetProvider(agent.Emailprovider, config, db);
+                if (provider == null)
+                {
+                    return Results.BadRequest(new { success = false, error = $"No email provider configured for agent '{agent.Agentname}'" });
+                }
+                
+                // Create a minimal mail object for the provider
+                var mail = new MailClass
+                {
+                    Id = "send-" + Guid.NewGuid().ToString(),
+                    From = request.To, // The recipient becomes "From" for reply context
+                    To = new[] { request.To },
+                    Subject = request.Subject,
+                };
+                
+                // Create AI response object to use existing send infrastructure
+                var aiResponse = new AiResponseClass
+                {
+                    EmailResponseText = request.Text,
+                    EmailResponseSubject = request.Subject,
+                    EmailResponseHtml = request.Html ?? $"<html><body>{System.Web.HttpUtility.HtmlEncode(request.Text ?? "").Replace("\n", "<br/>")}</body></html>",
+                };
+                
+                // For send_email, we need to send TO the specified address, not reply
+                // So we use the Inbound send endpoint directly
                 var apiUrl = config["Email:ApiUrl"] ?? throw new InvalidOperationException("Email:ApiUrl not configured");
                 var bearerToken = config["Email:BearerToken"] ?? throw new InvalidOperationException("Email:BearerToken not configured");
-                
-                // Default from address if not specified
-                var fromAddress = request.From ?? "noreply@agents.utxoag.com";
                 
                 var emailPayload = new
                 {
@@ -354,12 +396,12 @@ public class Program
                 
                 if (response.IsSuccessStatusCode)
                 {
-                    Logger.Log($"[API] send_email success: {response.StatusCode}");
-                    return Results.Ok(new { success = true, message = $"Email sent to {request.To}" });
+                    Logger.Log($"[API] send_email success: {response.StatusCode} (agent: {agent.Agentname}, from: {fromAddress})", agent.Id);
+                    return Results.Ok(new { success = true, message = $"Email sent from {fromAddress} to {request.To}" });
                 }
                 else
                 {
-                    Logger.LogError($"[API] send_email failed: {response.StatusCode} - {responseContent}");
+                    Logger.LogError($"[API] send_email failed: {response.StatusCode} - {responseContent}", agent.Id);
                     return Results.BadRequest(new { success = false, error = $"Failed to send email: {responseContent}" });
                 }
             }
@@ -370,7 +412,7 @@ public class Program
             }
         })
         .WithName("SendEmail")
-        .WithSummary("Send an email via Inbound API")
+        .WithSummary("Send an email using the agent's configured email provider")
         .Produces(StatusCodes.Status200OK)
         .Produces(StatusCodes.Status400BadRequest);
 

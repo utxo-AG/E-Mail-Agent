@@ -38,6 +38,8 @@ public class AttachmentResponse
 /// </summary>
 public class SendEmailRequest
 {
+    /// <summary>Agent name (required to determine email provider and from address)</summary>
+    public string AgentName { get; set; } = null!;
     public string? From { get; set; }
     public string To { get; set; } = null!;
     public string Subject { get; set; } = null!;
