@@ -378,6 +378,7 @@ public class Program
                 {
                     from = fromAddress,
                     to = request.To,
+                    cc = request.Cc,
                     subject = request.Subject,
                     text = request.Text,
                     html = request.Html ?? $"<html><body>{System.Web.HttpUtility.HtmlEncode(request.Text ?? "").Replace("\n", "<br/>")}</body></html>",

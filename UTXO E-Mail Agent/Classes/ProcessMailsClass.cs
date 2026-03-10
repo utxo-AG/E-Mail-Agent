@@ -135,35 +135,38 @@ public class ProcessMailsClass(DefaultdbContext db, IConfiguration configuration
     {
         var s = Environment.NewLine + "🔧 VERFÜGBARE TOOLS:" + Environment.NewLine + Environment.NewLine;
 
-        // Built-in send_email API - always available via curl
-        s += "📧 **send_email** (IMMER VERFÜGBAR)" + Environment.NewLine;
-        s += "   Verwende diesen API-Aufruf um E-Mails weiterzuleiten oder neue E-Mails zu senden." + Environment.NewLine;
+        // Built-in send_email API - for forwarding/sending to OTHER recipients
+        s += "📧 **send_email API** (für Weiterleitungen an ANDERE Empfänger)" + Environment.NewLine;
         s += Environment.NewLine;
-        s += "   Aufruf per curl:" + Environment.NewLine;
+        s += "   ⚠️ WICHTIG - WANN WAS VERWENDEN:" + Environment.NewLine;
+        s += "   • Antwort an den URSPRÜNGLICHEN Absender → Verwende die JSON-Antwort (EmailResponseText etc.)" + Environment.NewLine;
+        s += "     Das System verschickt die Antwort automatisch!" + Environment.NewLine;
+        s += "   • Weiterleitung/E-Mail an ANDERE Empfänger → Verwende send_email API (curl)" + Environment.NewLine;
+        s += Environment.NewLine;
+        s += "   Aufruf per curl (nur für Weiterleitungen!):" + Environment.NewLine;
         s += "   ```bash" + Environment.NewLine;
         s += "   curl -X POST http://localhost:5051/api/send_email \\" + Environment.NewLine;
         s += "     -H \"Content-Type: application/json\" \\" + Environment.NewLine;
         s += "     -d '{" + Environment.NewLine;
         s += $"       \"agentName\": \"{agent.Agentname}\"," + Environment.NewLine;
         s += "       \"to\": \"empfaenger@example.com\"," + Environment.NewLine;
+        s += "       \"cc\": \"kopie@example.com\"," + Environment.NewLine;
         s += "       \"subject\": \"Betreff\"," + Environment.NewLine;
-        s += "       \"text\": \"E-Mail Inhalt\"," + Environment.NewLine;
+        s += "       \"text\": \"E-Mail Inhalt als Text\"," + Environment.NewLine;
+        s += "       \"html\": \"<p>E-Mail Inhalt als HTML</p>\"," + Environment.NewLine;
         s += "       \"replyTo\": \"antwort-an@example.com\"" + Environment.NewLine;
         s += "     }'" + Environment.NewLine;
         s += "   ```" + Environment.NewLine;
         s += Environment.NewLine;
         s += "   Parameter:" + Environment.NewLine;
-        s += $"   - agentName: \"{agent.Agentname}\" (IMMER erforderlich - dein Agent-Name!)" + Environment.NewLine;
+        s += $"   - agentName: \"{agent.Agentname}\" (IMMER erforderlich!)" + Environment.NewLine;
         s += "   - to: Empfänger E-Mail-Adresse (erforderlich)" + Environment.NewLine;
+        s += "   - cc: CC-Empfänger (optional)" + Environment.NewLine;
         s += "   - subject: Betreff (erforderlich)" + Environment.NewLine;
         s += "   - text: Inhalt als Plain-Text (erforderlich)" + Environment.NewLine;
         s += "   - html: Inhalt als HTML (optional)" + Environment.NewLine;
-        s += "   - replyTo: Antwort-Adresse (optional, aber WICHTIG bei Weiterleitungen!)" + Environment.NewLine;
-        s += $"   Die Absenderadresse ist automatisch: {agent.Emailaddress}" + Environment.NewLine;
-        s += Environment.NewLine;
-        s += "   WICHTIG für Weiterleitungen:" + Environment.NewLine;
-        s += "   Wenn du eine Kunden-E-Mail weiterleitest, setze replyTo auf die E-Mail des Kunden!" + Environment.NewLine;
-        s += "   So kann der Empfänger (z.B. Support-Team) direkt dem Kunden antworten." + Environment.NewLine;
+        s += "   - replyTo: Antwort-Adresse (WICHTIG bei Weiterleitungen - setze auf Kunden-E-Mail!)" + Environment.NewLine;
+        s += $"   Absender ist automatisch: {agent.Emailaddress}" + Environment.NewLine;
         s += Environment.NewLine;
 
         // Agent-specific MCP servers
@@ -179,7 +182,9 @@ public class ProcessMailsClass(DefaultdbContext db, IConfiguration configuration
             }
         }
 
-        s += "WICHTIG: Wenn eine Anfrage erfordert eine E-Mail weiterzuleiten oder zu senden, verwende den send_email API-Aufruf oben." + Environment.NewLine;
+        s += "ZUSAMMENFASSUNG:" + Environment.NewLine;
+        s += "• Antwort an Absender → JSON-Antwort mit EmailResponseText (System verschickt automatisch)" + Environment.NewLine;
+        s += "• Weiterleitung an andere → send_email API per curl" + Environment.NewLine;
         return s;
     }
 

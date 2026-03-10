@@ -34,7 +34,8 @@ public class AttachmentResponse
 }
 
 /// <summary>
-/// Request model for the send email API
+/// Request model for the send email API (for forwarding/sending to OTHER recipients)
+/// Note: For replying to the original sender, use the JSON response instead!
 /// </summary>
 public class SendEmailRequest
 {
@@ -42,6 +43,7 @@ public class SendEmailRequest
     public string AgentName { get; set; } = null!;
     public string? From { get; set; }
     public string To { get; set; } = null!;
+    public string? Cc { get; set; }
     public string Subject { get; set; } = null!;
     public string? Text { get; set; }
     public string? Html { get; set; }
