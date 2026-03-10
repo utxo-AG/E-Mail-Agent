@@ -359,6 +359,7 @@ public class Program
                     From = request.To, // SendReplyResponseEmail sends TO this address
                     To = new[] { request.To },
                     Subject = request.Subject,
+                    ReplyTo = !string.IsNullOrEmpty(request.ReplyTo) ? new[] { request.ReplyTo } : null,
                 };
                 
                 // Create AI response object to use existing send infrastructure

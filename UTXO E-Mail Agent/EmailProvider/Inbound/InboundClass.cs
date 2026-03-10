@@ -135,6 +135,7 @@ public class InboundClass : IEmailProvider
         else
         {
             // Use send endpoint (new email)
+            var replyToAddress = mail.ReplyTo?.FirstOrDefault();
             var sendRequest = new
             {
                 from = agent.Emailaddress,
@@ -143,10 +144,15 @@ public class InboundClass : IEmailProvider
                 html = emailResponse.EmailResponseHtml,
                 text = emailResponse.EmailResponseText,
                 attachments = attachmentsForApi,
+                reply_to = replyToAddress,
             };
             jsonPayload = JsonConvert.SerializeObject(sendRequest, Formatting.Indented);
             requestUrl = _apiUrl + "emails";
             Logger.Log($"[Inbound] Using SEND (no valid Inbound ID available, original ID: {mail.Id})");
+            if (!string.IsNullOrEmpty(replyToAddress))
+            {
+                Logger.Log($"[Inbound] Reply-To set to: {replyToAddress}");
+            }
         }
 
         // Debug: Attachment-Struktur loggen

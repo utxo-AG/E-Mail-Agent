@@ -209,6 +209,19 @@ public class ImapClass : IEmailProvider
             message.From.Add(new MailboxAddress(agent.Emailaddress, agent.Emailaddress));
             message.To.Add(MailboxAddress.Parse(mail.From));
             message.Subject = mail.Subject.StartsWith("Re: ") ? mail.Subject : $"Re: {mail.Subject}";
+            
+            // Set Reply-To header if specified (important for forwarded emails)
+            if (mail.ReplyTo != null && mail.ReplyTo.Length > 0)
+            {
+                foreach (var replyTo in mail.ReplyTo)
+                {
+                    if (!string.IsNullOrEmpty(replyTo))
+                    {
+                        message.ReplyTo.Add(MailboxAddress.Parse(replyTo));
+                    }
+                }
+                Logger.Log($"[IMAP/SMTP] Reply-To set to: {string.Join(", ", mail.ReplyTo)}", agent.Id);
+            }
 
             // Build body
             var builder = new BodyBuilder
