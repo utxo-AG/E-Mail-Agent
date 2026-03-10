@@ -83,7 +83,7 @@ public class EmailPollingService : BackgroundService
                 agent.Lastpoll = DateTime.UtcNow;
                 await db.SaveChangesAsync();
 
-                await Logger.LogAsync($"[EmailPollingService] Processing agent {agent.Id} ({agent.Emailaddress})", agent.Id, null, false);
+                await Logger.LogAsync($"[EmailPollingService] Processing agent {agent.Id} ({agent.Agentname})", agent.Id, null, false);
 
                 // Select email provider by type
                 var provider = EmailProviderFactory.GetProvider(agent.Emailprovider, _configuration, db);
@@ -158,7 +158,7 @@ public class EmailPollingService : BackgroundService
                         {
                             // Log email content as additional data
                             var emailData = $"From: {mail.From}\nSubject: {mail.Subject}\nDate: {mail.CreatedAt}\n\nContent:\n{mail.Text}";
-                            await Logger.LogAsync($"[EmailPollingService] Processing email: {mail.Subject}", agent.Id, emailData);
+                            await Logger.LogAsync($"[EmailPollingService] Processing email: {mail.Subject} (MessageId: {mail.Id})", agent.Id, emailData);
 
                             // Process mail with AI (pass existing conversation)
                             var processor = new ProcessMailsClass(db, _configuration);

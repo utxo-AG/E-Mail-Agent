@@ -427,7 +427,7 @@ public class ClaudeCodeClass : IAiProvider
         Conversation conversation, 
         List<Conversation>? conversationHistory = null)
     {
-        Logger.Log($"[ClaudeCode] Processing email: {mailClass.Subject}", agent.Id);
+        Logger.Log($"[ClaudeCode] Processing email: {mailClass.Subject} (MessageId: {mailClass.OriginalMessageId ?? mailClass.Id})", agent.Id);
         
         // Register MCP server if agent has API endpoints configured
         RegisterMcpServerIfNeeded(agent);
@@ -670,7 +670,47 @@ public class ClaudeCodeClass : IAiProvider
             Attachments = Array.Empty<Attachment>()
         };
 
-        // Look for EMAIL_RESPONSE markers
+        // First, try to find JSON block (same as ClaudeClass)
+        var jsonPatterns = new[]
+        {
+            @"```json\s*([\s\S]*?)\s*```",           // Standard ```json ... ```
+            @"```JSON\s*([\s\S]*?)\s*```",           // Uppercase JSON
+            @"```\s*\n?\s*(\{[\s\S]*?\})\s*```",     // Just ``` with JSON inside
+        };
+
+        foreach (var pattern in jsonPatterns)
+        {
+            var jsonBlockMatch = Regex.Match(fullResponse, pattern, RegexOptions.IgnoreCase);
+            if (jsonBlockMatch.Success)
+            {
+                var jsonContent = jsonBlockMatch.Groups[1].Value.Trim();
+                try
+                {
+                    var parsed = JsonConvert.DeserializeObject<AiResponseClass>(jsonContent);
+                    if (parsed != null)
+                    {
+                        // Save text before JSON as AiExplanation if not already set
+                        var matchIndex = fullResponse.IndexOf(jsonBlockMatch.Value, StringComparison.Ordinal);
+                        if (matchIndex > 0 && string.IsNullOrEmpty(parsed.AiExplanation))
+                        {
+                            var beforeJson = fullResponse[..matchIndex].Trim();
+                            if (!string.IsNullOrEmpty(beforeJson))
+                            {
+                                parsed.AiExplanation = beforeJson;
+                            }
+                        }
+                        parsed.Attachments ??= Array.Empty<Attachment>();
+                        return parsed;
+                    }
+                }
+                catch
+                {
+                    // JSON parse failed, continue with other patterns
+                }
+            }
+        }
+
+        // Look for EMAIL_RESPONSE markers (legacy format)
         var responseMatch = Regex.Match(fullResponse, @"<EMAIL_RESPONSE>([\s\S]*?)</EMAIL_RESPONSE>", RegexOptions.IgnoreCase);
         if (responseMatch.Success)
         {

@@ -724,14 +724,15 @@ public class ClaudeClass : IAiProvider
                     try
                     {
                         var parsed = JsonConvert.DeserializeObject<AiResponseClass>(jsonContent);
-                        if (parsed != null && !string.IsNullOrEmpty(parsed.EmailResponseText))
+                        // Accept parsed JSON even if EmailResponseText is null (e.g., for delegations or auto-replies)
+                        if (parsed != null)
                         {
                             // Save text before JSON as AiExplanation
                             var matchIndex = fullText.IndexOf(jsonBlockMatch.Value, StringComparison.Ordinal);
                             if (matchIndex > 0)
                             {
                                 var beforeJson = fullText[..matchIndex].Trim();
-                                if (!string.IsNullOrEmpty(beforeJson))
+                                if (!string.IsNullOrEmpty(beforeJson) && string.IsNullOrEmpty(parsed.AiExplanation))
                                 {
                                     Logger.Log($"[ParseAiResponse] Saving {beforeJson.Length} chars as AiExplanation");
                                     parsed.AiExplanation = beforeJson;
@@ -766,11 +767,12 @@ public class ClaudeClass : IAiProvider
                         try
                         {
                             var parsed = JsonConvert.DeserializeObject<AiResponseClass>(jsonCandidate);
-                            if (parsed != null && !string.IsNullOrEmpty(parsed.EmailResponseText))
+                            // Accept parsed JSON even if EmailResponseText is null (e.g., for delegations)
+                            if (parsed != null)
                             {
                                 Logger.Log("[ParseAiResponse] Found valid JSON object via brace matching");
                                 var beforeJson = fullText[..i].Trim();
-                                if (!string.IsNullOrEmpty(beforeJson))
+                                if (!string.IsNullOrEmpty(beforeJson) && string.IsNullOrEmpty(parsed.AiExplanation))
                                     parsed.AiExplanation = beforeJson;
                                 return parsed;
                             }
@@ -785,7 +787,8 @@ public class ClaudeClass : IAiProvider
             try
             {
                 var directParse = JsonConvert.DeserializeObject<AiResponseClass>(fullText.Trim());
-                if (directParse != null && !string.IsNullOrEmpty(directParse.EmailResponseText))
+                // Accept parsed JSON even if EmailResponseText is null (e.g., for delegations)
+                if (directParse != null)
                 {
                     return directParse;
                 }

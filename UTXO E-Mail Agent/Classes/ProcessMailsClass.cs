@@ -271,6 +271,42 @@ public class ProcessMailsClass(DefaultdbContext db, IConfiguration configuration
         promptBuilder.AppendLine();
         promptBuilder.AppendLine("Beispiel für AttachmentData bei einem Tarif-PDF:");
         promptBuilder.AppendLine("\"AttachmentData\": \"INTERNET-ANGEBOT\\n\\nKunde: Max Mustermann\\nAdresse: Musterstraße 1, 12345 Musterstadt\\n\\nVerfügbare Tarife:\\n1. Tarif Basic - 25 Mbit/s - 24,90€/Monat\\n2. Tarif Premium - 100 Mbit/s - 44,90€/Monat\\n\\nKontakt: info@firma.de\"");
+        promptBuilder.AppendLine();
+        
+        // Delegation instructions
+        promptBuilder.AppendLine("AUFGABEN DELEGIEREN:");
+        promptBuilder.AppendLine("Wenn eine E-Mail nicht in deinen Zuständigkeitsbereich fällt, kannst du sie an einen anderen Agenten delegieren.");
+        promptBuilder.AppendLine("Die verfügbaren Agenten für Delegation stehen in deiner Aufgabenbeschreibung oben.");
+        promptBuilder.AppendLine();
+        promptBuilder.AppendLine("Um zu delegieren, führe folgenden curl-Aufruf aus:");
+        promptBuilder.AppendLine("```bash");
+        promptBuilder.AppendLine("curl -X POST http://localhost:5051/api/processemail \\");
+        promptBuilder.AppendLine("  -H \"Content-Type: application/json\" \\");
+        promptBuilder.AppendLine("  -d '{");
+        promptBuilder.AppendLine("    \"agentName\": \"<ZIEL-AGENT-NAME>\",");
+        promptBuilder.AppendLine($"    \"messageId\": \"{mailClass.OriginalMessageId ?? mailClass.Id}\",");
+        promptBuilder.AppendLine($"    \"from\": \"{mailClass.From}\",");
+        promptBuilder.AppendLine($"    \"to\": {System.Text.Json.JsonSerializer.Serialize(mailClass.To ?? Array.Empty<string>())},");
+        promptBuilder.AppendLine($"    \"subject\": \"{EscapeJsonString(mailClass.Subject)}\",");
+        promptBuilder.AppendLine($"    \"status\": \"{mailClass.Status}\",");
+        promptBuilder.AppendLine($"    \"createdAt\": \"{mailClass.CreatedAt}\",");
+        promptBuilder.AppendLine($"    \"hasAttachments\": {(mailClass.HasAttachments ?? false).ToString().ToLower()},");
+        promptBuilder.AppendLine($"    \"cc\": {System.Text.Json.JsonSerializer.Serialize(mailClass.Cc ?? Array.Empty<string>())},");
+        promptBuilder.AppendLine($"    \"bcc\": {System.Text.Json.JsonSerializer.Serialize(mailClass.Bcc ?? Array.Empty<string>())},");
+        promptBuilder.AppendLine($"    \"replyTo\": {System.Text.Json.JsonSerializer.Serialize(mailClass.ReplyTo ?? Array.Empty<string>())},");
+        promptBuilder.AppendLine("    \"html\": \"<ORIGINAL-HTML-CONTENT>\",");
+        promptBuilder.AppendLine("    \"text\": \"<ORIGINAL-TEXT-CONTENT>\",");
+        promptBuilder.AppendLine($"    \"attachments\": {System.Text.Json.JsonSerializer.Serialize(mailClass.Attachments ?? Array.Empty<string>())}");
+        promptBuilder.AppendLine("  }'");
+        promptBuilder.AppendLine("```");
+        promptBuilder.AppendLine();
+        promptBuilder.AppendLine("WICHTIG bei Delegation:");
+        promptBuilder.AppendLine("- Ersetze <ZIEL-AGENT-NAME> mit dem Namen des zuständigen Agenten");
+        promptBuilder.AppendLine("- Ersetze <ORIGINAL-HTML-CONTENT> und <ORIGINAL-TEXT-CONTENT> mit dem tatsächlichen E-Mail-Inhalt");
+        promptBuilder.AppendLine("- Nach erfolgreicher Delegation (HTTP 202) antworte NICHT selbst auf die E-Mail");
+        promptBuilder.AppendLine("- Setze in deiner JSON-Antwort alle EmailResponse-Felder auf null");
+        promptBuilder.AppendLine("- Erkläre in AiExplanation, dass du die E-Mail delegiert hast");
+        promptBuilder.AppendLine();
         
         return promptBuilder.ToString();
     }
@@ -290,5 +326,11 @@ public class ProcessMailsClass(DefaultdbContext db, IConfiguration configuration
         }
 
         return promptBuilder.ToString();
+    }
+    
+    private static string EscapeJsonString(string? input)
+    {
+        if (string.IsNullOrEmpty(input)) return "";
+        return input.Replace("\\", "\\\\").Replace("\"", "\\\"").Replace("\n", "\\n").Replace("\r", "\\r");
     }
 }

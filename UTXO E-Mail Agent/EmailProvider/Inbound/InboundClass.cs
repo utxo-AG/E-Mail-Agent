@@ -98,6 +98,12 @@ public class InboundClass : IEmailProvider
 
     public async Task SendReplyResponseEmail(AiResponseClass emailResponse, MailClass mail, Agent agent, Conversation? conversation)
     {
+        // Determine if we can use reply (need valid Inbound message ID) or must send new email
+        var canReply = mail.HasValidInboundId;
+        var messageIdForReply = !string.IsNullOrEmpty(mail.OriginalMessageId) && mail.OriginalMessageId.StartsWith("inbnd_")
+            ? mail.OriginalMessageId
+            : mail.Id;
+
         // Prepare attachments: Remove path field (only for local use)
         var attachmentsForApi = emailResponse.Attachments;
         if (attachmentsForApi != null && attachmentsForApi.Length > 0)
@@ -108,14 +114,40 @@ public class InboundClass : IEmailProvider
             }
         }
 
-        ReplyToEmailInboundClass replyResponse = new ReplyToEmailInboundClass
+        string jsonPayload;
+        string requestUrl;
+
+        if (canReply)
         {
-            From = agent.Emailaddress,
-            Subject = emailResponse.EmailResponseSubject,
-            Html = emailResponse.EmailResponseHtml,
-            Text = emailResponse.EmailResponseText,
-            Attachments = attachmentsForApi,
-        };
+            // Use reply endpoint
+            var replyResponse = new ReplyToEmailInboundClass
+            {
+                From = agent.Emailaddress,
+                Subject = emailResponse.EmailResponseSubject,
+                Html = emailResponse.EmailResponseHtml,
+                Text = emailResponse.EmailResponseText,
+                Attachments = attachmentsForApi,
+            };
+            jsonPayload = JsonConvert.SerializeObject(replyResponse, Formatting.Indented);
+            requestUrl = _apiUrl + $"emails/{messageIdForReply}/reply";
+            Logger.Log($"[Inbound] Using REPLY to message: {messageIdForReply}");
+        }
+        else
+        {
+            // Use send endpoint (new email)
+            var sendRequest = new
+            {
+                from = agent.Emailaddress,
+                to = new[] { mail.From }, // Send to original sender
+                subject = emailResponse.EmailResponseSubject,
+                html = emailResponse.EmailResponseHtml,
+                text = emailResponse.EmailResponseText,
+                attachments = attachmentsForApi,
+            };
+            jsonPayload = JsonConvert.SerializeObject(sendRequest, Formatting.Indented);
+            requestUrl = _apiUrl + "emails";
+            Logger.Log($"[Inbound] Using SEND (no valid Inbound ID available, original ID: {mail.Id})");
+        }
 
         // Debug: Attachment-Struktur loggen
         if (emailResponse.Attachments != null && emailResponse.Attachments.Length > 0)
@@ -131,12 +163,10 @@ public class InboundClass : IEmailProvider
             }
         }
 
-        var jsonPayload = JsonConvert.SerializeObject(replyResponse, Formatting.Indented);
-
         var payloadPreview = jsonPayload.Length > 500
             ? jsonPayload.Substring(0, 500) + "..."
             : jsonPayload;
-        Logger.Log($"[Inbound] Sending POST to: {_apiUrl}emails/{mail.Id}/reply");
+        Logger.Log($"[Inbound] Sending POST to: {requestUrl}");
         Logger.Log($"[Inbound] Payload Preview:\n{payloadPreview}");
 
         // Retry with exponential backoff: 5s, 15s, 30s
@@ -146,7 +176,7 @@ public class InboundClass : IEmailProvider
         for (int attempt = 1; attempt <= maxRetries; attempt++)
         {
             using var httpClient = new HttpClient();
-            using var request = new HttpRequestMessage(HttpMethod.Post, _apiUrl + $"emails/{mail.Id}/reply");
+            using var request = new HttpRequestMessage(HttpMethod.Post, requestUrl);
             request.Headers.TryAddWithoutValidation("Authorization", $"Bearer {_bearerToken}");
             request.Content = new StringContent(jsonPayload);
             request.Content.Headers.ContentType = MediaTypeHeaderValue.Parse("application/json");
@@ -174,7 +204,7 @@ public class InboundClass : IEmailProvider
             Logger.LogError($"[Inbound] ERROR sending email (attempt {attempt}/{maxRetries}):");
             Logger.LogError($"  Status Code: {response.StatusCode}");
             Logger.LogError($"  Response Body: {errorBody}");
-            Logger.LogError($"  Request URL: {_apiUrl}emails/{mail.Id}/reply");
+            Logger.LogError($"  Request URL: {requestUrl}");
 
             if (attempt < maxRetries)
             {
