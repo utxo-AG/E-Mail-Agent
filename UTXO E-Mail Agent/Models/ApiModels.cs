@@ -32,3 +32,16 @@ public class AttachmentResponse
     public string? ContentType { get; set; }
     public string? Content { get; set; } // Base64 encoded
 }
+
+/// <summary>
+/// Request model for the send email API
+/// </summary>
+public class SendEmailRequest
+{
+    public string? From { get; set; }
+    public string To { get; set; } = null!;
+    public string Subject { get; set; } = null!;
+    public string? Text { get; set; }
+    public string? Html { get; set; }
+    public string? ReplyTo { get; set; }
+}

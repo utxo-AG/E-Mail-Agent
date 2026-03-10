@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Newtonsoft.Json;
 using UTXO_E_Mail_Agent.Classes;
 using UTXO_E_Mail_Agent.Factory;
 using UTXO_E_Mail_Agent.Models;
@@ -318,9 +319,61 @@ public class Program
         .Produces(StatusCodes.Status202Accepted)
         .Produces(StatusCodes.Status400BadRequest);
 
-        
-        
-        
+        // Send email endpoint (used by AI agents for forwarding/sending emails)
+        app.MapPost("/api/send_email", async (SendEmailRequest request, IConfiguration config) =>
+        {
+            try
+            {
+                Logger.Log($"[API] send_email called: to={request.To}, subject={request.Subject}");
+                
+                var apiUrl = config["Email:ApiUrl"] ?? throw new InvalidOperationException("Email:ApiUrl not configured");
+                var bearerToken = config["Email:BearerToken"] ?? throw new InvalidOperationException("Email:BearerToken not configured");
+                
+                // Default from address if not specified
+                var fromAddress = request.From ?? "noreply@agents.utxoag.com";
+                
+                var emailPayload = new
+                {
+                    from = fromAddress,
+                    to = request.To,
+                    subject = request.Subject,
+                    text = request.Text,
+                    html = request.Html ?? $"<html><body>{System.Web.HttpUtility.HtmlEncode(request.Text ?? "").Replace("\n", "<br/>")}</body></html>",
+                    reply_to = request.ReplyTo
+                };
+                
+                var jsonPayload = JsonConvert.SerializeObject(emailPayload);
+                
+                using var httpClient = new HttpClient();
+                using var httpRequest = new HttpRequestMessage(HttpMethod.Post, apiUrl + "emails");
+                httpRequest.Headers.TryAddWithoutValidation("Authorization", $"Bearer {bearerToken}");
+                httpRequest.Content = new StringContent(jsonPayload, System.Text.Encoding.UTF8, "application/json");
+                
+                var response = await httpClient.SendAsync(httpRequest);
+                var responseContent = await response.Content.ReadAsStringAsync();
+                
+                if (response.IsSuccessStatusCode)
+                {
+                    Logger.Log($"[API] send_email success: {response.StatusCode}");
+                    return Results.Ok(new { success = true, message = $"Email sent to {request.To}" });
+                }
+                else
+                {
+                    Logger.LogError($"[API] send_email failed: {response.StatusCode} - {responseContent}");
+                    return Results.BadRequest(new { success = false, error = $"Failed to send email: {responseContent}" });
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.LogError($"[API] send_email error: {ex.Message}");
+                return Results.BadRequest(new { success = false, error = ex.Message });
+            }
+        })
+        .WithName("SendEmail")
+        .WithSummary("Send an email via Inbound API")
+        .Produces(StatusCodes.Status200OK)
+        .Produces(StatusCodes.Status400BadRequest);
+
         // Health check endpoint
         app.MapGet("/api/health", () => Results.Ok(new { status = "healthy", version = Version }))
             .WithName("HealthCheck")
