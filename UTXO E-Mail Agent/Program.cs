@@ -352,11 +352,11 @@ public class Program
                     return Results.BadRequest(new { success = false, error = $"No email provider configured for agent '{agent.Agentname}'" });
                 }
                 
-                // Create a minimal mail object for the provider
+                // Create a mail object - From is used as the recipient in SendReplyResponseEmail
                 var mail = new MailClass
                 {
                     Id = "send-" + Guid.NewGuid().ToString(),
-                    From = request.To, // The recipient becomes "From" for reply context
+                    From = request.To, // SendReplyResponseEmail sends TO this address
                     To = new[] { request.To },
                     Subject = request.Subject,
                 };
@@ -369,42 +369,11 @@ public class Program
                     EmailResponseHtml = request.Html ?? $"<html><body>{System.Web.HttpUtility.HtmlEncode(request.Text ?? "").Replace("\n", "<br/>")}</body></html>",
                 };
                 
-                // For send_email, we need to send TO the specified address, not reply
-                // So we use the Inbound send endpoint directly
-                var apiUrl = config["Email:ApiUrl"] ?? throw new InvalidOperationException("Email:ApiUrl not configured");
-                var bearerToken = config["Email:BearerToken"] ?? throw new InvalidOperationException("Email:BearerToken not configured");
+                // Use the provider's send method (works for both Inbound and IMAP/SMTP)
+                await provider.SendReplyResponseEmail(aiResponse, mail, agent, null);
                 
-                var emailPayload = new
-                {
-                    from = fromAddress,
-                    to = request.To,
-                    cc = request.Cc,
-                    subject = request.Subject,
-                    text = request.Text,
-                    html = request.Html ?? $"<html><body>{System.Web.HttpUtility.HtmlEncode(request.Text ?? "").Replace("\n", "<br/>")}</body></html>",
-                    reply_to = request.ReplyTo
-                };
-                
-                var jsonPayload = JsonConvert.SerializeObject(emailPayload);
-                
-                using var httpClient = new HttpClient();
-                using var httpRequest = new HttpRequestMessage(HttpMethod.Post, apiUrl + "emails");
-                httpRequest.Headers.TryAddWithoutValidation("Authorization", $"Bearer {bearerToken}");
-                httpRequest.Content = new StringContent(jsonPayload, System.Text.Encoding.UTF8, "application/json");
-                
-                var response = await httpClient.SendAsync(httpRequest);
-                var responseContent = await response.Content.ReadAsStringAsync();
-                
-                if (response.IsSuccessStatusCode)
-                {
-                    Logger.Log($"[API] send_email success: {response.StatusCode} (agent: {agent.Agentname}, from: {fromAddress})", agent.Id);
-                    return Results.Ok(new { success = true, message = $"Email sent from {fromAddress} to {request.To}" });
-                }
-                else
-                {
-                    Logger.LogError($"[API] send_email failed: {response.StatusCode} - {responseContent}", agent.Id);
-                    return Results.BadRequest(new { success = false, error = $"Failed to send email: {responseContent}" });
-                }
+                Logger.Log($"[API] send_email success (agent: {agent.Agentname}, provider: {agent.Emailprovider}, to: {request.To})", agent.Id);
+                return Results.Ok(new { success = true, message = $"Email sent from {agent.Emailaddress} to {request.To}" });
             }
             catch (Exception ex)
             {
