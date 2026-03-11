@@ -138,35 +138,61 @@ public class ImapClass : IEmailProvider
             
             // Log attachment count for debugging
             var attachmentCount = message.Attachments.Count();
-            Logger.Log($"[IMAP] Found {attachmentCount} attachment(s) in email", agent.Id);
+            Logger.Log($"[IMAP] Found {attachmentCount} attachment(s) via Attachments property", agent.Id);
             
-            foreach (var attachment in message.Attachments)
+            // Also check all body parts for attachments (some clients don't set Content-Disposition correctly)
+            var allParts = new List<MimeEntity>();
+            if (message.Body is Multipart multipart)
             {
-                Logger.Log($"[IMAP] Processing attachment: Type={attachment.GetType().Name}, ContentType={attachment.ContentType?.MimeType}", agent.Id);
-                
-                if (attachment is MimePart mimePart)
-                {
-                    var fileName = mimePart.FileName ?? mimePart.ContentDisposition?.FileName ?? $"attachment_{Guid.NewGuid():N}.bin";
-                    Logger.Log($"[IMAP] MimePart: FileName={fileName}, ContentType={mimePart.ContentType?.MimeType}", agent.Id);
+                CollectAllParts(multipart, allParts);
+            }
+            else if (message.Body != null)
+            {
+                allParts.Add(message.Body);
+            }
+            
+            Logger.Log($"[IMAP] Found {allParts.Count} total MIME part(s) in email", agent.Id);
+            
+            foreach (var part in allParts)
+            {
+                // Skip text/html and text/plain parts (these are the email body, not attachments)
+                if (part is TextPart)
+                    continue;
                     
-                    try
+                if (part is MimePart mimePart)
+                {
+                    // Check if this looks like an attachment
+                    var hasFileName = !string.IsNullOrEmpty(mimePart.FileName) || 
+                                     !string.IsNullOrEmpty(mimePart.ContentDisposition?.FileName);
+                    var isAttachment = mimePart.ContentDisposition?.Disposition == ContentDisposition.Attachment;
+                    var isInline = mimePart.ContentDisposition?.Disposition == ContentDisposition.Inline;
+                    
+                    Logger.Log($"[IMAP] MimePart: ContentType={mimePart.ContentType?.MimeType}, FileName={mimePart.FileName}, IsAttachment={isAttachment}, IsInline={isInline}, HasFileName={hasFileName}", agent.Id);
+                    
+                    // Include if it has a filename or is explicitly an attachment
+                    if (hasFileName || isAttachment)
                     {
-                        // Create directory if it doesn't exist
-                        Directory.CreateDirectory(attachmentsDir);
+                        var fileName = mimePart.FileName ?? mimePart.ContentDisposition?.FileName ?? $"attachment_{Guid.NewGuid():N}.bin";
                         
-                        // Save attachment to file
-                        var filePath = Path.Combine(attachmentsDir, fileName);
-                        using (var stream = File.Create(filePath))
+                        try
                         {
-                            await mimePart.Content.DecodeToAsync(stream);
+                            // Create directory if it doesn't exist
+                            Directory.CreateDirectory(attachmentsDir);
+                            
+                            // Save attachment to file
+                            var filePath = Path.Combine(attachmentsDir, fileName);
+                            using (var stream = File.Create(filePath))
+                            {
+                                await mimePart.Content.DecodeToAsync(stream);
+                            }
+                            
+                            attachmentNames.Add(fileName);
+                            Logger.Log($"[IMAP] Saved attachment: {fileName} to {filePath}", agent.Id);
                         }
-                        
-                        attachmentNames.Add(fileName);
-                        Logger.Log($"[IMAP] Saved attachment: {fileName} to {filePath}", agent.Id);
-                    }
-                    catch (Exception ex)
-                    {
-                        Logger.LogError($"[IMAP] Error saving attachment {fileName}: {ex.Message}", agent.Id);
+                        catch (Exception ex)
+                        {
+                            Logger.LogError($"[IMAP] Error saving attachment {fileName}: {ex.Message}", agent.Id);
+                        }
                     }
                 }
             }
@@ -308,6 +334,24 @@ public class ImapClass : IEmailProvider
         {
             Logger.LogError($"[IMAP/SMTP] Error sending reply: {ex.Message}");
             throw;
+        }
+    }
+    
+    /// <summary>
+    /// Recursively collects all MIME parts from a multipart message
+    /// </summary>
+    private static void CollectAllParts(Multipart multipart, List<MimeEntity> parts)
+    {
+        foreach (var part in multipart)
+        {
+            if (part is Multipart nested)
+            {
+                CollectAllParts(nested, parts);
+            }
+            else
+            {
+                parts.Add(part);
+            }
         }
     }
 }
