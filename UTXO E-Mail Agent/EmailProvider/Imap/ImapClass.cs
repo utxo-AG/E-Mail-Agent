@@ -132,13 +132,33 @@ public class ImapClass : IEmailProvider
             // Extract text content
             var textBody = message.TextBody ?? message.HtmlBody ?? "";
 
-            // Extract attachments - store as filenames for now
+            // Extract and save attachments to file system
             var attachmentNames = new List<string>();
+            var attachmentsDir = Path.Combine(Path.GetTempPath(), "attachments", agent.Id.ToString(), email.Id);
+            
             foreach (var attachment in message.Attachments)
             {
                 if (attachment is MimePart mimePart && !string.IsNullOrEmpty(mimePart.FileName))
                 {
-                    attachmentNames.Add(mimePart.FileName);
+                    try
+                    {
+                        // Create directory if it doesn't exist
+                        Directory.CreateDirectory(attachmentsDir);
+                        
+                        // Save attachment to file
+                        var filePath = Path.Combine(attachmentsDir, mimePart.FileName);
+                        using (var stream = File.Create(filePath))
+                        {
+                            await mimePart.Content.DecodeToAsync(stream);
+                        }
+                        
+                        attachmentNames.Add(mimePart.FileName);
+                        Logger.Log($"[IMAP] Saved attachment: {mimePart.FileName} to {filePath}", agent.Id);
+                    }
+                    catch (Exception ex)
+                    {
+                        Logger.LogError($"[IMAP] Error saving attachment {mimePart.FileName}: {ex.Message}", agent.Id);
+                    }
                 }
             }
 

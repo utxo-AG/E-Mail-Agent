@@ -477,6 +477,9 @@ public class ClaudeCodeClass : IAiProvider
             }
 
             // Prepare input data as JSON file (easier than command line args for large data)
+            // Calculate attachments directory path
+            var attachmentsDir = Path.Combine(Path.GetTempPath(), "attachments", agent.Id.ToString(), mailClass.Id ?? "unknown");
+            
             var inputData = new
             {
                 system_prompt = fullSystemPrompt,
@@ -485,6 +488,11 @@ public class ClaudeCodeClass : IAiProvider
                 email_text = mailClass.Text ?? "",
                 email_html = mailClass.Html,
                 email_from = mailClass.From ?? "(Unknown)",
+                message_id = mailClass.Id ?? "",
+                attachments = mailClass.Attachments ?? Array.Empty<string>(),
+                has_attachments = mailClass.HasAttachments ?? false,
+                attachments_directory = attachmentsDir,
+                agent_id = agent.Id,
                 working_directory = convWorkDir,
                 max_turns = 20,
                 model = agent.Aimodel  // Pass model to Claude Code SDK

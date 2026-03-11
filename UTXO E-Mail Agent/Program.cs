@@ -6,6 +6,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Newtonsoft.Json;
 using UTXO_E_Mail_Agent.Classes;
+using UTXO_E_Mail_Agent.EmailProvider.Inbound.Classes;
 using UTXO_E_Mail_Agent.Factory;
 using UTXO_E_Mail_Agent.Models;
 using UTXO_E_Mail_Agent.Services;
@@ -370,6 +371,55 @@ public class Program
                     EmailResponseHtml = request.Html ?? $"<html><body>{System.Web.HttpUtility.HtmlEncode(request.Text ?? "").Replace("\n", "<br/>")}</body></html>",
                 };
                 
+                // Load attachments from files if MessageId, AgentId and Attachments are provided
+                if (request.Attachments != null && request.Attachments.Length > 0 && !string.IsNullOrEmpty(request.MessageId))
+                {
+                    // Use provided AgentId or fall back to agent.Id
+                    var agentIdForPath = request.AgentId ?? agent.Id;
+                    var attachmentsDir = Path.Combine(Path.GetTempPath(), "attachments", agentIdForPath.ToString(), request.MessageId);
+                    
+                    Logger.Log($"[API] Loading {request.Attachments.Length} attachment(s) from {attachmentsDir}", agent.Id);
+                    
+                    if (Directory.Exists(attachmentsDir))
+                    {
+                        var attachments = new List<Attachment>();
+                        foreach (var filename in request.Attachments)
+                        {
+                            var filePath = Path.Combine(attachmentsDir, filename);
+                            if (File.Exists(filePath))
+                            {
+                                try
+                                {
+                                    var fileContent = await File.ReadAllBytesAsync(filePath);
+                                    var base64Content = Convert.ToBase64String(fileContent);
+                                    var contentType = GetMimeType(filename);
+                                    
+                                    attachments.Add(new Attachment
+                                    {
+                                        Filename = filename,
+                                        Content = base64Content,
+                                        ContentType = contentType
+                                    });
+                                    Logger.Log($"[API] Loaded attachment from file: {filename} ({contentType}, {fileContent.Length} bytes)", agent.Id);
+                                }
+                                catch (Exception ex)
+                                {
+                                    Logger.LogError($"[API] Error reading attachment file {filename}: {ex.Message}", agent.Id);
+                                }
+                            }
+                            else
+                            {
+                                Logger.Log($"[API] Attachment file not found: {filePath}", agent.Id);
+                            }
+                        }
+                        aiResponse.Attachments = attachments.ToArray();
+                    }
+                    else
+                    {
+                        Logger.Log($"[API] Attachments directory not found: {attachmentsDir}", agent.Id);
+                    }
+                }
+                
                 // Use the provider's send method (works for both Inbound and IMAP/SMTP)
                 await provider.SendReplyResponseEmail(aiResponse, mail, agent, null);
                 
@@ -405,4 +455,46 @@ public class Program
         await app.RunAsync("http://0.0.0.0:5051");
     }
     
+    /// <summary>
+    /// Get MIME type from file extension
+    /// </summary>
+    private static string GetMimeType(string filename)
+    {
+        var extension = Path.GetExtension(filename)?.ToLowerInvariant();
+        return extension switch
+        {
+            ".pdf" => "application/pdf",
+            ".doc" => "application/msword",
+            ".docx" => "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            ".xls" => "application/vnd.ms-excel",
+            ".xlsx" => "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            ".ppt" => "application/vnd.ms-powerpoint",
+            ".pptx" => "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+            ".txt" => "text/plain",
+            ".csv" => "text/csv",
+            ".html" => "text/html",
+            ".htm" => "text/html",
+            ".xml" => "application/xml",
+            ".json" => "application/json",
+            ".zip" => "application/zip",
+            ".rar" => "application/x-rar-compressed",
+            ".7z" => "application/x-7z-compressed",
+            ".tar" => "application/x-tar",
+            ".gz" => "application/gzip",
+            ".jpg" => "image/jpeg",
+            ".jpeg" => "image/jpeg",
+            ".png" => "image/png",
+            ".gif" => "image/gif",
+            ".bmp" => "image/bmp",
+            ".svg" => "image/svg+xml",
+            ".webp" => "image/webp",
+            ".mp3" => "audio/mpeg",
+            ".wav" => "audio/wav",
+            ".mp4" => "video/mp4",
+            ".avi" => "video/x-msvideo",
+            ".mov" => "video/quicktime",
+            ".eml" => "message/rfc822",
+            _ => "application/octet-stream"
+        };
+    }
 }

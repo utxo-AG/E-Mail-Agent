@@ -48,4 +48,10 @@ public class SendEmailRequest
     public string? Text { get; set; }
     public string? Html { get; set; }
     public string? ReplyTo { get; set; }
+    /// <summary>Array of attachment filenames to include (files in attachments directory)</summary>
+    public string[]? Attachments { get; set; }
+    /// <summary>Message ID of the original email (used to find attachments directory)</summary>
+    public string? MessageId { get; set; }
+    /// <summary>Agent ID (used to find attachments directory)</summary>
+    public int? AgentId { get; set; }
 }

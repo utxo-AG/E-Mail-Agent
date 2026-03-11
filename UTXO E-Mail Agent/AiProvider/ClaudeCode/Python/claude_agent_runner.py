@@ -48,7 +48,12 @@ async def run_email_agent_async(
     email_from: str,
     working_directory: str,
     max_turns: int = 20,
-    model: Optional[str] = None
+    model: Optional[str] = None,
+    message_id: str = "",
+    attachments: list = None,
+    has_attachments: bool = False,
+    attachments_directory: str = "",
+    agent_id: int = 0
 ) -> dict:
     """
     Run Claude Code agent to process an email and generate a response.
@@ -57,6 +62,9 @@ async def run_email_agent_async(
     Supported models: claude-sonnet-4-20250514, claude-opus-4-5-20251101, etc.
     """
     
+    if attachments is None:
+        attachments = []
+    
     # Build the full prompt
     full_prompt = f"""
 {user_prompt}
@@ -64,8 +72,18 @@ async def run_email_agent_async(
 ---
 E-Mail Subject: {email_subject}
 E-Mail From: {email_from}
+E-Mail MessageId: {message_id}
 E-Mail Text:
 {email_text}
+"""
+    
+    # Add attachments info if present
+    if has_attachments and attachments:
+        full_prompt += f"""
+E-Mail Attachments (Dateinamen): {', '.join(attachments)}
+Attachments-Verzeichnis: {attachments_directory}
+HINWEIS: Die Attachments liegen als Dateien im Verzeichnis {attachments_directory}. Du kannst diese mit dem Read-Tool lesen (z.B. PDFs, Textdateien).
+Um diese Attachments bei einer Weiterleitung mitzusenden, verwende die Parameter "agentId": {agent_id}, "messageId": "{message_id}" und "attachments": {json.dumps(attachments)} im curl-Aufruf!
 """
     
     if email_html:
@@ -269,7 +287,12 @@ def run_email_agent(
     email_from: str,
     working_directory: str,
     max_turns: int = 20,
-    model: Optional[str] = None
+    model: Optional[str] = None,
+    message_id: str = "",
+    attachments: list = None,
+    has_attachments: bool = False,
+    attachments_directory: str = "",
+    agent_id: int = 0
 ) -> dict:
     """Synchronous wrapper for the async function."""
     return asyncio.run(run_email_agent_async(
@@ -281,7 +304,12 @@ def run_email_agent(
         email_from=email_from,
         working_directory=working_directory,
         max_turns=max_turns,
-        model=model
+        model=model,
+        message_id=message_id,
+        attachments=attachments or [],
+        has_attachments=has_attachments,
+        attachments_directory=attachments_directory,
+        agent_id=agent_id
     ))
 
 
@@ -326,7 +354,12 @@ def main():
         email_from=input_data.get("email_from", ""),
         working_directory=input_data.get("working_directory", "."),
         max_turns=input_data.get("max_turns", 20),
-        model=input_data.get("model")
+        model=input_data.get("model"),
+        message_id=input_data.get("message_id", ""),
+        attachments=input_data.get("attachments", []),
+        has_attachments=input_data.get("has_attachments", False),
+        attachments_directory=input_data.get("attachments_directory", ""),
+        agent_id=input_data.get("agent_id", 0)
     )
     
     log(f"[End] Success: {result['success']}")
