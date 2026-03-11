@@ -136,28 +136,37 @@ public class ImapClass : IEmailProvider
             var attachmentNames = new List<string>();
             var attachmentsDir = Path.Combine(Path.GetTempPath(), "attachments", agent.Id.ToString(), email.Id);
             
+            // Log attachment count for debugging
+            var attachmentCount = message.Attachments.Count();
+            Logger.Log($"[IMAP] Found {attachmentCount} attachment(s) in email", agent.Id);
+            
             foreach (var attachment in message.Attachments)
             {
-                if (attachment is MimePart mimePart && !string.IsNullOrEmpty(mimePart.FileName))
+                Logger.Log($"[IMAP] Processing attachment: Type={attachment.GetType().Name}, ContentType={attachment.ContentType?.MimeType}", agent.Id);
+                
+                if (attachment is MimePart mimePart)
                 {
+                    var fileName = mimePart.FileName ?? mimePart.ContentDisposition?.FileName ?? $"attachment_{Guid.NewGuid():N}.bin";
+                    Logger.Log($"[IMAP] MimePart: FileName={fileName}, ContentType={mimePart.ContentType?.MimeType}", agent.Id);
+                    
                     try
                     {
                         // Create directory if it doesn't exist
                         Directory.CreateDirectory(attachmentsDir);
                         
                         // Save attachment to file
-                        var filePath = Path.Combine(attachmentsDir, mimePart.FileName);
+                        var filePath = Path.Combine(attachmentsDir, fileName);
                         using (var stream = File.Create(filePath))
                         {
                             await mimePart.Content.DecodeToAsync(stream);
                         }
                         
-                        attachmentNames.Add(mimePart.FileName);
-                        Logger.Log($"[IMAP] Saved attachment: {mimePart.FileName} to {filePath}", agent.Id);
+                        attachmentNames.Add(fileName);
+                        Logger.Log($"[IMAP] Saved attachment: {fileName} to {filePath}", agent.Id);
                     }
                     catch (Exception ex)
                     {
-                        Logger.LogError($"[IMAP] Error saving attachment {mimePart.FileName}: {ex.Message}", agent.Id);
+                        Logger.LogError($"[IMAP] Error saving attachment {fileName}: {ex.Message}", agent.Id);
                     }
                 }
             }
