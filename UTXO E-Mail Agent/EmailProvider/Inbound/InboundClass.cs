@@ -222,4 +222,107 @@ public class InboundClass : IEmailProvider
 
         Logger.LogError($"[Inbound] All {maxRetries} attempts failed for email {mail.Id}");
     }
+
+    public async Task RedirectEmail(MailClass mail, Agent agent, string[] to, string[]? cc = null, string? message = null)
+    {
+        try
+        {
+            var forwardSubject = mail.Subject?.StartsWith("Fwd:") == true || mail.Subject?.StartsWith("FW:") == true
+                ? mail.Subject
+                : $"Fwd: {mail.Subject}";
+
+            // Build forwarded content
+            var forwardHeader = new System.Text.StringBuilder();
+            if (!string.IsNullOrEmpty(message))
+            {
+                forwardHeader.AppendLine(message);
+                forwardHeader.AppendLine();
+            }
+            forwardHeader.AppendLine($"---------- Weitergeleitete E-Mail ----------");
+            forwardHeader.AppendLine($"Von: {mail.From}");
+            forwardHeader.AppendLine($"Datum: {mail.CreatedAt}");
+            forwardHeader.AppendLine($"Betreff: {mail.Subject}");
+            forwardHeader.AppendLine();
+
+            var textBody = forwardHeader.ToString() + (mail.Text ?? "");
+            string? htmlBody = null;
+            if (!string.IsNullOrEmpty(mail.Html))
+            {
+                var htmlHeader = forwardHeader.ToString().Replace("\n", "<br/>");
+                htmlBody = $"<div>{htmlHeader}</div><hr/>{mail.Html}";
+            }
+
+            // Send to each recipient via Inbound API
+            foreach (var recipient in to)
+            {
+                var payload = new
+                {
+                    from = agent.Emailaddress,
+                    to = recipient,
+                    subject = forwardSubject,
+                    text = textBody,
+                    html = htmlBody ?? textBody.Replace("\n", "<br/>"),
+                    reply_to = mail.From // So replies go to original sender
+                };
+
+                var jsonPayload = Newtonsoft.Json.JsonConvert.SerializeObject(payload);
+                var requestUrl = _apiUrl + "emails";
+
+                using var request = new HttpRequestMessage(HttpMethod.Post, requestUrl);
+                request.Headers.TryAddWithoutValidation("Authorization", $"Bearer {_bearerToken}");
+                request.Content = new StringContent(jsonPayload, System.Text.Encoding.UTF8, "application/json");
+
+                var response = await _httpClient.SendAsync(request);
+                if (response.IsSuccessStatusCode)
+                {
+                    Logger.Log($"[Inbound] Successfully redirected email to: {recipient}", agent.Id);
+                }
+                else
+                {
+                    var errorBody = await response.Content.ReadAsStringAsync();
+                    Logger.LogError($"[Inbound] Failed to redirect email to {recipient}: {response.StatusCode} - {errorBody}", agent.Id);
+                }
+            }
+
+            // Also send to CC recipients
+            if (cc != null)
+            {
+                foreach (var ccRecipient in cc)
+                {
+                    var payload = new
+                    {
+                        from = agent.Emailaddress,
+                        to = ccRecipient,
+                        subject = forwardSubject,
+                        text = textBody,
+                        html = htmlBody ?? textBody.Replace("\n", "<br/>"),
+                        reply_to = mail.From
+                    };
+
+                    var jsonPayload = Newtonsoft.Json.JsonConvert.SerializeObject(payload);
+                    var requestUrl = _apiUrl + "emails";
+
+                    using var request = new HttpRequestMessage(HttpMethod.Post, requestUrl);
+                    request.Headers.TryAddWithoutValidation("Authorization", $"Bearer {_bearerToken}");
+                    request.Content = new StringContent(jsonPayload, System.Text.Encoding.UTF8, "application/json");
+
+                    var response = await _httpClient.SendAsync(request);
+                    if (response.IsSuccessStatusCode)
+                    {
+                        Logger.Log($"[Inbound] Successfully redirected email to CC: {ccRecipient}", agent.Id);
+                    }
+                    else
+                    {
+                        var errorBody = await response.Content.ReadAsStringAsync();
+                        Logger.LogError($"[Inbound] Failed to redirect email to CC {ccRecipient}: {response.StatusCode} - {errorBody}", agent.Id);
+                    }
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError($"[Inbound] Error redirecting email: {ex.Message}", agent.Id);
+            throw;
+        }
+    }
 }

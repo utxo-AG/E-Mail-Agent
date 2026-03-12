@@ -337,6 +337,108 @@ public class ImapClass : IEmailProvider
         }
     }
     
+    public async Task RedirectEmail(MailClass mail, Agent agent, string[] to, string[]? cc = null, string? message = null)
+    {
+        try
+        {
+            var mimeMessage = new MimeMessage();
+            mimeMessage.From.Add(new MailboxAddress(agent.Emailaddress, agent.Emailaddress));
+            
+            foreach (var recipient in to)
+            {
+                mimeMessage.To.Add(MailboxAddress.Parse(recipient));
+            }
+            
+            if (cc != null)
+            {
+                foreach (var ccRecipient in cc)
+                {
+                    mimeMessage.Cc.Add(MailboxAddress.Parse(ccRecipient));
+                }
+            }
+            
+            // Set Reply-To to original sender so replies go to them
+            if (!string.IsNullOrEmpty(mail.From))
+            {
+                mimeMessage.ReplyTo.Add(MailboxAddress.Parse(mail.From));
+            }
+            
+            mimeMessage.Subject = mail.Subject?.StartsWith("Fwd:") == true || mail.Subject?.StartsWith("FW:") == true
+                ? mail.Subject
+                : $"Fwd: {mail.Subject}";
+
+            // Build the forwarded email body
+            var builder = new BodyBuilder();
+            
+            // Add optional message before forwarded content
+            var forwardHeader = new System.Text.StringBuilder();
+            if (!string.IsNullOrEmpty(message))
+            {
+                forwardHeader.AppendLine(message);
+                forwardHeader.AppendLine();
+            }
+            forwardHeader.AppendLine($"---------- Weitergeleitete E-Mail ----------");
+            forwardHeader.AppendLine($"Von: {mail.From}");
+            forwardHeader.AppendLine($"Datum: {mail.CreatedAt}");
+            forwardHeader.AppendLine($"Betreff: {mail.Subject}");
+            forwardHeader.AppendLine();
+
+            // Set text body with full original content
+            builder.TextBody = forwardHeader.ToString() + (mail.Text ?? "");
+            
+            // Set HTML body with full original content
+            if (!string.IsNullOrEmpty(mail.Html))
+            {
+                var htmlHeader = forwardHeader.ToString().Replace("\n", "<br/>");
+                builder.HtmlBody = $"<div>{htmlHeader}</div><hr/>{mail.Html}";
+            }
+
+            // Add original attachments
+            if (mail.Attachments != null && mail.Attachments.Length > 0)
+            {
+                var attachmentsDir = Path.Combine(Path.GetTempPath(), "attachments", agent.Id.ToString(), mail.Id ?? "unknown");
+                foreach (var attachmentName in mail.Attachments)
+                {
+                    var filePath = Path.Combine(attachmentsDir, attachmentName);
+                    if (File.Exists(filePath))
+                    {
+                        await builder.Attachments.AddAsync(filePath);
+                        Logger.Log($"[IMAP/SMTP] Added attachment: {attachmentName}", agent.Id);
+                    }
+                    else
+                    {
+                        Logger.LogWarning($"[IMAP/SMTP] Attachment file not found: {filePath}", agent.Id);
+                    }
+                }
+            }
+
+            mimeMessage.Body = builder.ToMessageBody();
+
+            // Send via SMTP
+            using var smtp = new SmtpClient();
+            smtp.ServerCertificateValidationCallback = (s, c, h, e) => true;
+
+            var smtpServer = agent.Smtpserver ?? throw new InvalidOperationException("SMTP server not configured");
+            var smtpPort = agent.Smtpport ?? 465;
+            var useSsl = agent.Smtpusessl ?? true;
+
+            await smtp.ConnectAsync(smtpServer, smtpPort, useSsl);
+            await smtp.AuthenticateAsync(
+                agent.Smtpusername ?? throw new InvalidOperationException("SMTP username not configured"),
+                agent.Smtppassword ?? throw new InvalidOperationException("SMTP password not configured"));
+
+            await smtp.SendAsync(mimeMessage);
+            await smtp.DisconnectAsync(true);
+
+            Logger.Log($"[IMAP/SMTP] Successfully redirected email to: {string.Join(", ", to)}", agent.Id);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError($"[IMAP/SMTP] Error redirecting email: {ex.Message}", agent.Id);
+            throw;
+        }
+    }
+
     /// <summary>
     /// Recursively collects all MIME parts from a multipart message
     /// </summary>

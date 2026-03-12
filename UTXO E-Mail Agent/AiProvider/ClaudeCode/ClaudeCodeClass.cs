@@ -373,11 +373,9 @@ public class ClaudeCodeClass : IAiProvider
         sb.AppendLine("Du hast Zugriff auf folgende APIs. Verwende curl via Bash um sie aufzurufen.");
         sb.AppendLine();
         
-        // Critical forwarding instruction
-        sb.AppendLine("🚨 WICHTIG FÜR ALLE API-AUFRUFE MIT E-MAIL-INHALTEN:");
-        sb.AppendLine("Bei curl-Aufrufen an send_email API MUSS der VOLLSTÄNDIGE E-Mail-Inhalt übergeben werden!");
-        sb.AppendLine("- NIEMALS den text/html Parameter kürzen oder zusammenfassen!");
-        sb.AppendLine("- Der GESAMTE Original-Inhalt muss 1:1 im JSON-Body stehen!");
+        // Redirect info
+        sb.AppendLine("📨 HINWEIS: Für E-Mail-Weiterleitungen verwende Action='redirect' in deiner JSON-Antwort!");
+        sb.AppendLine("Das System leitet dann die komplette Original-E-Mail automatisch weiter.");
         sb.AppendLine();
 
         foreach (var api in agent.Mcpservers)

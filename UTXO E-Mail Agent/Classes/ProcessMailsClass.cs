@@ -135,52 +135,11 @@ public class ProcessMailsClass(DefaultdbContext db, IConfiguration configuration
     {
         var s = Environment.NewLine + "🔧 VERFÜGBARE TOOLS:" + Environment.NewLine + Environment.NewLine;
 
-        // Built-in send_email API - for forwarding/sending to OTHER recipients
-        s += "📧 **send_email API** (für Weiterleitungen an ANDERE Empfänger)" + Environment.NewLine;
-        s += Environment.NewLine;
-        s += "   ⚠️ WICHTIG - WANN WAS VERWENDEN:" + Environment.NewLine;
-        s += "   • Antwort an den URSPRÜNGLICHEN Absender → Verwende die JSON-Antwort (EmailResponseText etc.)" + Environment.NewLine;
-        s += "     Das System verschickt die Antwort automatisch!" + Environment.NewLine;
-        s += "   • Weiterleitung/E-Mail an ANDERE Empfänger → Verwende send_email API (curl)" + Environment.NewLine;
-        s += Environment.NewLine;
-        s += "   Aufruf per curl (nur für Weiterleitungen!):" + Environment.NewLine;
-        s += "   ```bash" + Environment.NewLine;
-        s += "   curl -X POST http://localhost:5051/api/send_email \\" + Environment.NewLine;
-        s += "     -H \"Content-Type: application/json\" \\" + Environment.NewLine;
-        s += "     -d '{" + Environment.NewLine;
-        s += $"       \"agentName\": \"{agent.Agentname}\"," + Environment.NewLine;
-        s += $"       \"agentId\": {agent.Id}," + Environment.NewLine;
-        s += "       \"to\": \"empfaenger@example.com\"," + Environment.NewLine;
-        s += "       \"cc\": \"kopie@example.com\"," + Environment.NewLine;
-        s += "       \"subject\": \"Betreff\"," + Environment.NewLine;
-        s += "       \"text\": \"E-Mail Inhalt als Text\"," + Environment.NewLine;
-        s += "       \"html\": \"<p>E-Mail Inhalt als HTML</p>\"," + Environment.NewLine;
-        s += "       \"replyTo\": \"antwort-an@example.com\"," + Environment.NewLine;
-        s += "       \"messageId\": \"original-message-id\"," + Environment.NewLine;
-        s += "       \"attachments\": [\"datei1.pdf\", \"datei2.xlsx\"]" + Environment.NewLine;
-        s += "     }'" + Environment.NewLine;
-        s += "   ```" + Environment.NewLine;
-        s += Environment.NewLine;
-        s += "   Parameter:" + Environment.NewLine;
-        s += $"   - agentName: \"{agent.Agentname}\" (IMMER erforderlich!)" + Environment.NewLine;
-        s += $"   - agentId: {agent.Id} (erforderlich bei Attachments)" + Environment.NewLine;
-        s += "   - to: Empfänger E-Mail-Adresse (erforderlich)" + Environment.NewLine;
-        s += "   - cc: CC-Empfänger (optional)" + Environment.NewLine;
-        s += "   - subject: Betreff (erforderlich)" + Environment.NewLine;
-        s += "   - text: Inhalt als Plain-Text (erforderlich)" + Environment.NewLine;
-        s += "   - html: Inhalt als HTML (optional)" + Environment.NewLine;
-        s += "   - replyTo: Antwort-Adresse (WICHTIG bei Weiterleitungen - setze auf Kunden-E-Mail!)" + Environment.NewLine;
-        s += "   - messageId: ID der Original-E-Mail (erforderlich bei Attachments)" + Environment.NewLine;
-        s += "   - attachments: Array mit Dateinamen der Anhänge zum Weiterleiten (optional)" + Environment.NewLine;
-        s += $"   Absender ist automatisch: {agent.Emailaddress}" + Environment.NewLine;
-        s += Environment.NewLine;
-        s += "   ⚠️ KRITISCH - VOLLSTÄNDIGE WEITERLEITUNG:" + Environment.NewLine;
-        s += "   Bei E-Mail-Weiterleitungen MUSS der VOLLSTÄNDIGE Inhalt übergeben werden!" + Environment.NewLine;
-        s += "   - NIEMALS den Inhalt kürzen, zusammenfassen oder '[...]' einfügen!" + Environment.NewLine;
-        s += "   - Der komplette 'text' Parameter muss den gesamten Plain-Text enthalten" + Environment.NewLine;
-        s += "   - Der komplette 'html' Parameter muss den gesamten HTML-Inhalt enthalten" + Environment.NewLine;
-        s += "   - Kopiere den Inhalt 1:1 - keine Änderungen, keine Auslassungen!" + Environment.NewLine;
-        s += "   - Alle Anhänge im 'attachments' Array auflisten" + Environment.NewLine;
+        // Redirect reminder
+        s += "📨 **E-MAIL WEITERLEITUNG**" + Environment.NewLine;
+        s += "   Für Weiterleitungen verwende Action='redirect' in deiner JSON-Antwort!" + Environment.NewLine;
+        s += "   Das System leitet die komplette Original-E-Mail inkl. HTML und Anhänge automatisch weiter." + Environment.NewLine;
+        s += "   Du musst nur die Empfänger angeben (RedirectTo, optional RedirectCc)." + Environment.NewLine;
         s += Environment.NewLine;
 
         // Agent-specific MCP servers
@@ -197,8 +156,10 @@ public class ProcessMailsClass(DefaultdbContext db, IConfiguration configuration
         }
 
         s += "ZUSAMMENFASSUNG:" + Environment.NewLine;
-        s += "• Antwort an Absender → JSON-Antwort mit EmailResponseText (System verschickt automatisch)" + Environment.NewLine;
-        s += "• Weiterleitung an andere → send_email API per curl" + Environment.NewLine;
+        s += "• Antwort an Absender → Action='respond' mit EmailResponseText" + Environment.NewLine;
+        s += "• Weiterleitung an andere → Action='redirect' mit RedirectTo Array" + Environment.NewLine;
+        s += "• Spam/unwichtig → Action='delete'" + Environment.NewLine;
+        s += "• Selbst erledigt → Action='ignore'" + Environment.NewLine;
         return s;
     }
 
@@ -210,16 +171,7 @@ public class ProcessMailsClass(DefaultdbContext db, IConfiguration configuration
         promptBuilder.AppendLine($"Sprache in der Du die Antwort erstellen sollst: {agent.Defaultlanguage}");
         promptBuilder.AppendLine();
         
-        // CRITICAL: Full content forwarding instruction at the TOP of the prompt
-        promptBuilder.AppendLine("🚨🚨🚨 ABSOLUT KRITISCHE REGEL FÜR E-MAIL-WEITERLEITUNGEN 🚨🚨🚨");
-        promptBuilder.AppendLine("Wenn du eine E-Mail weiterleitest (per curl/send_email API):");
-        promptBuilder.AppendLine("- Du MUSST den VOLLSTÄNDIGEN Original-Inhalt im 'text' und 'html' Parameter übergeben!");
-        promptBuilder.AppendLine("- NIEMALS kürzen, zusammenfassen, oder '...' / '[...]' einfügen!");
-        promptBuilder.AppendLine("- NIEMALS Teile weglassen oder 'vollständiger Inhalt folgt' schreiben!");
-        promptBuilder.AppendLine("- Kopiere den GESAMTEN Inhalt 1:1 in den curl-Request!");
-        promptBuilder.AppendLine("- Bei langen E-Mails: TROTZDEM alles übertragen, egal wie lang!");
-        promptBuilder.AppendLine("🚨🚨🚨 ENDE KRITISCHE REGEL 🚨🚨🚨");
-        promptBuilder.AppendLine();
+
 
         if (!string.IsNullOrEmpty(agent.Customer.Companyinformation))
         {
@@ -263,29 +215,36 @@ public class ProcessMailsClass(DefaultdbContext db, IConfiguration configuration
         promptBuilder.AppendLine("```");
 
         promptBuilder.AppendLine();
-        promptBuilder.AppendLine("WICHTIG - SEND_EMAIL VS. JSON-ANTWORT:");
-        promptBuilder.AppendLine("Es gibt ZWEI verschiedene Wege eine E-Mail zu senden:");
-        promptBuilder.AppendLine("1. send_email Tool: NUR für Weiterleitungen an ANDERE Adressen (z.B. internes Team, Support)");
-        promptBuilder.AppendLine("2. JSON-Antwort (EmailResponseText/Html): NUR für die Antwort an den URSPRÜNGLICHEN ABSENDER");
+        promptBuilder.AppendLine("KRITISCH - AKTIONEN UND ANTWORTFORMAT:");
+        promptBuilder.AppendLine("Du musst IMMER eine der folgenden Aktionen im JSON angeben:");
         promptBuilder.AppendLine();
-        promptBuilder.AppendLine("NIEMALS send_email benutzen um dem ursprünglichen Absender zu antworten!");
-        promptBuilder.AppendLine("Die Antwort an den Absender erfolgt IMMER über die JSON-Felder EmailResponseText/EmailResponseHtml.");
-        promptBuilder.AppendLine("Das System schickt die JSON-Antwort automatisch an den Absender.");
+        promptBuilder.AppendLine("📧 ACTION = \"respond\" - Antwort an den URSPRÜNGLICHEN Absender senden");
+        promptBuilder.AppendLine("   → Fülle EmailResponseText, EmailResponseSubject, EmailResponseHtml aus");
+        promptBuilder.AppendLine("   → Das System sendet die Antwort automatisch");
         promptBuilder.AppendLine();
-        promptBuilder.AppendLine("- Ob der ursprüngliche Absender eine Antwort erhalten soll, steht in deiner Aufgabe oben");
-        promptBuilder.AppendLine("- Wenn der Absender eine Antwort bekommen soll: Fülle EmailResponseText, EmailResponseSubject und EmailResponseHtml aus");
-        promptBuilder.AppendLine("- Wenn der Absender KEINE Antwort bekommen soll: Setze EmailResponseText, EmailResponseSubject und EmailResponseHtml auf null");
-        promptBuilder.AppendLine("- Erkläre in AiExplanation IMMER was du getan hast");
+        promptBuilder.AppendLine("📨 ACTION = \"redirect\" - E-Mail an ANDERE Empfänger weiterleiten");
+        promptBuilder.AppendLine("   → Setze RedirectTo (Array mit E-Mail-Adressen)");
+        promptBuilder.AppendLine("   → Optional: RedirectCc für CC-Empfänger");
+        promptBuilder.AppendLine("   → Optional: RedirectMessage für eine kurze Nachricht vor der Original-Mail");
+        promptBuilder.AppendLine("   → Das System leitet die KOMPLETTE Original-E-Mail automatisch weiter (inkl. HTML und Anhänge)!");
+        promptBuilder.AppendLine("   → EmailResponseText etc. auf null setzen");
         promptBuilder.AppendLine();
-
+        promptBuilder.AppendLine("🗑️ ACTION = \"delete\" - E-Mail ist Spam/unwichtig, keine Aktion nötig");
+        promptBuilder.AppendLine("   → Alle EmailResponse-Felder auf null setzen");
         promptBuilder.AppendLine();
-        promptBuilder.AppendLine("KRITISCH - ANTWORTFORMAT:");
+        promptBuilder.AppendLine("⏭️ ACTION = \"ignore\" - Du hast die Aufgabe bereits selbst erledigt (z.B. über API-Aufrufe)");
+        promptBuilder.AppendLine("   → Alle EmailResponse-Felder auf null setzen");
+        promptBuilder.AppendLine();
         promptBuilder.AppendLine("Deine FINALE Antwort MUSS ZWINGEND folgendes JSON-Format haben:");
         promptBuilder.AppendLine("```json");
         promptBuilder.AppendLine("{");
+        promptBuilder.AppendLine("  \"Action\": \"respond\",  // oder \"redirect\", \"delete\", \"ignore\"");
         promptBuilder.AppendLine("  \"EmailResponseText\": \"...\",");
         promptBuilder.AppendLine("  \"EmailResponseSubject\": \"...\",");
         promptBuilder.AppendLine("  \"EmailResponseHtml\": \"...\",");
+        promptBuilder.AppendLine("  \"RedirectTo\": [\"empfaenger@example.com\"],  // nur bei Action=redirect");
+        promptBuilder.AppendLine("  \"RedirectCc\": [],  // optional bei redirect");
+        promptBuilder.AppendLine("  \"RedirectMessage\": \"Kurze Info...\",  // optional bei redirect");
         promptBuilder.AppendLine("  \"AiExplanation\": \"...\",");
         promptBuilder.AppendLine("  \"attachments\": [],");
         promptBuilder.AppendLine("  \"MustCreateAttachment\": false,");
@@ -296,12 +255,14 @@ public class ProcessMailsClass(DefaultdbContext db, IConfiguration configuration
         promptBuilder.AppendLine("```");
         promptBuilder.AppendLine();
         promptBuilder.AppendLine("WICHTIGE Regeln für die Antwort:");
+        promptBuilder.AppendLine("- Das 'Action' Feld ist PFLICHT und bestimmt was passiert");
         promptBuilder.AppendLine("- Du kannst optional KURZ deine Überlegungen erklären, aber dann MUSS das vollständige JSON folgen");
         promptBuilder.AppendLine("- Das JSON muss IMMER am Ende deiner finalen Antwort stehen");
-        promptBuilder.AppendLine("- Wenn Du eine Mail als HTML bekommen hast, antworte auch als HTML");
-        promptBuilder.AppendLine("- Die Antwort soll sowohl EmailResponseText (plain text) als auch EmailResponseHtml (HTML) enthalten");
-        promptBuilder.AppendLine("- Die ursprüngliche E-Mail des Kunden soll eingerückt/quoted sein");
-        promptBuilder.AppendLine("- Der Betreff soll ein 'RE:' vorangestellt haben");
+        promptBuilder.AppendLine("- Bei Action='respond': Antworte in HTML wenn die Original-Mail HTML war");
+        promptBuilder.AppendLine("- Bei Action='respond': Die Antwort soll EmailResponseText UND EmailResponseHtml enthalten");
+        promptBuilder.AppendLine("- Bei Action='respond': Die ursprüngliche E-Mail des Kunden soll eingerückt/quoted sein");
+        promptBuilder.AppendLine("- Bei Action='respond': Der Betreff soll ein 'RE:' vorangestellt haben");
+        promptBuilder.AppendLine("- Bei Action='redirect': Das System kümmert sich um ALLES - du gibst nur die Empfänger an!");
         promptBuilder.AppendLine();
         promptBuilder.AppendLine("ATTACHMENTS (PDFs, DOCs, etc.) - WICHTIG:");
         promptBuilder.AppendLine("Wenn der Kunde ein Dokument (PDF, Word, Excel, PowerPoint) anfordert:");

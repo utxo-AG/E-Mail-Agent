@@ -166,22 +166,52 @@ public class EmailPollingService : BackgroundService
 
                             await Logger.LogAsync($"[EmailPollingService] AI Response generated", agent.Id, aiResponse.AiExplanation);
 
-                            // Only send reply if there's actual content and recipient hasn't already been emailed via send_email tool
-                            if (!string.IsNullOrEmpty(aiResponse.EmailResponseText) || !string.IsNullOrEmpty(aiResponse.EmailResponseHtml))
+                            // Process based on Action field
+                            var action = aiResponse.Action?.ToLowerInvariant() ?? "respond";
+                            
+                            switch (action)
                             {
-                                if (!string.IsNullOrEmpty(mail.From) && aiResponse.AlreadySentTo.Contains(mail.From))
-                                {
-                                    await Logger.LogAsync($"[EmailPollingService] Skipping reply to {mail.From} - already sent via send_email tool", agent.Id);
-                                }
-                                else
-                                {
-                                    await provider.SendReplyResponseEmail(aiResponse, mail, agent, aiResponse.Conversation);
-                                    await Logger.LogAsync($"[EmailPollingService] Reply sent to {mail.From}", agent.Id, aiResponse.EmailResponseText);
-                                }
-                            }
-                            else
-                            {
-                                await Logger.LogAsync($"[EmailPollingService] No reply sent (forwarded or no response required)", agent.Id);
+                                case "redirect":
+                                    // Forward the ORIGINAL email with all content to the specified recipients
+                                    if (aiResponse.RedirectTo != null && aiResponse.RedirectTo.Length > 0)
+                                    {
+                                        await provider.RedirectEmail(mail, agent, aiResponse.RedirectTo, aiResponse.RedirectCc, aiResponse.RedirectMessage);
+                                        await Logger.LogAsync($"[EmailPollingService] Email redirected to: {string.Join(", ", aiResponse.RedirectTo)}", agent.Id);
+                                    }
+                                    else
+                                    {
+                                        await Logger.LogAsync($"[EmailPollingService] Redirect action but no RedirectTo specified", agent.Id);
+                                    }
+                                    break;
+                                    
+                                case "delete":
+                                    await Logger.LogAsync($"[EmailPollingService] Email marked as spam/deleted - no action taken", agent.Id);
+                                    break;
+                                    
+                                case "ignore":
+                                    await Logger.LogAsync($"[EmailPollingService] Action=ignore - AI handled the task independently", agent.Id);
+                                    break;
+                                    
+                                case "respond":
+                                default:
+                                    // Original behavior: send reply if there's content
+                                    if (!string.IsNullOrEmpty(aiResponse.EmailResponseText) || !string.IsNullOrEmpty(aiResponse.EmailResponseHtml))
+                                    {
+                                        if (!string.IsNullOrEmpty(mail.From) && aiResponse.AlreadySentTo.Contains(mail.From))
+                                        {
+                                            await Logger.LogAsync($"[EmailPollingService] Skipping reply to {mail.From} - already sent via send_email tool", agent.Id);
+                                        }
+                                        else
+                                        {
+                                            await provider.SendReplyResponseEmail(aiResponse, mail, agent, aiResponse.Conversation);
+                                            await Logger.LogAsync($"[EmailPollingService] Reply sent to {mail.From}", agent.Id, aiResponse.EmailResponseText);
+                                        }
+                                    }
+                                    else
+                                    {
+                                        await Logger.LogAsync($"[EmailPollingService] No reply sent (no response content)", agent.Id);
+                                    }
+                                    break;
                             }
 
                             // Cleanup: Delete entire working directory after sending

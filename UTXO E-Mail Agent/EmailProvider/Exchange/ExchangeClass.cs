@@ -29,4 +29,8 @@ public class ExchangeClass : IEmailProvider
         throw new NotImplementedException();
     }
 
+    public Task RedirectEmail(MailClass mail, Agent agent, string[] to, string[]? cc = null, string? message = null)
+    {
+        throw new NotImplementedException();
+    }
 }

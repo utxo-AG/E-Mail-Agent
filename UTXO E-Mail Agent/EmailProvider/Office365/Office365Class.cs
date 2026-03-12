@@ -312,6 +312,90 @@ public class Office365Class : IEmailProvider
         if (string.IsNullOrEmpty(html)) return null;
         return System.Text.RegularExpressions.Regex.Replace(html, "<[^>]*>", "");
     }
+
+    public async Task RedirectEmail(MailClass mail, Agent agent, string[] to, string[]? cc = null, string? message = null)
+    {
+        try
+        {
+            var accessToken = await _tokenService.GetValidTokenAsync(agent);
+            if (string.IsNullOrEmpty(accessToken))
+            {
+                Logger.LogError("[Office365] No valid access token available.", agent.Id);
+                throw new InvalidOperationException("No valid Office 365 access token");
+            }
+
+            var graphClient = CreateGraphClient(accessToken);
+
+            var forwardSubject = mail.Subject?.StartsWith("Fwd:") == true || mail.Subject?.StartsWith("FW:") == true
+                ? mail.Subject
+                : $"Fwd: {mail.Subject}";
+
+            // Build forwarded content
+            var forwardHeader = new System.Text.StringBuilder();
+            if (!string.IsNullOrEmpty(message))
+            {
+                forwardHeader.AppendLine(message);
+                forwardHeader.AppendLine();
+            }
+            forwardHeader.AppendLine($"---------- Weitergeleitete E-Mail ----------");
+            forwardHeader.AppendLine($"Von: {mail.From}");
+            forwardHeader.AppendLine($"Datum: {mail.CreatedAt}");
+            forwardHeader.AppendLine($"Betreff: {mail.Subject}");
+            forwardHeader.AppendLine();
+
+            string htmlBody;
+            if (!string.IsNullOrEmpty(mail.Html))
+            {
+                var htmlHeader = forwardHeader.ToString().Replace("\n", "<br/>");
+                htmlBody = $"<div>{htmlHeader}</div><hr/>{mail.Html}";
+            }
+            else
+            {
+                htmlBody = forwardHeader.ToString().Replace("\n", "<br/>") + (mail.Text ?? "").Replace("\n", "<br/>");
+            }
+
+            var forwardMessage = new Message
+            {
+                Subject = forwardSubject,
+                Body = new ItemBody
+                {
+                    ContentType = BodyType.Html,
+                    Content = htmlBody
+                },
+                ToRecipients = to.Select(addr => new Recipient
+                {
+                    EmailAddress = new EmailAddress { Address = addr }
+                }).ToList(),
+                ReplyTo = new List<Recipient>
+                {
+                    new Recipient { EmailAddress = new EmailAddress { Address = mail.From } }
+                }
+            };
+
+            if (cc != null && cc.Length > 0)
+            {
+                forwardMessage.CcRecipients = cc.Select(addr => new Recipient
+                {
+                    EmailAddress = new EmailAddress { Address = addr }
+                }).ToList();
+            }
+
+            // TODO: Add attachments from original email if needed
+
+            await graphClient.Me.SendMail.PostAsync(new Microsoft.Graph.Me.SendMail.SendMailPostRequestBody
+            {
+                Message = forwardMessage,
+                SaveToSentItems = true
+            });
+
+            Logger.Log($"[Office365] Successfully redirected email to: {string.Join(", ", to)}", agent.Id);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError($"[Office365] Error redirecting email: {ex.Message}", agent.Id);
+            throw;
+        }
+    }
 }
 
 /// <summary>

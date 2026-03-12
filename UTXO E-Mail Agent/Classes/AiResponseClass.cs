@@ -54,4 +54,25 @@ public class AiResponseClass
     public string? AttachmentType { get; set; }  // "pdf", "docx", "xlsx", "pptx"
     public string? AttachmentData { get; set; }  // Structured data for the document (JSON or text)
     public string? AttachmentFilename { get; set; }  // Suggested filename for the attachment
+    
+    // Action fields - what to do with the email
+    /// <summary>
+    /// Action to perform: "respond" (send reply), "redirect" (forward to others), "delete" (spam), "ignore" (no action needed)
+    /// </summary>
+    public string? Action { get; set; }  // "respond", "redirect", "delete", "ignore"
+    
+    /// <summary>
+    /// Recipients for redirect action (TO addresses)
+    /// </summary>
+    public string[]? RedirectTo { get; set; }
+    
+    /// <summary>
+    /// CC recipients for redirect action
+    /// </summary>
+    public string[]? RedirectCc { get; set; }
+    
+    /// <summary>
+    /// Optional message to prepend when redirecting
+    /// </summary>
+    public string? RedirectMessage { get; set; }
 }
