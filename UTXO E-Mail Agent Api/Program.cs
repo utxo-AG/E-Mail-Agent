@@ -14,6 +14,9 @@ builder.Services.AddDbContext<DefaultdbContext>(options =>
 // Add controllers
 builder.Services.AddControllers();
 
+// Add HttpClient for webhook forwarding
+builder.Services.AddHttpClient();
+
 // Add API Key Authentication
 builder.Services.AddAuthentication("ApiKey")
     .AddScheme<ApiKeyAuthenticationOptions, ApiKeyAuthenticationHandler>("ApiKey", null);

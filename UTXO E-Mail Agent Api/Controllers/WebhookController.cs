@@ -1,3 +1,5 @@
+using System.Text;
+using System.Text.Json;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using UTXO_E_Mail_Agent_Api.DTOs;
@@ -17,16 +19,19 @@ public class WebhookController : ControllerBase
     private readonly DefaultdbContext _db;
     private readonly IConfiguration _configuration;
     private readonly ILogger<WebhookController> _logger;
+    private readonly IHttpClientFactory _httpClientFactory;
 
-    public WebhookController(DefaultdbContext db, IConfiguration configuration, ILogger<WebhookController> logger)
+    public WebhookController(DefaultdbContext db, IConfiguration configuration, ILogger<WebhookController> logger, IHttpClientFactory httpClientFactory)
     {
         _db = db;
         _configuration = configuration;
         _logger = logger;
+        _httpClientFactory = httpClientFactory;
     }
 
     /// <summary>
     /// Receive inbound email via webhook (not publicly documented)
+    /// Forwards the email to the agent's /api/processemail endpoint
     /// </summary>
     [HttpPost("inbound/{agentId}")]
     public async Task<ActionResult> ReceiveInboundEmail(int agentId, [FromBody] InboundEmailWebhookDto dto)
@@ -54,43 +59,72 @@ public class WebhookController : ControllerBase
             return NotFound(new { message = "Agent not found" });
         }
 
-        // Check if email was already processed (by MessageId)
         var messageId = dto.Id ?? Guid.NewGuid().ToString();
-        var existingConversation = await _db.Conversations
-            .AsNoTracking()
-            .FirstOrDefaultAsync(c => c.Messageid == messageId && c.AgentId == agentId);
-
-        if (existingConversation != null)
-        {
-            _logger.LogInformation("Email {MessageId} already processed for agent {AgentId}, skipping", messageId, agentId);
-            return Ok(new { message = "Email already processed", conversationId = existingConversation.Id });
-        }
-
-        // Create conversation entry (claiming the email)
-        var conversation = new Conversation
-        {
-            AgentId = agentId,
-            Messageid = messageId,
-            Emailfrom = dto.From ?? "(Unknown)",
-            Subject = dto.Subject ?? "(No Subject)",
-            Text = dto.Text,
-            Htmltext = dto.Html,
-            Emailreceived = dto.CreatedAt ?? DateTime.UtcNow
-        };
-
-        _db.Conversations.Add(conversation);
-        await _db.SaveChangesAsync();
-
-        _logger.LogInformation("Webhook received email for agent {AgentId}: {Subject} from {From}", 
+        
+        _logger.LogInformation("Webhook received email for agent {AgentId}: {Subject} from {From}, forwarding to processemail", 
             agentId, dto.Subject, dto.From);
 
-        // Return conversation ID for tracking
-        return Ok(new 
-        { 
-            message = "Email received", 
-            conversationId = conversation.Id,
-            status = "pending_processing"
-        });
+        // Forward to agent's /api/processemail endpoint
+        var agentApiUrl = _configuration["AgentApiUrl"] ?? "http://localhost:5051";
+        var processEmailUrl = $"{agentApiUrl.TrimEnd('/')}/api/processemail";
+
+        // Build ProcessMailRequestClass-compatible payload
+        var processEmailRequest = new
+        {
+            MessageId = messageId,
+            AgentName = agent.Agentname,
+            From = dto.From ?? "(Unknown)",
+            To = new[] { agent.Email ?? "" },
+            Subject = dto.Subject ?? "(No Subject)",
+            Status = "unread",
+            CreatedAt = (dto.CreatedAt ?? DateTime.UtcNow).ToString("o"),
+            Html = dto.Html,
+            Text = dto.Text,
+            Attachments = dto.Attachments?.Select(a => a.Filename).Where(f => f != null).ToArray() ?? Array.Empty<string>(),
+            HasAttachments = dto.Attachments?.Any() ?? false
+        };
+
+        try
+        {
+            var httpClient = _httpClientFactory.CreateClient();
+            var jsonContent = new StringContent(
+                JsonSerializer.Serialize(processEmailRequest),
+                Encoding.UTF8,
+                "application/json"
+            );
+
+            var response = await httpClient.PostAsync(processEmailUrl, jsonContent);
+            var responseContent = await response.Content.ReadAsStringAsync();
+
+            if (response.IsSuccessStatusCode)
+            {
+                _logger.LogInformation("Successfully forwarded email {MessageId} to agent {AgentId} processemail endpoint", 
+                    messageId, agentId);
+                
+                return Ok(new 
+                { 
+                    message = "Email forwarded for processing", 
+                    messageId = messageId,
+                    status = "queued"
+                });
+            }
+            else
+            {
+                _logger.LogError("Failed to forward email {MessageId} to processemail: {StatusCode} - {Response}", 
+                    messageId, response.StatusCode, responseContent);
+                
+                return StatusCode(502, new 
+                { 
+                    message = "Failed to forward email to agent", 
+                    error = responseContent 
+                });
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Exception while forwarding email {MessageId} to processemail", messageId);
+            return StatusCode(500, new { message = "Error forwarding email", error = ex.Message });
+        }
     }
 
     /// <summary>
