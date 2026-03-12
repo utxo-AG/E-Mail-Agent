@@ -174,6 +174,14 @@ public class ProcessMailsClass(DefaultdbContext db, IConfiguration configuration
         s += "   - attachments: Array mit Dateinamen der Anhänge zum Weiterleiten (optional)" + Environment.NewLine;
         s += $"   Absender ist automatisch: {agent.Emailaddress}" + Environment.NewLine;
         s += Environment.NewLine;
+        s += "   ⚠️ KRITISCH - VOLLSTÄNDIGE WEITERLEITUNG:" + Environment.NewLine;
+        s += "   Bei E-Mail-Weiterleitungen MUSS der VOLLSTÄNDIGE Inhalt übergeben werden!" + Environment.NewLine;
+        s += "   - NIEMALS den Inhalt kürzen, zusammenfassen oder '[...]' einfügen!" + Environment.NewLine;
+        s += "   - Der komplette 'text' Parameter muss den gesamten Plain-Text enthalten" + Environment.NewLine;
+        s += "   - Der komplette 'html' Parameter muss den gesamten HTML-Inhalt enthalten" + Environment.NewLine;
+        s += "   - Kopiere den Inhalt 1:1 - keine Änderungen, keine Auslassungen!" + Environment.NewLine;
+        s += "   - Alle Anhänge im 'attachments' Array auflisten" + Environment.NewLine;
+        s += Environment.NewLine;
 
         // Agent-specific MCP servers
         if (agent.Mcpservers.Any())

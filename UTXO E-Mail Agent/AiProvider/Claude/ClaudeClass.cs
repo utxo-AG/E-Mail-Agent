@@ -170,8 +170,8 @@ public class ClaudeClass : IAiProvider
                 {
                     { "to", new Property() { Type = "string", Description = "Recipient email address" } },
                     { "subject", new Property() { Type = "string", Description = "Email subject" } },
-                    { "text", new Property() { Type = "string", Description = "Plain text content of the email" } },
-                    { "html", new Property() { Type = "string", Description = "HTML content of the email (optional)" } },
+                    { "text", new Property() { Type = "string", Description = "COMPLETE plain text content of the email. When forwarding, include the ENTIRE original text - never truncate or summarize!" } },
+                    { "html", new Property() { Type = "string", Description = "COMPLETE HTML content of the email. When forwarding HTML emails, this is REQUIRED and must contain the ENTIRE original HTML - never truncate or summarize!" } },
                     { "reply_to", new Property() { Type = "string", Description = "Reply-to address (optional). IMPORTANT: When forwarding a customer email, set this to the customer's email so replies go directly to them." } }
                 },
                 Required = new List<string>() { "to", "subject", "text" }
@@ -182,7 +182,7 @@ public class ClaudeClass : IAiProvider
 
             tools.Add(new Function(
                 "send_email",
-                $"Send an email to a recipient. Use this to forward emails or send new emails. The sender address is always {agent.Emailaddress}. When forwarding, use reply_to with the original sender's email so replies go to them.",
+                $"Send an email to a recipient. Use this to forward emails or send new emails. The sender address is always {agent.Emailaddress}. CRITICAL: When forwarding emails, you MUST include the COMPLETE content in both 'text' and 'html' parameters - NEVER truncate, summarize or use '[...]'. Always set reply_to to the original sender's email.",
                 JsonNode.Parse(sendEmailSchemaJson)));
 
             Logger.Log($"[MCP] Registered built-in tool: send_email (from: {agent.Emailaddress})", agent.Id);
