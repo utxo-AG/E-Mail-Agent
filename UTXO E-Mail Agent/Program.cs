@@ -1,14 +1,10 @@
-﻿using Microsoft.AspNetCore.Builder;
-using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Builder;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
-using Newtonsoft.Json;
+using UTXO_E_Mail_Agent.Api;
 using UTXO_E_Mail_Agent.Classes;
-using UTXO_E_Mail_Agent.EmailProvider.Inbound.Classes;
-using UTXO_E_Mail_Agent.Factory;
-using UTXO_E_Mail_Agent.Models;
 using UTXO_E_Mail_Agent.Services;
 using UTXO_E_Mail_Agent_Shared.Models;
 
@@ -20,10 +16,6 @@ public class Program
     private const string Version = "1.5.0";
     private const string BuildDate = "2026-03-12";
 
-    private static IConfiguration _configuration = null!;
-    private static int _pollingIntervalSeconds;
-    private static string _connectionString = null!;
-
     public static async Task Main(string[] args)
     {
         Console.WriteLine("═══════════════════════════════════════════════════");
@@ -34,31 +26,31 @@ public class Program
         var builder = WebApplication.CreateBuilder(args);
 
         // Configuration
-        _configuration = builder.Configuration;
-        _pollingIntervalSeconds = int.Parse(_configuration["AppSettings:PollingIntervalSeconds"] ?? "60");
-        _connectionString = _configuration.GetConnectionString("DefaultConnection")
+        var configuration = builder.Configuration;
+        var pollingIntervalSeconds = int.Parse(configuration["AppSettings:PollingIntervalSeconds"] ?? "60");
+        var connectionString = configuration.GetConnectionString("DefaultConnection")
             ?? throw new InvalidOperationException("Connection string 'DefaultConnection' not found.");
 
         // Initialize logger with database connection
-        Logger.Initialize(_connectionString);
+        Logger.Initialize(connectionString);
 
         // Add services
         builder.Services.AddDbContext<DefaultdbContext>(options =>
-            options.UseMySql(_connectionString, ServerVersion.AutoDetect(_connectionString),
+            options.UseMySql(connectionString, ServerVersion.AutoDetect(connectionString),
                 mysqlOptions => mysqlOptions.UseQuerySplittingBehavior(QuerySplittingBehavior.SplitQuery)));
 
         // Add CORS for Admintool access
         builder.Services.AddCors(options =>
         {
             options.AddPolicy("AllowAll",
-                builder => builder
+                policyBuilder => policyBuilder
                     .AllowAnyOrigin()
                     .AllowAnyMethod()
                     .AllowAnyHeader());
         });
 
         // Add background service for email polling
-        builder.Services.AddSingleton<IConfiguration>(_configuration);
+        builder.Services.AddSingleton<IConfiguration>(configuration);
         builder.Services.AddHostedService<EmailPollingService>();
 
         // Add background task queue for fire-and-forget email processing
@@ -100,473 +92,23 @@ public class Program
             options.RoutePrefix = "swagger"; // Swagger will be available at /swagger
         });
 
-        // API endpoint for processing emails
-        app.MapPost("/api/processtext", async (ProcessTextRequestClass request, DefaultdbContext db) =>
-        {
-            try
-            {
-                // Get agent (default to first active agent if not specified)
-                Agent? agent;
-                if (request.AgentId.HasValue)
-                {
-                    agent = await db.Agents
-                        .Include(a=>a.Customer)
-                        .Include(a => a.Mcpservers)
-                        .Include(a => a.Skills)
-                        .Where(a => a.Id == request.AgentId.Value && a.State == "active")
-                        .FirstOrDefaultAsync();
-                }
-                else
-                {
-                    agent = await db.Agents
-                        .Include(a=>a.Customer)
-                        .Include(a => a.Mcpservers)
-                        .Include(a => a.Skills)
-                        .Where(a => a.State == "active")
-                        .FirstOrDefaultAsync();
-                }
+        // Map API endpoints (from separate files in Api folder)
+        app.MapProcessTextEndpoints();
+        app.MapProcessEmailEndpoints();
+        app.MapSendEmailEndpoints();
+        app.MapHealthEndpoints(Version);
 
-                if (agent == null)
-                {
-                    return Results.BadRequest(new ProcessEmailResponse
-                    {
-                        Success = false,
-                        Error = "No active agent found"
-                    });
-                }
-
-                // Create mail object from request
-                var mail = new MailClass
-                {
-                    Id = "API-" + Guid.NewGuid().ToString(),
-                    Type = "email",
-                    From = "api@example.com",
-                    To = [agent.Emailaddress],
-                    Subject = "API Request",
-                    Status = "unread",
-                    CreatedAt = DateTime.Now.ToString("o"),
-                    Text = request.TextContent,
-                    Html = string.Empty,
-                    Cc = Array.Empty<string>(),
-                    Bcc = Array.Empty<string>(),
-                    ReplyTo = Array.Empty<string>(),
-                    Attachments = Array.Empty<string>()
-                };
-
-                // Process with AI
-                var processor = new ProcessMailsClass(db, _configuration);
-                var aiResponse = await processor.ProcessMailAsync(mail, agent);
-
-                // Build response
-                var response = new ProcessEmailResponse
-                {
-                    Success = true,
-                    EmailResponseText = aiResponse.EmailResponseText,
-                    EmailResponseSubject = aiResponse.EmailResponseSubject,
-                    EmailResponseHtml = aiResponse.EmailResponseHtml,
-                    AiExplanation = aiResponse.AiExplanation
-                };
-
-                // Add attachments to response
-                if (aiResponse.Attachments != null)
-                {
-                    foreach (var att in aiResponse.Attachments)
-                    {
-                        response.Attachments.Add(new AttachmentResponse
-                        {
-                            Filename = att.Filename,
-                            ContentType = att.ContentType,
-                            Content = att.Content
-                        });
-                    }
-                }
-
-                return Results.Ok(response);
-            }
-            catch (Exception ex)
-            {
-                Logger.LogError($"[API] Error processing email: {ex.Message}");
-                return Results.BadRequest(new ProcessEmailResponse
-                {
-                    Success = false,
-                    Error = ex.Message
-                });
-            }
-        })
-        .WithName("ProcessText")
-        .WithSummary("Process text with AI")
-        .Produces<ProcessEmailResponse>(StatusCodes.Status200OK)
-        .Produces<ProcessEmailResponse>(StatusCodes.Status400BadRequest);
-
-        // Fire-and-forget email processing endpoint
-        app.MapPost("/api/processemail", async (ProcessMailRequestClass request, DefaultdbContext db, IBackgroundTaskQueue taskQueue) =>
-        {
-            try
-            {
-                // Validate agent exists before queuing
-                Agent? agent;
-                if (!string.IsNullOrEmpty(request.AgentName))
-                {
-                    // Find agent by name (case-insensitive)
-                    var agentNameLower = request.AgentName.ToLower();
-                    agent = await db.Agents
-                        .Where(a => a.Agentname.ToLower() == agentNameLower && a.State == "active")
-                        .FirstOrDefaultAsync();
-                }
-                else
-                {
-                    return Results.BadRequest(new { success = false, error = "No Agent specified" });
-                }
-
-                if (agent == null)
-                {
-                    return Results.BadRequest(new { success = false, error = "Agent not found" });
-                }
-
-                var agentId = agent.Id;
-                var taskId = "API-" + Guid.NewGuid().ToString();
-                
-                Logger.Log($"[API] Queuing email for agent '{request.AgentName}' (TaskId: {taskId}, OriginalMessageId: {request.MessageId ?? "none"})");
-
-                // Queue the work item for background processing
-                taskQueue.QueueBackgroundWorkItem(async (serviceProvider, cancellationToken) =>
-                {
-                    var scopedDb = serviceProvider.GetRequiredService<DefaultdbContext>();
-                    var config = serviceProvider.GetRequiredService<IConfiguration>();
-
-                    // Re-fetch agent with includes in the new scope
-                    var scopedAgent = await scopedDb.Agents
-                        .Include(a => a.Customer)
-                        .Include(a => a.Mcpservers)
-                        .Include(a => a.Skills)
-                        .Where(a => a.Id == agentId && a.State == "active")
-                        .FirstOrDefaultAsync(cancellationToken);
-
-                    if (scopedAgent == null)
-                    {
-                        Logger.LogError($"[API Background] Agent {agentId} not found for task {taskId}");
-                        return;
-                    }
-
-                    // Save attachment data to temp directory if provided
-                    var attachmentFilenames = request.Attachments ?? Array.Empty<string>();
-                    if (request.AttachmentData != null && request.AttachmentData.Length > 0)
-                    {
-                        var attachmentsDir = Path.Combine(Path.GetTempPath(), "attachments", agentId.ToString(), taskId);
-                        Directory.CreateDirectory(attachmentsDir);
-                        
-                        Logger.Log($"[API Background] Saving {request.AttachmentData.Length} attachment(s) to {attachmentsDir}");
-                        
-                        var savedFilenames = new List<string>();
-                        foreach (var attachment in request.AttachmentData)
-                        {
-                            if (string.IsNullOrEmpty(attachment.Filename) || string.IsNullOrEmpty(attachment.Content))
-                                continue;
-                                
-                            try
-                            {
-                                var fileBytes = Convert.FromBase64String(attachment.Content);
-                                var filePath = Path.Combine(attachmentsDir, attachment.Filename);
-                                await File.WriteAllBytesAsync(filePath, fileBytes, cancellationToken);
-                                savedFilenames.Add(attachment.Filename);
-                                Logger.Log($"[API Background] Saved attachment: {attachment.Filename} ({fileBytes.Length} bytes)");
-                            }
-                            catch (Exception ex)
-                            {
-                                Logger.LogError($"[API Background] Failed to save attachment {attachment.Filename}: {ex.Message}");
-                            }
-                        }
-                        
-                        // Use saved filenames instead of request.Attachments
-                        attachmentFilenames = savedFilenames.ToArray();
-                    }
-
-                    var mail = new MailClass
-                    {
-                        Id = taskId,
-                        OriginalMessageId = request.MessageId, // Preserve original Inbound ID for reply
-                        Type = "internal",
-                        From = request.From,
-                        To = request.To,
-                        Subject = request.Subject,
-                        Status = "unread",
-                        CreatedAt = request.CreatedAt,
-                        Text = request.Text,
-                        Html = request.Html,
-                        Cc = request.Cc,
-                        Bcc = request.Bcc,
-                        ReplyTo = request.ReplyTo,
-                        Attachments = attachmentFilenames,
-                        HasAttachments = attachmentFilenames.Length > 0,
-                    };
-
-                    try
-                    {
-                        var processor = new ProcessMailsClass(scopedDb, config);
-                        var aiResponse = await processor.ProcessMailAsync(mail, scopedAgent);
-                        
-                        // Get email provider for this agent
-                        var provider = Factory.EmailProviderFactory.GetProvider(scopedAgent.Emailprovider, config, scopedDb);
-                        
-                        // Process based on Action field (same logic as EmailPollingService)
-                        var action = aiResponse.Action?.ToLowerInvariant() ?? "respond";
-                        
-                        switch (action)
-                        {
-                            case "redirect":
-                                // Forward the ORIGINAL email with all content to the specified recipients
-                                if (aiResponse.RedirectTo != null && aiResponse.RedirectTo.Length > 0)
-                                {
-                                    if (provider != null)
-                                    {
-                                        await provider.RedirectEmail(mail, scopedAgent, aiResponse.RedirectTo, aiResponse.RedirectCc, aiResponse.RedirectMessage);
-                                        Logger.Log($"[API Background] Email redirected to: {string.Join(", ", aiResponse.RedirectTo)}");
-                                    }
-                                    else
-                                    {
-                                        Logger.LogWarning($"[API Background] No email provider found for redirect");
-                                    }
-                                }
-                                else
-                                {
-                                    Logger.Log($"[API Background] Redirect action but no RedirectTo specified");
-                                }
-                                break;
-                                
-                            case "delete":
-                                Logger.Log($"[API Background] Email marked as spam/deleted - no action taken");
-                                break;
-                                
-                            case "ignore":
-                                Logger.Log($"[API Background] Action=ignore - AI handled the task independently");
-                                break;
-                                
-                            case "respond":
-                            default:
-                                // Original behavior: send reply if there's content
-                                if (!string.IsNullOrEmpty(aiResponse.EmailResponseText) || !string.IsNullOrEmpty(aiResponse.EmailResponseHtml))
-                                {
-                                    // Check if recipient was already emailed via send_email tool
-                                    if (!string.IsNullOrEmpty(mail.From) && aiResponse.AlreadySentTo.Contains(mail.From))
-                                    {
-                                        Logger.Log($"[API Background] Skipping reply to {mail.From} - already sent via send_email tool");
-                                    }
-                                    else
-                                    {
-                                        if (provider != null)
-                                        {
-                                            await provider.SendReplyResponseEmail(aiResponse, mail, scopedAgent, aiResponse.Conversation);
-                                            Logger.Log($"[API Background] Reply sent to {mail.From}");
-                                        }
-                                        else
-                                        {
-                                            Logger.LogWarning($"[API Background] No email provider found for agent {scopedAgent.Id}");
-                                        }
-                                    }
-                                }
-                                else
-                                {
-                                    Logger.Log($"[API Background] No reply sent (delegated or no response required)");
-                                }
-                                break;
-                        }
-                        
-                        Logger.Log($"[API Background] Task {taskId} completed successfully");
-                    }
-                    catch (Exception ex)
-                    {
-                        Logger.LogError($"[API Background] Task {taskId} failed: {ex.Message}");
-                    }
-                });
-
-                return Results.Accepted(value: new { success = true, taskId = taskId, message = "Email queued for processing" });
-            }
-            catch (Exception ex)
-            {
-                Logger.LogError($"[API] Error queuing email: {ex.Message}");
-                return Results.BadRequest(new { success = false, error = ex.Message });
-            }
-        })
-        .WithName("ProcessEmail")
-        .WithSummary("Queue email for AI processing (fire-and-forget)")
-        .Produces(StatusCodes.Status202Accepted)
-        .Produces(StatusCodes.Status400BadRequest);
-
-        // Send email endpoint (used by AI agents for forwarding/sending emails)
-        app.MapPost("/api/send_email", async (SendEmailRequest request, DefaultdbContext db, IConfiguration config) =>
-        {
-            try
-            {
-                // Validate agent
-                if (string.IsNullOrEmpty(request.AgentName))
-                {
-                    return Results.BadRequest(new { success = false, error = "AgentName is required" });
-                }
-                
-                var agentNameLower = request.AgentName.ToLower();
-                var agent = await db.Agents
-                    .Where(a => a.Agentname.ToLower() == agentNameLower && a.State == "active")
-                    .FirstOrDefaultAsync();
-                
-                if (agent == null)
-                {
-                    return Results.BadRequest(new { success = false, error = $"Agent '{request.AgentName}' not found" });
-                }
-                
-                Logger.Log($"[API] send_email called by agent '{agent.Agentname}': to={request.To}, subject={request.Subject}", agent.Id);
-                
-                // Use agent's email address as from, or override if specified
-                var fromAddress = request.From ?? agent.Emailaddress;
-                
-                // Get the appropriate email provider for this agent
-                var provider = EmailProviderFactory.GetProvider(agent.Emailprovider, config, db);
-                if (provider == null)
-                {
-                    return Results.BadRequest(new { success = false, error = $"No email provider configured for agent '{agent.Agentname}'" });
-                }
-                
-                // Create a mail object - From is used as the recipient in SendReplyResponseEmail
-                var mail = new MailClass
-                {
-                    Id = "send-" + Guid.NewGuid().ToString(),
-                    From = request.To, // SendReplyResponseEmail sends TO this address
-                    To = new[] { request.To },
-                    Subject = request.Subject,
-                    ReplyTo = !string.IsNullOrEmpty(request.ReplyTo) ? new[] { request.ReplyTo } : null,
-                };
-                
-                // Create AI response object to use existing send infrastructure
-                var aiResponse = new AiResponseClass
-                {
-                    EmailResponseText = request.Text,
-                    EmailResponseSubject = request.Subject,
-                    EmailResponseHtml = request.Html ?? $"<html><body>{System.Web.HttpUtility.HtmlEncode(request.Text ?? "").Replace("\n", "<br/>")}</body></html>",
-                };
-                
-                // Load attachments from files if MessageId, AgentId and Attachments are provided
-                if (request.Attachments != null && request.Attachments.Length > 0 && !string.IsNullOrEmpty(request.MessageId))
-                {
-                    // Use provided AgentId or fall back to agent.Id
-                    var agentIdForPath = request.AgentId ?? agent.Id;
-                    var attachmentsDir = Path.Combine(Path.GetTempPath(), "attachments", agentIdForPath.ToString(), request.MessageId);
-                    
-                    Logger.Log($"[API] Loading {request.Attachments.Length} attachment(s) from {attachmentsDir}", agent.Id);
-                    
-                    if (Directory.Exists(attachmentsDir))
-                    {
-                        var attachments = new List<Attachment>();
-                        foreach (var filename in request.Attachments)
-                        {
-                            var filePath = Path.Combine(attachmentsDir, filename);
-                            if (File.Exists(filePath))
-                            {
-                                try
-                                {
-                                    var fileContent = await File.ReadAllBytesAsync(filePath);
-                                    var base64Content = Convert.ToBase64String(fileContent);
-                                    var contentType = GetMimeType(filename);
-                                    
-                                    attachments.Add(new Attachment
-                                    {
-                                        Filename = filename,
-                                        Content = base64Content,
-                                        ContentType = contentType
-                                    });
-                                    Logger.Log($"[API] Loaded attachment from file: {filename} ({contentType}, {fileContent.Length} bytes)", agent.Id);
-                                }
-                                catch (Exception ex)
-                                {
-                                    Logger.LogError($"[API] Error reading attachment file {filename}: {ex.Message}", agent.Id);
-                                }
-                            }
-                            else
-                            {
-                                Logger.Log($"[API] Attachment file not found: {filePath}", agent.Id);
-                            }
-                        }
-                        aiResponse.Attachments = attachments.ToArray();
-                    }
-                    else
-                    {
-                        Logger.Log($"[API] Attachments directory not found: {attachmentsDir}", agent.Id);
-                    }
-                }
-                
-                // Use the provider's send method (works for both Inbound and IMAP/SMTP)
-                await provider.SendReplyResponseEmail(aiResponse, mail, agent, null);
-                
-                Logger.Log($"[API] send_email success (agent: {agent.Agentname}, provider: {agent.Emailprovider}, to: {request.To})", agent.Id);
-                return Results.Ok(new { success = true, message = $"Email sent from {agent.Emailaddress} to {request.To}" });
-            }
-            catch (Exception ex)
-            {
-                Logger.LogError($"[API] send_email error: {ex.Message}");
-                return Results.BadRequest(new { success = false, error = ex.Message });
-            }
-        })
-        .WithName("SendEmail")
-        .WithSummary("Send an email using the agent's configured email provider")
-        .Produces(StatusCodes.Status200OK)
-        .Produces(StatusCodes.Status400BadRequest);
-
-        // Health check endpoint
-        app.MapGet("/api/health", () => Results.Ok(new { status = "healthy", version = Version }))
-            .WithName("HealthCheck")
-            .WithSummary("Health check")
-            .Produces(StatusCodes.Status200OK);
-
-        Console.WriteLine($"Polling interval: {_pollingIntervalSeconds} seconds");
+        Console.WriteLine($"Polling interval: {pollingIntervalSeconds} seconds");
         Console.WriteLine("API running on: http://localhost:5051");
         Console.WriteLine("Endpoints:");
         Console.WriteLine("  POST /api/processtext - Process text with AI");
+        Console.WriteLine("  POST /api/processemail - Queue email for AI processing");
+        Console.WriteLine("  POST /api/send_email - Send email via agent's provider");
         Console.WriteLine("  GET /api/health - Health check");
         Console.WriteLine("");
         Console.WriteLine("Swagger UI available at: http://localhost:5051/swagger");
 
         // Run the web application
         await app.RunAsync("http://0.0.0.0:5051");
-    }
-    
-    /// <summary>
-    /// Get MIME type from file extension
-    /// </summary>
-    private static string GetMimeType(string filename)
-    {
-        var extension = Path.GetExtension(filename)?.ToLowerInvariant();
-        return extension switch
-        {
-            ".pdf" => "application/pdf",
-            ".doc" => "application/msword",
-            ".docx" => "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-            ".xls" => "application/vnd.ms-excel",
-            ".xlsx" => "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            ".ppt" => "application/vnd.ms-powerpoint",
-            ".pptx" => "application/vnd.openxmlformats-officedocument.presentationml.presentation",
-            ".txt" => "text/plain",
-            ".csv" => "text/csv",
-            ".html" => "text/html",
-            ".htm" => "text/html",
-            ".xml" => "application/xml",
-            ".json" => "application/json",
-            ".zip" => "application/zip",
-            ".rar" => "application/x-rar-compressed",
-            ".7z" => "application/x-7z-compressed",
-            ".tar" => "application/x-tar",
-            ".gz" => "application/gzip",
-            ".jpg" => "image/jpeg",
-            ".jpeg" => "image/jpeg",
-            ".png" => "image/png",
-            ".gif" => "image/gif",
-            ".bmp" => "image/bmp",
-            ".svg" => "image/svg+xml",
-            ".webp" => "image/webp",
-            ".mp3" => "audio/mpeg",
-            ".wav" => "audio/wav",
-            ".mp4" => "video/mp4",
-            ".avi" => "video/x-msvideo",
-            ".mov" => "video/quicktime",
-            ".eml" => "message/rfc822",
-            _ => "application/octet-stream"
-        };
     }
 }
