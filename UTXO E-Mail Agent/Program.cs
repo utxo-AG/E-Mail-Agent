@@ -17,8 +17,8 @@ namespace UTXO_E_Mail_Agent;
 public class Program
 {
     // Version information - update this with each release
-    private const string Version = "1.4.0";
-    private const string BuildDate = "2026-02-10";
+    private const string Version = "1.5.0";
+    private const string BuildDate = "2026-03-12";
 
     private static IConfiguration _configuration = null!;
     private static int _pollingIntervalSeconds;
