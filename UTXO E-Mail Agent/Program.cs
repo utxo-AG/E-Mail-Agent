@@ -305,32 +305,70 @@ public class Program
                         var processor = new ProcessMailsClass(scopedDb, config);
                         var aiResponse = await processor.ProcessMailAsync(mail, scopedAgent);
                         
-                        // Send reply email if there's content
-                        if (!string.IsNullOrEmpty(aiResponse.EmailResponseText) || !string.IsNullOrEmpty(aiResponse.EmailResponseHtml))
+                        // Get email provider for this agent
+                        var provider = Factory.EmailProviderFactory.GetProvider(scopedAgent.Emailprovider, config, scopedDb);
+                        
+                        // Process based on Action field (same logic as EmailPollingService)
+                        var action = aiResponse.Action?.ToLowerInvariant() ?? "respond";
+                        
+                        switch (action)
                         {
-                            // Check if recipient was already emailed via send_email tool
-                            if (!string.IsNullOrEmpty(mail.From) && aiResponse.AlreadySentTo.Contains(mail.From))
-                            {
-                                Logger.Log($"[API Background] Skipping reply to {mail.From} - already sent via send_email tool");
-                            }
-                            else
-                            {
-                                // Get email provider for this agent
-                                var provider = Factory.EmailProviderFactory.GetProvider(scopedAgent.Emailprovider, config, scopedDb);
-                                if (provider != null)
+                            case "redirect":
+                                // Forward the ORIGINAL email with all content to the specified recipients
+                                if (aiResponse.RedirectTo != null && aiResponse.RedirectTo.Length > 0)
                                 {
-                                    await provider.SendReplyResponseEmail(aiResponse, mail, scopedAgent, aiResponse.Conversation);
-                                    Logger.Log($"[API Background] Reply sent to {mail.From}");
+                                    if (provider != null)
+                                    {
+                                        await provider.RedirectEmail(mail, scopedAgent, aiResponse.RedirectTo, aiResponse.RedirectCc, aiResponse.RedirectMessage);
+                                        Logger.Log($"[API Background] Email redirected to: {string.Join(", ", aiResponse.RedirectTo)}");
+                                    }
+                                    else
+                                    {
+                                        Logger.LogWarning($"[API Background] No email provider found for redirect");
+                                    }
                                 }
                                 else
                                 {
-                                    Logger.LogWarning($"[API Background] No email provider found for agent {scopedAgent.Id}");
+                                    Logger.Log($"[API Background] Redirect action but no RedirectTo specified");
                                 }
-                            }
-                        }
-                        else
-                        {
-                            Logger.Log($"[API Background] No reply sent (delegated or no response required)");
+                                break;
+                                
+                            case "delete":
+                                Logger.Log($"[API Background] Email marked as spam/deleted - no action taken");
+                                break;
+                                
+                            case "ignore":
+                                Logger.Log($"[API Background] Action=ignore - AI handled the task independently");
+                                break;
+                                
+                            case "respond":
+                            default:
+                                // Original behavior: send reply if there's content
+                                if (!string.IsNullOrEmpty(aiResponse.EmailResponseText) || !string.IsNullOrEmpty(aiResponse.EmailResponseHtml))
+                                {
+                                    // Check if recipient was already emailed via send_email tool
+                                    if (!string.IsNullOrEmpty(mail.From) && aiResponse.AlreadySentTo.Contains(mail.From))
+                                    {
+                                        Logger.Log($"[API Background] Skipping reply to {mail.From} - already sent via send_email tool");
+                                    }
+                                    else
+                                    {
+                                        if (provider != null)
+                                        {
+                                            await provider.SendReplyResponseEmail(aiResponse, mail, scopedAgent, aiResponse.Conversation);
+                                            Logger.Log($"[API Background] Reply sent to {mail.From}");
+                                        }
+                                        else
+                                        {
+                                            Logger.LogWarning($"[API Background] No email provider found for agent {scopedAgent.Id}");
+                                        }
+                                    }
+                                }
+                                else
+                                {
+                                    Logger.Log($"[API Background] No reply sent (delegated or no response required)");
+                                }
+                                break;
                         }
                         
                         Logger.Log($"[API Background] Task {taskId} completed successfully");
