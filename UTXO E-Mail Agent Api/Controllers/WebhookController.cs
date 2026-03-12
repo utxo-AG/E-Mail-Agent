@@ -48,6 +48,13 @@ public class WebhookController : ControllerBase
             }
         }
 
+        // Validate payload has email data
+        if (dto.Email == null)
+        {
+            _logger.LogWarning("Webhook request for agent {AgentId} has no email data", agentId);
+            return BadRequest(new { message = "No email data in payload" });
+        }
+
         // Validate agent exists
         var agent = await _db.Agents
             .Include(a => a.Customer)
@@ -59,10 +66,28 @@ public class WebhookController : ControllerBase
             return NotFound(new { message = "Agent not found" });
         }
 
-        var messageId = dto.Id ?? Guid.NewGuid().ToString();
+        // Extract data from the nested structure
+        var email = dto.Email;
+        var parsedData = email.ParsedData;
+        
+        var messageId = email.Id ?? email.MessageId ?? Guid.NewGuid().ToString();
+        var fromAddress = email.From?.Addresses?.FirstOrDefault()?.Address ?? email.From?.Text ?? "(Unknown)";
+        var subject = email.Subject ?? parsedData?.Subject ?? "(No Subject)";
+        var textBody = parsedData?.TextBody;
+        var htmlBody = parsedData?.HtmlBody;
+        var receivedAt = email.ReceivedAt ?? parsedData?.Date ?? DateTime.UtcNow;
+        
+        // Extract CC addresses
+        var ccAddresses = parsedData?.Cc?.Addresses?.Select(a => a.Address).Where(a => a != null).ToArray();
+        
+        // Extract ReplyTo addresses
+        var replyToAddresses = parsedData?.ReplyTo?.Addresses?.Select(a => a.Address).Where(a => a != null).ToArray();
+        
+        // Extract attachment filenames
+        var attachments = parsedData?.Attachments?.Select(a => a.Filename).Where(f => f != null).ToArray() ?? Array.Empty<string>();
         
         _logger.LogInformation("Webhook received email for agent {AgentId}: {Subject} from {From}, forwarding to processemail", 
-            agentId, dto.Subject, dto.From);
+            agentId, subject, fromAddress);
 
         // Forward to agent's /api/processemail endpoint
         var agentApiUrl = _configuration["AgentApiUrl"] ?? "http://localhost:5051";
@@ -73,15 +98,17 @@ public class WebhookController : ControllerBase
         {
             MessageId = messageId,
             AgentName = agent.Agentname,
-            From = dto.From ?? "(Unknown)",
+            From = fromAddress,
             To = new[] { agent.Emailaddress },
-            Subject = dto.Subject ?? "(No Subject)",
+            Subject = subject,
             Status = "unread",
-            CreatedAt = (dto.CreatedAt ?? DateTime.UtcNow).ToString("o"),
-            Html = dto.Html,
-            Text = dto.Text,
-            Attachments = dto.Attachments?.Select(a => a.Filename).Where(f => f != null).ToArray() ?? Array.Empty<string>(),
-            HasAttachments = dto.Attachments?.Any() ?? false
+            CreatedAt = receivedAt.ToString("o"),
+            Html = htmlBody,
+            Text = textBody,
+            Cc = ccAddresses,
+            ReplyTo = replyToAddresses,
+            Attachments = attachments,
+            HasAttachments = attachments.Length > 0
         };
 
         try
