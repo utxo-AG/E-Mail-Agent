@@ -74,7 +74,7 @@ public class WebhookController : ControllerBase
             MessageId = messageId,
             AgentName = agent.Agentname,
             From = dto.From ?? "(Unknown)",
-            To = new[] { agent.Email ?? "" },
+            To = new[] { agent.Emailaddress },
             Subject = dto.Subject ?? "(No Subject)",
             Status = "unread",
             CreatedAt = (dto.CreatedAt ?? DateTime.UtcNow).ToString("o"),
