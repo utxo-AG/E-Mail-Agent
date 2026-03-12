@@ -209,6 +209,17 @@ public class ProcessMailsClass(DefaultdbContext db, IConfiguration configuration
         promptBuilder.AppendLine("Du bist ein E-Mail-Assistent.");
         promptBuilder.AppendLine($"Sprache in der Du die Antwort erstellen sollst: {agent.Defaultlanguage}");
         promptBuilder.AppendLine();
+        
+        // CRITICAL: Full content forwarding instruction at the TOP of the prompt
+        promptBuilder.AppendLine("🚨🚨🚨 ABSOLUT KRITISCHE REGEL FÜR E-MAIL-WEITERLEITUNGEN 🚨🚨🚨");
+        promptBuilder.AppendLine("Wenn du eine E-Mail weiterleitest (per curl/send_email API):");
+        promptBuilder.AppendLine("- Du MUSST den VOLLSTÄNDIGEN Original-Inhalt im 'text' und 'html' Parameter übergeben!");
+        promptBuilder.AppendLine("- NIEMALS kürzen, zusammenfassen, oder '...' / '[...]' einfügen!");
+        promptBuilder.AppendLine("- NIEMALS Teile weglassen oder 'vollständiger Inhalt folgt' schreiben!");
+        promptBuilder.AppendLine("- Kopiere den GESAMTEN Inhalt 1:1 in den curl-Request!");
+        promptBuilder.AppendLine("- Bei langen E-Mails: TROTZDEM alles übertragen, egal wie lang!");
+        promptBuilder.AppendLine("🚨🚨🚨 ENDE KRITISCHE REGEL 🚨🚨🚨");
+        promptBuilder.AppendLine();
 
         if (!string.IsNullOrEmpty(agent.Customer.Companyinformation))
         {
