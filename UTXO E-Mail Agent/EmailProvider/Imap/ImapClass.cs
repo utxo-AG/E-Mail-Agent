@@ -386,11 +386,18 @@ public class ImapClass : IEmailProvider
             // Set text body with full original content
             builder.TextBody = forwardHeader.ToString() + (mail.Text ?? "");
             
+            Logger.Log($"[IMAP/SMTP] Redirect - Text length: {mail.Text?.Length ?? 0}, HTML length: {mail.Html?.Length ?? 0}", agent.Id);
+            
             // Set HTML body with full original content
             if (!string.IsNullOrEmpty(mail.Html))
             {
                 var htmlHeader = forwardHeader.ToString().Replace("\n", "<br/>");
                 builder.HtmlBody = $"<div>{htmlHeader}</div><hr/>{mail.Html}";
+                Logger.Log($"[IMAP/SMTP] Redirect - HTML body set, total length: {builder.HtmlBody.Length}", agent.Id);
+            }
+            else
+            {
+                Logger.Log($"[IMAP/SMTP] Redirect - No HTML content available, using text only", agent.Id);
             }
 
             // Add original attachments
