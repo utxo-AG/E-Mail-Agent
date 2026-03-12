@@ -41,19 +41,36 @@ public class WebhookController : ControllerBase
             _logger.LogInformation("Webhook event: {Event}", eventHeader.ToString());
         if (Request.Headers.TryGetValue("X-Endpoint-ID", out var endpointHeader))
             _logger.LogInformation("Webhook endpoint ID: {EndpointId}", endpointHeader.ToString());
+
+        // Validate agent exists first (needed for token verification)
+        var agent = await _db.Agents
+            .Include(a => a.Customer)
+            .FirstOrDefaultAsync(a => a.Id == agentId);
+
+        if (agent == null)
+        {
+            _logger.LogWarning("Webhook request for non-existent agent {AgentId}", agentId);
+            return NotFound(new { message = "Agent not found" });
+        }
         
-        // Validate webhook verification token (from inbound.new)
-        var expectedToken = _configuration["WebhookVerificationToken"] ?? _configuration["WebhookSecret"];
+        // Validate webhook verification token
+        // Priority: 1. Agent's token, 2. Global config (fallback)
+        var expectedToken = agent.Webhookverificationtoken 
+            ?? _configuration["WebhookVerificationToken"] 
+            ?? _configuration["WebhookSecret"];
+            
         if (!string.IsNullOrEmpty(expectedToken))
         {
-            // Check X-Webhook-Verification-Token (inbound.new) or X-Webhook-Secret (legacy)
-            var hasValidToken = 
-                (Request.Headers.TryGetValue("X-Webhook-Verification-Token", out var tokenHeader) && tokenHeader.ToString() == expectedToken) ||
-                (Request.Headers.TryGetValue("X-Webhook-Secret", out var secretHeader) && secretHeader.ToString() == expectedToken);
+            // Get token from request headers (X-Webhook-Verification-Token or X-Webhook-Secret)
+            string? receivedToken = null;
+            if (Request.Headers.TryGetValue("X-Webhook-Verification-Token", out var tokenHeader))
+                receivedToken = tokenHeader.ToString();
+            else if (Request.Headers.TryGetValue("X-Webhook-Secret", out var secretHeader))
+                receivedToken = secretHeader.ToString();
             
-            if (!hasValidToken)
+            if (receivedToken != expectedToken)
             {
-                _logger.LogWarning("Webhook request with invalid or missing verification token for agent {AgentId}", agentId);
+                _logger.LogWarning("Webhook request with invalid verification token for agent {AgentId}", agentId);
                 return Unauthorized(new { message = "Invalid webhook verification token" });
             }
         }
@@ -63,17 +80,6 @@ public class WebhookController : ControllerBase
         {
             _logger.LogWarning("Webhook request for agent {AgentId} has no email data", agentId);
             return BadRequest(new { message = "No email data in payload" });
-        }
-
-        // Validate agent exists
-        var agent = await _db.Agents
-            .Include(a => a.Customer)
-            .FirstOrDefaultAsync(a => a.Id == agentId);
-
-        if (agent == null)
-        {
-            _logger.LogWarning("Webhook request for non-existent agent {AgentId}", agentId);
-            return NotFound(new { message = "Agent not found" });
         }
 
         // Extract data from the nested structure

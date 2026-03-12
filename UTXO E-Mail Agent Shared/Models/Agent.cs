@@ -61,6 +61,11 @@ public partial class Agent
 
     public bool Useconversationhistory { get; set; }
 
+    /// <summary>
+    /// Webhook verification token from inbound.new (for webhook-based email receiving)
+    /// </summary>
+    public string? Webhookverificationtoken { get; set; }
+
     public virtual ICollection<Conversation> Conversations { get; set; } = new List<Conversation>();
 
     public virtual Customer Customer { get; set; } = null!;
