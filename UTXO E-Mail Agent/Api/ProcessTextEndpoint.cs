@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using UTXO_E_Mail_Agent.Classes;
 using UTXO_E_Mail_Agent.Models;
+using UTXO_E_Mail_Agent.Services;
 using UTXO_E_Mail_Agent_Shared.Models;
 
 namespace UTXO_E_Mail_Agent.Api;
