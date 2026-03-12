@@ -248,6 +248,39 @@ public class Program
                         return;
                     }
 
+                    // Save attachment data to temp directory if provided
+                    var attachmentFilenames = request.Attachments ?? Array.Empty<string>();
+                    if (request.AttachmentData != null && request.AttachmentData.Length > 0)
+                    {
+                        var attachmentsDir = Path.Combine(Path.GetTempPath(), "attachments", agentId.ToString(), taskId);
+                        Directory.CreateDirectory(attachmentsDir);
+                        
+                        Logger.Log($"[API Background] Saving {request.AttachmentData.Length} attachment(s) to {attachmentsDir}");
+                        
+                        var savedFilenames = new List<string>();
+                        foreach (var attachment in request.AttachmentData)
+                        {
+                            if (string.IsNullOrEmpty(attachment.Filename) || string.IsNullOrEmpty(attachment.Content))
+                                continue;
+                                
+                            try
+                            {
+                                var fileBytes = Convert.FromBase64String(attachment.Content);
+                                var filePath = Path.Combine(attachmentsDir, attachment.Filename);
+                                await File.WriteAllBytesAsync(filePath, fileBytes, cancellationToken);
+                                savedFilenames.Add(attachment.Filename);
+                                Logger.Log($"[API Background] Saved attachment: {attachment.Filename} ({fileBytes.Length} bytes)");
+                            }
+                            catch (Exception ex)
+                            {
+                                Logger.LogError($"[API Background] Failed to save attachment {attachment.Filename}: {ex.Message}");
+                            }
+                        }
+                        
+                        // Use saved filenames instead of request.Attachments
+                        attachmentFilenames = savedFilenames.ToArray();
+                    }
+
                     var mail = new MailClass
                     {
                         Id = taskId,
@@ -263,7 +296,8 @@ public class Program
                         Cc = request.Cc,
                         Bcc = request.Bcc,
                         ReplyTo = request.ReplyTo,
-                        Attachments = request.Attachments,
+                        Attachments = attachmentFilenames,
+                        HasAttachments = attachmentFilenames.Length > 0,
                     };
 
                     try

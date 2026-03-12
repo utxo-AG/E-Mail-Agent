@@ -32,5 +32,27 @@ public class ProcessMailRequestClass
 
         public string Text { get; set; }
 
+        /// <summary>
+        /// Array of attachment filenames (for backwards compatibility)
+        /// </summary>
         public string[] Attachments { get; set; }
+        
+        /// <summary>
+        /// Array of attachment data objects with filename, content type, and base64 content.
+        /// When provided, attachments will be saved to the temp directory automatically.
+        /// </summary>
+        public AttachmentDataClass[] AttachmentData { get; set; }
+}
+
+/// <summary>
+/// Attachment data with base64 encoded content
+/// </summary>
+public class AttachmentDataClass
+{
+        public string Filename { get; set; }
+        public string ContentType { get; set; }
+        /// <summary>
+        /// Base64 encoded file content
+        /// </summary>
+        public string Content { get; set; }
 }
