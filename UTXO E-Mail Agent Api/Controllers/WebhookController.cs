@@ -36,15 +36,25 @@ public class WebhookController : ControllerBase
     [HttpPost("inbound/{agentId}")]
     public async Task<ActionResult> ReceiveInboundEmail(int agentId, [FromBody] InboundEmailWebhookDto dto)
     {
-        // Validate webhook secret
-        var expectedSecret = _configuration["WebhookSecret"];
-        if (!string.IsNullOrEmpty(expectedSecret))
+        // Log webhook headers for debugging
+        if (Request.Headers.TryGetValue("X-Webhook-Event", out var eventHeader))
+            _logger.LogInformation("Webhook event: {Event}", eventHeader.ToString());
+        if (Request.Headers.TryGetValue("X-Endpoint-ID", out var endpointHeader))
+            _logger.LogInformation("Webhook endpoint ID: {EndpointId}", endpointHeader.ToString());
+        
+        // Validate webhook verification token (from inbound.new)
+        var expectedToken = _configuration["WebhookVerificationToken"] ?? _configuration["WebhookSecret"];
+        if (!string.IsNullOrEmpty(expectedToken))
         {
-            if (!Request.Headers.TryGetValue("X-Webhook-Secret", out var secretHeader) ||
-                secretHeader.ToString() != expectedSecret)
+            // Check X-Webhook-Verification-Token (inbound.new) or X-Webhook-Secret (legacy)
+            var hasValidToken = 
+                (Request.Headers.TryGetValue("X-Webhook-Verification-Token", out var tokenHeader) && tokenHeader.ToString() == expectedToken) ||
+                (Request.Headers.TryGetValue("X-Webhook-Secret", out var secretHeader) && secretHeader.ToString() == expectedToken);
+            
+            if (!hasValidToken)
             {
-                _logger.LogWarning("Webhook request with invalid or missing secret for agent {AgentId}", agentId);
-                return Unauthorized(new { message = "Invalid webhook secret" });
+                _logger.LogWarning("Webhook request with invalid or missing verification token for agent {AgentId}", agentId);
+                return Unauthorized(new { message = "Invalid webhook verification token" });
             }
         }
 
