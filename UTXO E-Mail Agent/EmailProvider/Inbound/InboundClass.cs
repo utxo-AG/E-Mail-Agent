@@ -268,11 +268,12 @@ public class InboundClass : IEmailProvider
                 var jsonPayload = Newtonsoft.Json.JsonConvert.SerializeObject(payload);
                 var requestUrl = _apiUrl + "emails";
 
+                using var httpClient = new HttpClient();
                 using var request = new HttpRequestMessage(HttpMethod.Post, requestUrl);
                 request.Headers.TryAddWithoutValidation("Authorization", $"Bearer {_bearerToken}");
                 request.Content = new StringContent(jsonPayload, System.Text.Encoding.UTF8, "application/json");
 
-                var response = await _httpClient.SendAsync(request);
+                var response = await httpClient.SendAsync(request);
                 if (response.IsSuccessStatusCode)
                 {
                     Logger.Log($"[Inbound] Successfully redirected email to: {recipient}", agent.Id);
@@ -302,11 +303,12 @@ public class InboundClass : IEmailProvider
                     var jsonPayload = Newtonsoft.Json.JsonConvert.SerializeObject(payload);
                     var requestUrl = _apiUrl + "emails";
 
+                    using var httpClient = new HttpClient();
                     using var request = new HttpRequestMessage(HttpMethod.Post, requestUrl);
                     request.Headers.TryAddWithoutValidation("Authorization", $"Bearer {_bearerToken}");
                     request.Content = new StringContent(jsonPayload, System.Text.Encoding.UTF8, "application/json");
 
-                    var response = await _httpClient.SendAsync(request);
+                    var response = await httpClient.SendAsync(request);
                     if (response.IsSuccessStatusCode)
                     {
                         Logger.Log($"[Inbound] Successfully redirected email to CC: {ccRecipient}", agent.Id);
