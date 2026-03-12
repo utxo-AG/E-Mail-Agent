@@ -83,11 +83,66 @@ public class WebhookController : ControllerBase
         // Extract ReplyTo addresses
         var replyToAddresses = parsedData?.ReplyTo?.Addresses?.Select(a => a.Address).Where(a => a != null).ToArray();
         
-        // Extract attachment filenames
-        var attachments = parsedData?.Attachments?.Select(a => a.Filename).Where(f => f != null).ToArray() ?? Array.Empty<string>();
-        
         _logger.LogInformation("Webhook received email for agent {AgentId}: {Subject} from {From}, forwarding to processemail", 
             agentId, subject, fromAddress);
+
+        // Download attachments and save to temp directory
+        var attachmentFilenames = new List<string>();
+        var inboundAttachments = parsedData?.Attachments ?? new List<InboundAttachmentDto>();
+        
+        if (inboundAttachments.Count > 0)
+        {
+            var inboundApiKey = _configuration["Email:BearerToken"];
+            var attachmentsDir = Path.Combine(Path.GetTempPath(), "attachments", agentId.ToString(), messageId);
+            
+            // Create directory if it doesn't exist
+            Directory.CreateDirectory(attachmentsDir);
+            
+            _logger.LogInformation("Downloading {Count} attachment(s) to {Dir}", inboundAttachments.Count, attachmentsDir);
+            
+            var httpClient = _httpClientFactory.CreateClient();
+            
+            foreach (var attachment in inboundAttachments)
+            {
+                if (string.IsNullOrEmpty(attachment.DownloadUrl) || string.IsNullOrEmpty(attachment.Filename))
+                {
+                    _logger.LogWarning("Skipping attachment with missing URL or filename");
+                    continue;
+                }
+                
+                try
+                {
+                    var request = new HttpRequestMessage(HttpMethod.Get, attachment.DownloadUrl);
+                    if (!string.IsNullOrEmpty(inboundApiKey))
+                    {
+                        request.Headers.Add("Authorization", $"Bearer {inboundApiKey}");
+                    }
+                    
+                    var response = await httpClient.SendAsync(request);
+                    
+                    if (response.IsSuccessStatusCode)
+                    {
+                        var fileBytes = await response.Content.ReadAsByteArrayAsync();
+                        var filePath = Path.Combine(attachmentsDir, attachment.Filename);
+                        
+                        await System.IO.File.WriteAllBytesAsync(filePath, fileBytes);
+                        attachmentFilenames.Add(attachment.Filename);
+                        
+                        _logger.LogInformation("Downloaded attachment: {Filename} ({Size} bytes)", 
+                            attachment.Filename, fileBytes.Length);
+                    }
+                    else
+                    {
+                        _logger.LogWarning("Failed to download attachment {Filename}: {StatusCode}", 
+                            attachment.Filename, response.StatusCode);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Error downloading attachment {Filename}", attachment.Filename);
+                }
+            }
+        }
 
         // Forward to agent's /api/processemail endpoint
         var agentApiUrl = _configuration["AgentApiUrl"] ?? "http://localhost:5051";
@@ -107,8 +162,8 @@ public class WebhookController : ControllerBase
             Text = textBody,
             Cc = ccAddresses,
             ReplyTo = replyToAddresses,
-            Attachments = attachments,
-            HasAttachments = attachments.Length > 0
+            Attachments = attachmentFilenames.ToArray(),
+            HasAttachments = attachmentFilenames.Count > 0
         };
 
         try
@@ -132,6 +187,7 @@ public class WebhookController : ControllerBase
                 { 
                     message = "Email forwarded for processing", 
                     messageId = messageId,
+                    attachmentsDownloaded = attachmentFilenames.Count,
                     status = "queued"
                 });
             }
