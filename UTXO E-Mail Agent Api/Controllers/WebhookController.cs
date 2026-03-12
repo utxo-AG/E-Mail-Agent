@@ -8,12 +8,11 @@ using UTXO_E_Mail_Agent_Shared.Models;
 namespace UTXO_E_Mail_Agent_Api.Controllers;
 
 /// <summary>
-/// Internal webhook controller for receiving inbound emails.
-/// This controller is NOT documented in Swagger and requires a secret header for authentication.
+/// Webhook controller for receiving inbound emails from inbound.new
+/// Requires X-Webhook-Verification-Token header for authentication.
 /// </summary>
 [ApiController]
 [Route("webhook")]
-[ApiExplorerSettings(IgnoreApi = true)] // Hide from Swagger
 public class WebhookController : ControllerBase
 {
     private readonly DefaultdbContext _db;
@@ -30,10 +29,22 @@ public class WebhookController : ControllerBase
     }
 
     /// <summary>
-    /// Receive inbound email via webhook (not publicly documented)
-    /// Forwards the email to the agent's /api/processemail endpoint
+    /// Receive inbound email via webhook from inbound.new
     /// </summary>
+    /// <remarks>
+    /// This endpoint receives emails from inbound.new webhooks and forwards them to the agent for processing.
+    /// 
+    /// Required header: X-Webhook-Verification-Token (from inbound.new endpoint settings)
+    /// 
+    /// The verification token is checked against the agent's webhookverificationtoken field in the database.
+    /// </remarks>
+    /// <param name="agentId">The ID of the agent to receive the email</param>
+    /// <param name="dto">The webhook payload from inbound.new</param>
     [HttpPost("inbound/{agentId}")]
+    [ProducesResponseType(typeof(object), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status502BadGateway)]
     public async Task<ActionResult> ReceiveInboundEmail(int agentId, [FromBody] InboundEmailWebhookDto dto)
     {
         // Log webhook headers for debugging
