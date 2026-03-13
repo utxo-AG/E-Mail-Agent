@@ -105,6 +105,8 @@ public class Program
         Console.WriteLine("  POST /api/processtext - Process text with AI");
         Console.WriteLine("  POST /api/processemail - Queue email for AI processing");
         Console.WriteLine("  POST /api/send_email - Send email via agent's provider");
+        Console.WriteLine("  POST /api/search_conversations - Search previous conversations");
+        Console.WriteLine("  POST /api/get_attachment - Download conversation attachment");
         Console.WriteLine("  GET /api/health - Health check");
         Console.WriteLine("");
         Console.WriteLine("Swagger UI available at: http://localhost:5051/swagger");
