@@ -170,6 +170,113 @@ public class ApiTools
         }
     }
 
+    /// <summary>
+    /// Search previous conversations for this agent. Filter by sender email, keywords, and time range.
+    /// </summary>
+    [McpServerTool(Name = "search_conversations"), Description("Search previous email conversations. Filter by sender email address, subject/text keywords, and time range. Returns conversation details with attachment metadata.")]
+    public static async Task<string> SearchConversations(
+        [Description("The agent ID")] int agentId,
+        [Description("Filter by sender email address (partial match)")] string? emailAddress = null,
+        [Description("Search term for subject or text content")] string? searchTerm = null,
+        [Description("Number of days to look back (default 7)")] int daysBack = 7,
+        [Description("Maximum number of results (default 10)")] int limit = 10)
+    {
+        try
+        {
+            var optionsBuilder = new DbContextOptionsBuilder<DefaultdbContext>();
+            optionsBuilder.UseMySql(ConnectionString, ServerVersion.AutoDetect(ConnectionString),
+                mysqlOptions => mysqlOptions.UseQuerySplittingBehavior(QuerySplittingBehavior.SplitQuery));
+            await using var db = new DefaultdbContext(optionsBuilder.Options);
+
+            var cutoff = DateTime.UtcNow.AddDays(-daysBack);
+
+            var query = db.Conversations
+                .Where(c => c.AgentId == agentId && c.Emailreceived >= cutoff);
+
+            if (!string.IsNullOrEmpty(emailAddress))
+                query = query.Where(c => c.Emailfrom.Contains(emailAddress));
+
+            if (!string.IsNullOrEmpty(searchTerm))
+                query = query.Where(c =>
+                    c.Subject.Contains(searchTerm) ||
+                    (c.Text != null && c.Text.Contains(searchTerm)) ||
+                    (c.Agentresponsetext != null && c.Agentresponsetext.Contains(searchTerm)));
+
+            var conversations = await query
+                .OrderByDescending(c => c.Emailreceived)
+                .Take(limit)
+                .Select(c => new
+                {
+                    c.Id,
+                    c.Emailfrom,
+                    c.Subject,
+                    text = c.Text != null ? c.Text.Substring(0, Math.Min(500, c.Text.Length)) : null,
+                    agentResponse = c.Agentresponsetext != null
+                        ? c.Agentresponsetext.Substring(0, Math.Min(500, c.Agentresponsetext.Length))
+                        : null,
+                    c.Emailreceived,
+                    attachments = c.ConversationAttachments.Select(a => new
+                    {
+                        a.Id,
+                        a.Filename,
+                        a.ContentType
+                    }).ToList()
+                })
+                .AsNoTracking()
+                .ToListAsync();
+
+            return JsonSerializer.Serialize(new
+            {
+                agentId,
+                count = conversations.Count,
+                conversations
+            }, new JsonSerializerOptions { WriteIndented = true });
+        }
+        catch (Exception ex)
+        {
+            return CreateErrorResponse(0, $"Error searching conversations: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Download a conversation attachment by its ID. Returns the file content as Base64.
+    /// </summary>
+    [McpServerTool(Name = "get_attachment"), Description("Download a conversation attachment by ID. Returns the Base64-encoded file content with metadata.")]
+    public static async Task<string> GetAttachment(
+        [Description("The agent ID (for authorization)")] int agentId,
+        [Description("The attachment ID to download")] int attachmentId)
+    {
+        try
+        {
+            var optionsBuilder = new DbContextOptionsBuilder<DefaultdbContext>();
+            optionsBuilder.UseMySql(ConnectionString, ServerVersion.AutoDetect(ConnectionString));
+            await using var db = new DefaultdbContext(optionsBuilder.Options);
+
+            var attachment = await db.ConversationAttachments
+                .Include(a => a.Conversation)
+                .Where(a => a.Id == attachmentId && a.Conversation.AgentId == agentId)
+                .AsNoTracking()
+                .FirstOrDefaultAsync();
+
+            if (attachment == null)
+            {
+                return CreateErrorResponse(404, $"Attachment {attachmentId} not found for agent {agentId}");
+            }
+
+            return JsonSerializer.Serialize(new
+            {
+                id = attachment.Id,
+                filename = attachment.Filename,
+                contentType = attachment.ContentType,
+                content = attachment.Content
+            }, new JsonSerializerOptions { WriteIndented = true });
+        }
+        catch (Exception ex)
+        {
+            return CreateErrorResponse(0, $"Error getting attachment: {ex.Message}");
+        }
+    }
+
     private static string CreateResponse(int statusCode, bool success, string? body, string? error, string? apiName = null, string? apiDescription = null)
     {
         var response = new

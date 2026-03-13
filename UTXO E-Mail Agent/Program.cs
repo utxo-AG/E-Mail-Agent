@@ -96,6 +96,7 @@ public class Program
         app.MapProcessTextEndpoints();
         app.MapProcessEmailEndpoints();
         app.MapSendEmailEndpoints();
+        app.MapSearchConversationsEndpoints();
         app.MapHealthEndpoints(Version);
 
         Console.WriteLine($"Polling interval: {pollingIntervalSeconds} seconds");

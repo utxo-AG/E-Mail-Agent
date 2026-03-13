@@ -192,6 +192,61 @@ public class ClaudeClass : IAiProvider
             Logger.LogWarning($"[MCP] Could not register send_email tool: {ex.Message}", agent.Id);
         }
 
+        // Search Conversations Tool
+        try
+        {
+            var searchConvSchema = new InputSchema()
+            {
+                Type = "object",
+                Properties = new Dictionary<string, Property>()
+                {
+                    { "email_address", new Property() { Type = "string", Description = "Filter by sender email address (partial match)" } },
+                    { "search_term", new Property() { Type = "string", Description = "Search term for subject or text content" } },
+                    { "days_back", new Property() { Type = "integer", Description = "Number of days to look back (default 7)" } },
+                    { "limit", new Property() { Type = "integer", Description = "Maximum number of results (default 10)" } }
+                },
+                Required = new List<string>()
+            };
+
+            var jsonOpts2 = new JsonSerializerOptions { DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull };
+            tools.Add(new Function(
+                "search_conversations",
+                "Search previous email conversations for this agent. Filter by sender email address, subject/text keywords, and time range. Returns conversation details with attachment IDs that can be downloaded with get_attachment.",
+                JsonNode.Parse(System.Text.Json.JsonSerializer.Serialize(searchConvSchema, jsonOpts2))));
+
+            Logger.Log($"[MCP] Registered built-in tool: search_conversations", agent.Id);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogWarning($"[MCP] Could not register search_conversations tool: {ex.Message}", agent.Id);
+        }
+
+        // Get Attachment Tool
+        try
+        {
+            var getAttSchema = new InputSchema()
+            {
+                Type = "object",
+                Properties = new Dictionary<string, Property>()
+                {
+                    { "attachment_id", new Property() { Type = "integer", Description = "The attachment ID to download (from search_conversations results)" } }
+                },
+                Required = new List<string>() { "attachment_id" }
+            };
+
+            var jsonOpts3 = new JsonSerializerOptions { DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull };
+            tools.Add(new Function(
+                "get_attachment",
+                "Download a conversation attachment by its ID. Returns the file content as Base64 with metadata.",
+                JsonNode.Parse(System.Text.Json.JsonSerializer.Serialize(getAttSchema, jsonOpts3))));
+
+            Logger.Log($"[MCP] Registered built-in tool: get_attachment", agent.Id);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogWarning($"[MCP] Could not register get_attachment tool: {ex.Message}", agent.Id);
+        }
+
         // Dynamically register MCP tools from Agent.Mcpservers
         var mcpToolHandlers = new Dictionary<string, Func<JsonStringParameter, Task<string>>>();
 
@@ -380,6 +435,23 @@ public class ClaudeClass : IAiProvider
                         // Track that this recipient already received an email
                         if (!string.IsNullOrEmpty(to))
                             sentEmailRecipients.Add(to);
+                    }
+                    else if (toolUse.Name == "search_conversations")
+                    {
+                        var emailAddr = toolUse.Input?["email_address"]?.ToString();
+                        var searchTerm = toolUse.Input?["search_term"]?.ToString();
+                        var daysBack = int.TryParse(toolUse.Input?["days_back"]?.ToString(), out var d) ? d : 7;
+                        var searchLimit = int.TryParse(toolUse.Input?["limit"]?.ToString(), out var l) ? l : 10;
+
+                        result = await McpServers.ConversationSearchMcpServer.SearchConversations(
+                            agent.Id, emailAddr, searchTerm, daysBack, searchLimit, _connectionString);
+                    }
+                    else if (toolUse.Name == "get_attachment")
+                    {
+                        var attachmentId = int.TryParse(toolUse.Input?["attachment_id"]?.ToString(), out var aid) ? aid : 0;
+
+                        result = await McpServers.ConversationSearchMcpServer.GetAttachment(
+                            agent.Id, attachmentId, connectionString: _connectionString);
                     }
                     else if (mcpToolHandlers.ContainsKey(toolUse.Name))
                     {
