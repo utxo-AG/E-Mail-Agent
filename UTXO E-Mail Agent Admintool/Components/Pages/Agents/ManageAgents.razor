@@ -84,6 +84,10 @@
             {
                 <MudChip T="string" Color="Color.Success" Size="Size.Small">Active</MudChip>
             }
+            else if (context.Agent.State == "suspend")
+            {
+                <MudChip T="string" Color="Color.Warning" Size="Size.Small">Suspended</MudChip>
+            }
             else
             {
                 <MudChip T="string" Color="Color.Default" Size="Size.Small">Inactive</MudChip>
@@ -120,6 +124,24 @@
                                Size="Size.Small"
                                OnClick="@(() => OpenChatDialog(context.Agent))" />
             </MudTooltip>
+            @if (context.Agent.State == "active")
+            {
+                <MudTooltip Text="Suspend Agent">
+                    <MudIconButton Icon="@Icons.Material.Filled.Pause"
+                                   Color="Color.Warning"
+                                   Size="Size.Small"
+                                   OnClick="@(() => ToggleSuspendAgent(context.Agent))" />
+                </MudTooltip>
+            }
+            else if (context.Agent.State == "suspend")
+            {
+                <MudTooltip Text="Activate Agent">
+                    <MudIconButton Icon="@Icons.Material.Filled.PlayArrow"
+                                   Color="Color.Success"
+                                   Size="Size.Small"
+                                   OnClick="@(() => ToggleSuspendAgent(context.Agent))" />
+                </MudTooltip>
+            }
             <MudTooltip Text="Delete Agent">
                 <MudIconButton Icon="@Icons.Material.Filled.Delete"
                                Color="Color.Error"
@@ -315,6 +337,33 @@
         };
 
         await DialogService.ShowAsync<ChatWithAgentDialog>("Chat with Agent", parameters, options);
+    }
+
+    private async Task ToggleSuspendAgent(Agent agent)
+    {
+        var newState = agent.State == "active" ? "suspend" : "active";
+        var actionText = newState == "suspend" ? "suspend" : "activate";
+
+        var result = await DialogService.ShowMessageBox(
+            newState == "suspend" ? "Suspend Agent" : "Activate Agent",
+            $"Are you sure you want to {actionText} agent '{agent.Emailaddress}'?",
+            yesText: newState == "suspend" ? "Suspend" : "Activate",
+            cancelText: "Cancel");
+
+        if (result == true)
+        {
+            await using var db = await DbFactory.CreateDbContextAsync();
+            var agentToUpdate = await db.Agents.FindAsync(agent.Id);
+            if (agentToUpdate != null)
+            {
+                agentToUpdate.State = newState;
+                await db.SaveChangesAsync();
+                if (table != null)
+                {
+                    await table.ReloadServerData();
+                }
+            }
+        }
     }
 
     private async Task DeleteAgent(Agent agent)
