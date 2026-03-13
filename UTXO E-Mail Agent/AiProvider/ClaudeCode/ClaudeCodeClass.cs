@@ -616,9 +616,20 @@ public class ClaudeCodeClass : IAiProvider
             if (pythonResult.FilesCreated != null && pythonResult.FilesCreated.Count > 0)
             {
                 var attachments = responseClass.Attachments?.ToList() ?? new List<Attachment>();
-                
+
+                // Skip script/build artifacts - only include actual document attachments
+                var skipExtensions = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+                    { ".py", ".pyc", ".js", ".sh", ".bat", ".cmd" };
+
                 foreach (var filePath in pythonResult.FilesCreated)
                 {
+                    var ext = Path.GetExtension(filePath);
+                    if (skipExtensions.Contains(ext))
+                    {
+                        Logger.Log($"[ClaudeCode] Skipping script file: {Path.GetFileName(filePath)}", agent.Id);
+                        continue;
+                    }
+
                     if (File.Exists(filePath))
                     {
                         try
@@ -626,6 +637,11 @@ public class ClaudeCodeClass : IAiProvider
                             var fileBytes = await File.ReadAllBytesAsync(filePath);
                             var fileName = Path.GetFileName(filePath);
                             var contentType = GlobalFunctions.GetContentTypeFromExtension(filePath);
+
+                            // Remove any existing attachment with the same filename (e.g. from JSON-parsed response)
+                            // to avoid duplicates where the JSON version has no content
+                            attachments.RemoveAll(a =>
+                                string.Equals(a.Filename, fileName, StringComparison.OrdinalIgnoreCase));
 
                             attachments.Add(new Attachment
                             {
@@ -643,7 +659,13 @@ public class ClaudeCodeClass : IAiProvider
                         }
                     }
                 }
-                
+
+                // Remove any remaining attachments that have no content and no valid path
+                // (e.g. filenames from JSON response that weren't found as actual files)
+                attachments.RemoveAll(a =>
+                    string.IsNullOrEmpty(a.Content) &&
+                    (string.IsNullOrEmpty(a.Path) || !File.Exists(a.Path)));
+
                 responseClass.Attachments = attachments.ToArray();
             }
 
