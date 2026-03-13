@@ -133,7 +133,7 @@ public static class ProcessEmailEndpoint
                                 {
                                     if (provider != null)
                                     {
-                                        await provider.RedirectEmail(mail, scopedAgent, aiResponse.RedirectTo, aiResponse.RedirectCc, aiResponse.RedirectMessage);
+                                        await provider.RedirectEmail(mail, scopedAgent, aiResponse.RedirectTo, aiResponse.RedirectCc, aiResponse.RedirectMessage, aiResponse.Attachments);
                                         Logger.Log($"[API Background] Email redirected to: {string.Join(", ", aiResponse.RedirectTo)}");
                                     }
                                     else

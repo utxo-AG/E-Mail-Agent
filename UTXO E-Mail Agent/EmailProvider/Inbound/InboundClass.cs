@@ -223,7 +223,7 @@ public class InboundClass : IEmailProvider
         Logger.LogError($"[Inbound] All {maxRetries} attempts failed for email {mail.Id}");
     }
 
-    public async Task RedirectEmail(MailClass mail, Agent agent, string[] to, string[]? cc = null, string? message = null)
+    public async Task RedirectEmail(MailClass mail, Agent agent, string[] to, string[]? cc = null, string? message = null, Attachment[]? aiAttachments = null)
     {
         try
         {

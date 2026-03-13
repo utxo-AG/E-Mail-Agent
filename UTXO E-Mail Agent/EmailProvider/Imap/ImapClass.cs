@@ -337,7 +337,7 @@ public class ImapClass : IEmailProvider
         }
     }
     
-    public async Task RedirectEmail(MailClass mail, Agent agent, string[] to, string[]? cc = null, string? message = null)
+    public async Task RedirectEmail(MailClass mail, Agent agent, string[] to, string[]? cc = null, string? message = null, Attachment[]? aiAttachments = null)
     {
         try
         {
@@ -415,6 +415,21 @@ public class ImapClass : IEmailProvider
                     else
                     {
                         Logger.LogWarning($"[IMAP/SMTP] Attachment file not found: {filePath}", agent.Id);
+                    }
+                }
+            }
+
+            // Add AI-generated attachments (e.g. PDFs created by the agent)
+            if (aiAttachments != null && aiAttachments.Length > 0)
+            {
+                foreach (var attachment in aiAttachments)
+                {
+                    if (!string.IsNullOrEmpty(attachment.Content))
+                    {
+                        var data = Convert.FromBase64String(attachment.Content);
+                        builder.Attachments.Add(attachment.Filename, data,
+                            MimeKit.ContentType.Parse(attachment.ContentType ?? "application/octet-stream"));
+                        Logger.Log($"[IMAP/SMTP] Added AI attachment: {attachment.Filename}", agent.Id);
                     }
                 }
             }

@@ -6,6 +6,7 @@ using Microsoft.Graph.Me.SendMail;
 using Microsoft.Kiota.Abstractions.Authentication;
 using UTXO_E_Mail_Agent.Classes;
 using UTXO_E_Mail_Agent.Interfaces;
+using EmailAttachment = UTXO_E_Mail_Agent.EmailProvider.Inbound.Classes.Attachment;
 using UTXO_E_Mail_Agent.Services;
 using UTXO_E_Mail_Agent_Shared.Models;
 
@@ -313,7 +314,7 @@ public class Office365Class : IEmailProvider
         return System.Text.RegularExpressions.Regex.Replace(html, "<[^>]*>", "");
     }
 
-    public async Task RedirectEmail(MailClass mail, Agent agent, string[] to, string[]? cc = null, string? message = null)
+    public async Task RedirectEmail(MailClass mail, Agent agent, string[] to, string[]? cc = null, string? message = null, EmailAttachment[]? aiAttachments = null)
     {
         try
         {

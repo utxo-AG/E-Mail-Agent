@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Configuration;
 using UTXO_E_Mail_Agent.Classes;
+using UTXO_E_Mail_Agent.EmailProvider.Inbound.Classes;
 using UTXO_E_Mail_Agent_Shared.Models;
 
 namespace UTXO_E_Mail_Agent.Interfaces;
@@ -18,7 +19,8 @@ public interface IEmailProvider
     /// <param name="to">Array of recipient email addresses</param>
     /// <param name="cc">Optional array of CC recipients</param>
     /// <param name="message">Optional message to prepend to the forwarded email</param>
-    public Task RedirectEmail(MailClass mail, Agent agent, string[] to, string[]? cc = null, string? message = null);
+    /// <param name="aiAttachments">Optional AI-generated attachments to include (e.g. PDFs created by the agent)</param>
+    public Task RedirectEmail(MailClass mail, Agent agent, string[] to, string[]? cc = null, string? message = null, Attachment[]? aiAttachments = null);
 
     /// <summary>
     /// Marks an email as unread again (e.g. after a processing error).

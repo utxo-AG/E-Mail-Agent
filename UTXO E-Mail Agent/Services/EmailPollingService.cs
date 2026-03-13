@@ -175,7 +175,7 @@ public class EmailPollingService : BackgroundService
                                     // Forward the ORIGINAL email with all content to the specified recipients
                                     if (aiResponse.RedirectTo != null && aiResponse.RedirectTo.Length > 0)
                                     {
-                                        await provider.RedirectEmail(mail, agent, aiResponse.RedirectTo, aiResponse.RedirectCc, aiResponse.RedirectMessage);
+                                        await provider.RedirectEmail(mail, agent, aiResponse.RedirectTo, aiResponse.RedirectCc, aiResponse.RedirectMessage, aiResponse.Attachments);
                                         await Logger.LogAsync($"[EmailPollingService] Email redirected to: {string.Join(", ", aiResponse.RedirectTo)}", agent.Id);
                                     }
                                     else

@@ -3,6 +3,7 @@ using MailKit.Net.Smtp;
 using Microsoft.Extensions.Configuration;
 using MimeKit;
 using UTXO_E_Mail_Agent.Classes;
+using UTXO_E_Mail_Agent.EmailProvider.Inbound.Classes;
 using UTXO_E_Mail_Agent.Interfaces;
 using UTXO_E_Mail_Agent_Shared.Models;
 using UTXO_E_Mail_Agent.Services;
@@ -208,7 +209,7 @@ public class Pop3Class : IEmailProvider
         }
     }
 
-    public async Task RedirectEmail(MailClass mail, Agent agent, string[] to, string[]? cc = null, string? message = null)
+    public async Task RedirectEmail(MailClass mail, Agent agent, string[] to, string[]? cc = null, string? message = null, Attachment[]? aiAttachments = null)
     {
         try
         {
@@ -268,6 +269,20 @@ public class Pop3Class : IEmailProvider
                     if (File.Exists(filePath))
                     {
                         await builder.Attachments.AddAsync(filePath);
+                    }
+                }
+            }
+
+            // Add AI-generated attachments
+            if (aiAttachments != null && aiAttachments.Length > 0)
+            {
+                foreach (var attachment in aiAttachments)
+                {
+                    if (!string.IsNullOrEmpty(attachment.Content))
+                    {
+                        var data = Convert.FromBase64String(attachment.Content);
+                        builder.Attachments.Add(attachment.Filename, data,
+                            MimeKit.ContentType.Parse(attachment.ContentType ?? "application/octet-stream"));
                     }
                 }
             }

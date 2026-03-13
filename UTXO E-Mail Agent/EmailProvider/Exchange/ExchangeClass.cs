@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Configuration;
 using UTXO_E_Mail_Agent.Classes;
+using UTXO_E_Mail_Agent.EmailProvider.Inbound.Classes;
 using UTXO_E_Mail_Agent.Interfaces;
 using UTXO_E_Mail_Agent_Shared.Models;
 
@@ -29,7 +30,7 @@ public class ExchangeClass : IEmailProvider
         throw new NotImplementedException();
     }
 
-    public Task RedirectEmail(MailClass mail, Agent agent, string[] to, string[]? cc = null, string? message = null)
+    public Task RedirectEmail(MailClass mail, Agent agent, string[] to, string[]? cc = null, string? message = null, Attachment[]? aiAttachments = null)
     {
         throw new NotImplementedException();
     }
