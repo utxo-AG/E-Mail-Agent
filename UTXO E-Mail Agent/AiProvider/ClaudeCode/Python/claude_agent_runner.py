@@ -77,14 +77,73 @@ E-Mail Text:
 {email_text}
 """
     
+    # Pre-extract text from PDF attachments so the agent doesn't need to Read them
+    # (Reading binary PDFs via the Read tool causes a fatal JSON buffer overflow)
+    pdf_extracts = {}
+    if has_attachments and attachments and attachments_directory:
+        for att_name in attachments:
+            if att_name.lower().endswith('.pdf'):
+                att_path = os.path.join(attachments_directory, att_name)
+                if os.path.exists(att_path):
+                    text = None
+                    # Try PyPDF2 first (pure Python, no system dependencies)
+                    try:
+                        from PyPDF2 import PdfReader
+                        reader = PdfReader(att_path)
+                        pages_text = []
+                        for page in reader.pages:
+                            page_text = page.extract_text()
+                            if page_text:
+                                pages_text.append(page_text)
+                        if pages_text:
+                            text = "\n".join(pages_text)
+                            log(f"[PDF] Extracted via PyPDF2: {len(text)} chars from {att_name}")
+                    except ImportError:
+                        log(f"[PDF] PyPDF2 not available")
+                    except Exception as e:
+                        log(f"[PDF] PyPDF2 error for {att_name}: {str(e)}")
+
+                    # Fallback to pdftotext CLI
+                    if not text:
+                        try:
+                            import subprocess
+                            result = subprocess.run(
+                                ['pdftotext', att_path, '-'],
+                                capture_output=True, text=True, timeout=30
+                            )
+                            if result.returncode == 0 and result.stdout.strip():
+                                text = result.stdout.strip()
+                                log(f"[PDF] Extracted via pdftotext: {len(text)} chars from {att_name}")
+                        except FileNotFoundError:
+                            log(f"[PDF] pdftotext not installed either")
+                        except Exception as e:
+                            log(f"[PDF] pdftotext error for {att_name}: {str(e)}")
+
+                    if text:
+                        # Limit to 10000 chars to avoid prompt bloat
+                        if len(text) > 10000:
+                            text = text[:10000] + "\n... (Text gekürzt)"
+                        pdf_extracts[att_name] = text
+
     # Add attachments info if present
     if has_attachments and attachments:
         full_prompt += f"""
 E-Mail Attachments (Dateinamen): {', '.join(attachments)}
 Attachments-Verzeichnis: {attachments_directory}
-HINWEIS: Die Attachments liegen als Dateien im Verzeichnis {attachments_directory}. Du kannst diese mit dem Read-Tool lesen (z.B. PDFs, Textdateien).
+HINWEIS: Die Attachments liegen als Dateien im Verzeichnis {attachments_directory}.
+WICHTIG: Verwende NIEMALS das Read-Tool für PDF-Dateien oder andere Binärdateien! Das führt zu einem fatalen Fehler (Buffer-Überlauf).
+- PDF-Inhalte werden dir bereits oben als extrahierter Text bereitgestellt (falls vorhanden).
+- Falls du trotzdem eine PDF lesen musst: Verwende Bash mit `python3 -c "from PyPDF2 import PdfReader; r=PdfReader('DATEI.pdf'); print('\\n'.join(p.extract_text() or '' for p in r.pages))"`.
+- Für Textdateien (.txt, .csv, .json, .xml, .html): Read-Tool ist OK.
+- Für Bilddateien (.png, .jpg): Nicht direkt lesbar, nur als Attachment weiterleiten.
 Um diese Attachments bei einer Weiterleitung mitzusenden, verwende die Parameter "agentId": {agent_id}, "messageId": "{message_id}" und "attachments": {json.dumps(attachments)} im curl-Aufruf!
 """
+        # Append pre-extracted PDF text content
+        if pdf_extracts:
+            full_prompt += "\n--- EXTRAHIERTER PDF-INHALT ---\n"
+            for pdf_name, pdf_text in pdf_extracts.items():
+                full_prompt += f"\n=== {pdf_name} ===\n{pdf_text}\n"
+            full_prompt += "--- ENDE PDF-INHALT ---\n"
     
     if email_html:
         full_prompt += f"""

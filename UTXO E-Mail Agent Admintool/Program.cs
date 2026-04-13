@@ -14,6 +14,12 @@ builder.Services.AddControllers();
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
 
+// Increase SignalR message size limit for large system prompts (default: 32KB)
+builder.Services.AddSignalR(options =>
+{
+    options.MaximumReceiveMessageSize = 512 * 1024; // 512 KB
+});
+
 // Add MudBlazor services
 builder.Services.AddMudServices();
 

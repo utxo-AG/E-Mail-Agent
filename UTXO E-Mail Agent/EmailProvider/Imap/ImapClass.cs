@@ -384,20 +384,46 @@ public class ImapClass : IEmailProvider
             forwardHeader.AppendLine();
 
             // Set text body with full original content
-            builder.TextBody = forwardHeader.ToString() + (mail.Text ?? "");
-            
+            var fullText = mail.Text ?? "";
+            builder.TextBody = forwardHeader.ToString() + fullText;
+
             Logger.Log($"[IMAP/SMTP] Redirect - Text length: {mail.Text?.Length ?? 0}, HTML length: {mail.Html?.Length ?? 0}", agent.Id);
-            
-            // Set HTML body with full original content
+
+            // Build HTML body - email clients prefer HTML, so it must have complete content
+            var htmlHeader = forwardHeader.ToString().Replace("\n", "<br/>");
+            var textLooksLikeHtml = fullText.Contains("<html", StringComparison.OrdinalIgnoreCase) ||
+                                   fullText.Contains("<body", StringComparison.OrdinalIgnoreCase) ||
+                                   fullText.Contains("<div", StringComparison.OrdinalIgnoreCase);
+
             if (!string.IsNullOrEmpty(mail.Html))
             {
-                var htmlHeader = forwardHeader.ToString().Replace("\n", "<br/>");
-                builder.HtmlBody = $"<div>{htmlHeader}</div><hr/>{mail.Html}";
-                Logger.Log($"[IMAP/SMTP] Redirect - HTML body set, total length: {builder.HtmlBody.Length}", agent.Id);
+                if (!textLooksLikeHtml && fullText.Length > mail.Html.Length * 1.5)
+                {
+                    // Text has significantly more content than HTML (e.g. HTML is just a summary)
+                    // Include text content as HTML so nothing gets lost
+                    var textAsHtml = System.Web.HttpUtility.HtmlEncode(fullText).Replace("\n", "<br/>");
+                    builder.HtmlBody = $"<div>{htmlHeader}</div><div style=\"white-space:pre-wrap\">{textAsHtml}</div><hr/><div>{mail.Html}</div>";
+                    Logger.Log($"[IMAP/SMTP] Redirect - HTML body with text+HTML (text longer), total length: {builder.HtmlBody.Length}", agent.Id);
+                }
+                else
+                {
+                    // HTML has complete content - use it directly
+                    builder.HtmlBody = $"<div>{htmlHeader}</div><hr/>{mail.Html}";
+                    Logger.Log($"[IMAP/SMTP] Redirect - HTML body from original HTML, total length: {builder.HtmlBody.Length}", agent.Id);
+                }
+            }
+            else if (textLooksLikeHtml)
+            {
+                // Text contains HTML markup - use it as-is
+                builder.HtmlBody = $"<div>{htmlHeader}</div><hr/>{fullText}";
+                Logger.Log($"[IMAP/SMTP] Redirect - HTML body from text (contains HTML), total length: {builder.HtmlBody.Length}", agent.Id);
             }
             else
             {
-                Logger.Log($"[IMAP/SMTP] Redirect - No HTML content available, using text only", agent.Id);
+                // Pure plain text - convert to HTML
+                var textAsHtml = System.Web.HttpUtility.HtmlEncode(fullText).Replace("\n", "<br/>");
+                builder.HtmlBody = $"<div>{htmlHeader}</div><div style=\"white-space:pre-wrap\">{textAsHtml}</div>";
+                Logger.Log($"[IMAP/SMTP] Redirect - HTML body from plain text, total length: {builder.HtmlBody.Length}", agent.Id);
             }
 
             // Add original attachments

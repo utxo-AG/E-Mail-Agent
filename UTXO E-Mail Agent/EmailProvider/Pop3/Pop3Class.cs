@@ -252,12 +252,34 @@ public class Pop3Class : IEmailProvider
             forwardHeader.AppendLine($"Betreff: {mail.Subject}");
             forwardHeader.AppendLine();
 
-            builder.TextBody = forwardHeader.ToString() + (mail.Text ?? "");
-            
+            var fullText = mail.Text ?? "";
+            builder.TextBody = forwardHeader.ToString() + fullText;
+
+            var htmlHeader = forwardHeader.ToString().Replace("\n", "<br/>");
+            var textLooksLikeHtml = fullText.Contains("<html", StringComparison.OrdinalIgnoreCase) ||
+                                   fullText.Contains("<body", StringComparison.OrdinalIgnoreCase) ||
+                                   fullText.Contains("<div", StringComparison.OrdinalIgnoreCase);
+
             if (!string.IsNullOrEmpty(mail.Html))
             {
-                var htmlHeader = forwardHeader.ToString().Replace("\n", "<br/>");
-                builder.HtmlBody = $"<div>{htmlHeader}</div><hr/>{mail.Html}";
+                if (!textLooksLikeHtml && fullText.Length > mail.Html.Length * 1.5)
+                {
+                    var textAsHtml = System.Web.HttpUtility.HtmlEncode(fullText).Replace("\n", "<br/>");
+                    builder.HtmlBody = $"<div>{htmlHeader}</div><div style=\"white-space:pre-wrap\">{textAsHtml}</div><hr/><div>{mail.Html}</div>";
+                }
+                else
+                {
+                    builder.HtmlBody = $"<div>{htmlHeader}</div><hr/>{mail.Html}";
+                }
+            }
+            else if (textLooksLikeHtml)
+            {
+                builder.HtmlBody = $"<div>{htmlHeader}</div><hr/>{fullText}";
+            }
+            else
+            {
+                var textAsHtml = System.Web.HttpUtility.HtmlEncode(fullText).Replace("\n", "<br/>");
+                builder.HtmlBody = $"<div>{htmlHeader}</div><div style=\"white-space:pre-wrap\">{textAsHtml}</div>";
             }
 
             if (mail.Attachments != null && mail.Attachments.Length > 0)
