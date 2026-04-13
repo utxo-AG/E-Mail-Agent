@@ -248,9 +248,13 @@ else
                 </MudItem>
 
                 <MudItem xs="12">
-                    <MudTextField Label="Task to be Completed"
+                    <MudTextField Label="Task to be Completed (System Prompt)"
                                   @bind-Value="agent.Tasktobecompleted"
-                                  Lines="5"
+                                  Lines="15"
+                                  AutoGrow="true"
+                                  MaxLines="50"
+                                  Immediate="false"
+                                  DebounceInterval="500"
                                   Variant="Variant.Outlined" />
                 </MudItem>
 
@@ -483,54 +487,63 @@ else
 
     private async Task Save()
     {
-        // Auto-set provider type to polling for IMAP, POP3, Exchange, and Office365
-        if (agent.Emailprovider?.ToLower() == "imap" ||
-            agent.Emailprovider?.ToLower() == "pop3" ||
-            agent.Emailprovider?.ToLower() == "exchange" ||
-            agent.Emailprovider?.ToLower() == "office365")
+        try
         {
-            agent.Emailprovidertype = "polling";
-        }
-
-        await using var db = await DbFactory.CreateDbContextAsync();
-
-        if (AgentId.HasValue)
-        {
-            // Update existing agent
-            var existingAgent = await db.Agents.FindAsync(AgentId.Value);
-            if (existingAgent != null)
+            // Auto-set provider type to polling for IMAP, POP3, Exchange, and Office365
+            if (agent.Emailprovider?.ToLower() == "imap" ||
+                agent.Emailprovider?.ToLower() == "pop3" ||
+                agent.Emailprovider?.ToLower() == "exchange" ||
+                agent.Emailprovider?.ToLower() == "office365")
             {
-                existingAgent.Emailaddress = agent.Emailaddress;
-                existingAgent.State = agent.State;
-                existingAgent.Defaultlanguage = agent.Defaultlanguage;
-                existingAgent.Emailprovider = agent.Emailprovider??"inbound";
-                existingAgent.Emailprovidertype = agent.Emailprovidertype;
-                existingAgent.Emailusername = agent.Emailusername;
-                existingAgent.Emailpassword = agent.Emailpassword;
-                existingAgent.Emailserver = agent.Emailserver;
-                existingAgent.Emailport = agent.Emailport;
-                existingAgent.Emailusessl = agent.Emailusessl;
-                existingAgent.Aiprovider = agent.Aiprovider;
-                existingAgent.Aimodel = agent.Aimodel;
-                existingAgent.Tasktobecompleted = agent.Tasktobecompleted;
-                existingAgent.Useconversationhistory = agent.Useconversationhistory;
-                existingAgent.Smtpserver = agent.Smtpserver;
-                existingAgent.Smtpport = agent.Smtpport;
-                existingAgent.Smtpusername = agent.Smtpusername;
-                existingAgent.Smtppassword = agent.Smtppassword;
-                existingAgent.Smtpusessl = agent.Smtpusessl;
-
-                await db.SaveChangesAsync();
+                agent.Emailprovidertype = "polling";
             }
-        }
-        else
-        {
-            // Create new agent
-            db.Agents.Add(agent);
-            await db.SaveChangesAsync();
-        }
 
-        NavigationManager.NavigateTo(GetReturnUrl());
+            await using var db = await DbFactory.CreateDbContextAsync();
+
+            if (AgentId.HasValue)
+            {
+                // Update existing agent
+                var existingAgent = await db.Agents.FindAsync(AgentId.Value);
+                if (existingAgent != null)
+                {
+                    existingAgent.Emailaddress = agent.Emailaddress;
+                    existingAgent.State = agent.State;
+                    existingAgent.Defaultlanguage = agent.Defaultlanguage;
+                    existingAgent.Emailprovider = agent.Emailprovider ?? "inbound";
+                    existingAgent.Emailprovidertype = agent.Emailprovidertype;
+                    existingAgent.Emailusername = agent.Emailusername;
+                    existingAgent.Emailpassword = agent.Emailpassword;
+                    existingAgent.Emailserver = agent.Emailserver;
+                    existingAgent.Emailport = agent.Emailport;
+                    existingAgent.Emailusessl = agent.Emailusessl;
+                    existingAgent.Aiprovider = agent.Aiprovider;
+                    existingAgent.Aimodel = agent.Aimodel;
+                    existingAgent.Tasktobecompleted = agent.Tasktobecompleted;
+                    existingAgent.Useconversationhistory = agent.Useconversationhistory;
+                    existingAgent.Smtpserver = agent.Smtpserver;
+                    existingAgent.Smtpport = agent.Smtpport;
+                    existingAgent.Smtpusername = agent.Smtpusername;
+                    existingAgent.Smtppassword = agent.Smtppassword;
+                    existingAgent.Smtpusessl = agent.Smtpusessl;
+
+                    await db.SaveChangesAsync();
+                    Snackbar.Add($"Agent saved (Prompt: {existingAgent.Tasktobecompleted?.Length ?? 0} chars)", Severity.Success);
+                }
+            }
+            else
+            {
+                // Create new agent
+                db.Agents.Add(agent);
+                await db.SaveChangesAsync();
+                Snackbar.Add("Agent created", Severity.Success);
+            }
+
+            NavigationManager.NavigateTo(GetReturnUrl());
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error saving: {ex.Message}", Severity.Error);
+        }
     }
 
     private async Task LoadMcpServers()
