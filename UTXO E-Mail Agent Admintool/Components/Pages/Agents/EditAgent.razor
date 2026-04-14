@@ -7,6 +7,7 @@
 @inject IDialogService DialogService
 @inject IHttpClientFactory HttpClientFactory
 @inject ISnackbar Snackbar
+@inject IConfiguration Configuration
 
 <PageTitle>@(AgentId.HasValue ? "Edit Agent" : "Create New Agent")</PageTitle>
 
@@ -724,6 +725,26 @@ else
             var skillToDelete = await db.Skills.FindAsync(skill.Id);
             if (skillToDelete != null)
             {
+                // Delete from Anthropic if uploaded
+                if (!string.IsNullOrEmpty(skillToDelete.Skillid))
+                {
+                    try
+                    {
+                        var apiKey = Configuration["Claude:ApiKey"];
+                        if (!string.IsNullOrEmpty(apiKey))
+                        {
+                            using var httpClient = new HttpClient();
+                            var client = new Anthropic.SDK.AnthropicClient(apiKey, httpClient);
+                            await client.Skills.DeleteSkillAsync(skillToDelete.Skillid);
+                            Snackbar.Add($"Skill '{skill.Skillname}' also deleted from Anthropic", Severity.Info);
+                        }
+                    }
+                    catch
+                    {
+                        // Ignore - may already be deleted at Anthropic
+                    }
+                }
+
                 db.Skills.Remove(skillToDelete);
                 await db.SaveChangesAsync();
                 await LoadSkills();

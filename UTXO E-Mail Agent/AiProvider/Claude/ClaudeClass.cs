@@ -903,11 +903,29 @@ public class ClaudeClass : IAiProvider
 
     /// <summary>
     /// Uploads a skill file to Anthropic and returns the assigned Skill ID.
+    /// Uses DB ID in the name to avoid display_title conflicts between agents.
     /// </summary>
     private async Task<string> UploadSkillToAnthropicAsync(AnthropicClient client, DbSkill dbSkill)
     {
         if (dbSkill.Skillfiles == null || dbSkill.Skillfiles.Length == 0)
             throw new InvalidOperationException($"Skill '{dbSkill.Skillname}' has no file content.");
+
+        // Use unique name with DB ID to avoid display_title conflicts
+        var uniqueSkillName = $"{dbSkill.Skillname}-{dbSkill.Id}";
+
+        // If skill already has an Anthropic ID, delete it first (re-upload)
+        if (!string.IsNullOrEmpty(dbSkill.Skillid))
+        {
+            try
+            {
+                await client.Skills.DeleteSkillAsync(dbSkill.Skillid);
+                Logger.Log($"[Claude] Deleted existing skill '{dbSkill.Skillid}' before re-upload");
+            }
+            catch
+            {
+                // Ignore - may already be deleted
+            }
+        }
 
         if (dbSkill.Filetype == "zip")
         {
@@ -915,7 +933,7 @@ public class ClaudeClass : IAiProvider
             try
             {
                 await File.WriteAllBytesAsync(tempPath, dbSkill.Skillfiles);
-                var response = await client.Skills.CreateSkillFromZipAsync(dbSkill.Skillname, tempPath);
+                var response = await client.Skills.CreateSkillFromZipAsync(uniqueSkillName, tempPath);
                 return response.Id;
             }
             finally
@@ -929,9 +947,9 @@ public class ClaudeClass : IAiProvider
         var stream = new MemoryStream(dbSkill.Skillfiles);
         var files = new List<(string filename, Stream stream, string mimeType)>
         {
-            ($"{dbSkill.Skillname}/SKILL.md", stream, "text/markdown")
+            ($"{uniqueSkillName}/SKILL.md", stream, "text/markdown")
         };
-        var mdResponse = await client.Skills.CreateSkillFromStreamsAsync(dbSkill.Skillname, files);
+        var mdResponse = await client.Skills.CreateSkillFromStreamsAsync(uniqueSkillName, files);
         return mdResponse.Id;
     }
 

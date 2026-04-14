@@ -327,6 +327,8 @@ public class SkillUploadService
 
     /// <summary>
     /// Uploads a skill to Anthropic and returns the assigned Skill ID.
+    /// Uses the DB ID in the skill name to avoid display_title conflicts between agents.
+    /// If a skill with the same ID already exists at Anthropic, it is deleted first.
     /// </summary>
     public async Task<SkillUploadResult> UploadSkillAsync(Skill skill)
     {
@@ -356,6 +358,23 @@ public class SkillUploadService
             using var httpClient = new HttpClient { Timeout = TimeSpan.FromMinutes(5) };
             var client = new AnthropicClient(apiKey, httpClient);
 
+            // Use unique name with DB ID to avoid display_title conflicts
+            var uniqueSkillName = $"{skill.Skillname}-{skill.Id}";
+
+            // If skill already has an Anthropic ID, delete it first (re-upload)
+            if (!string.IsNullOrEmpty(skill.Skillid))
+            {
+                try
+                {
+                    await client.Skills.DeleteSkillAsync(skill.Skillid);
+                    _logger.LogInformation("Deleted existing skill '{SkillId}' from Anthropic before re-upload", skill.Skillid);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Could not delete existing skill '{SkillId}' - may already be deleted", skill.Skillid);
+                }
+            }
+
             string skillId;
 
             if (skill.Filetype == "zip")
@@ -365,7 +384,7 @@ public class SkillUploadService
                 try
                 {
                     await File.WriteAllBytesAsync(tempPath, skill.Skillfiles!);
-                    var response = await client.Skills.CreateSkillFromZipAsync(skill.Skillname, tempPath);
+                    var response = await client.Skills.CreateSkillFromZipAsync(uniqueSkillName, tempPath);
                     skillId = response.Id;
                 }
                 finally
@@ -380,14 +399,14 @@ public class SkillUploadService
                 var stream = new MemoryStream(skill.Skillfiles!);
                 var files = new List<(string filename, Stream stream, string mimeType)>
                 {
-                    ($"{skill.Skillname}/SKILL.md", stream, "text/markdown")
+                    ($"{uniqueSkillName}/SKILL.md", stream, "text/markdown")
                 };
-                var response = await client.Skills.CreateSkillFromStreamsAsync(skill.Skillname, files);
+                var response = await client.Skills.CreateSkillFromStreamsAsync(uniqueSkillName, files);
                 skillId = response.Id;
             }
 
-            _logger.LogInformation("Successfully uploaded skill '{SkillName}' to Anthropic with ID: {SkillId}", 
-                skill.Skillname, skillId);
+            _logger.LogInformation("Successfully uploaded skill '{SkillName}' (unique: '{UniqueSkillName}') to Anthropic with ID: {SkillId}",
+                skill.Skillname, uniqueSkillName, skillId);
 
             return new SkillUploadResult
             {
