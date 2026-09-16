@@ -79,7 +79,7 @@ public partial class DefaultdbContext : DbContext
                 .HasColumnName("agentname");
             entity.Property(e => e.Aimodel)
                 .HasMaxLength(255)
-                .HasDefaultValueSql("'claude-sonnet-4-20250514'")
+                .HasDefaultValueSql("'claude-opus-4-8'")
                 .HasColumnName("aimodel");
             entity.Property(e => e.Aiprovider)
                 .HasDefaultValueSql("'claude'")
@@ -142,6 +142,7 @@ public partial class DefaultdbContext : DbContext
                 .HasColumnName("state");
             entity.Property(e => e.Tasktobecompleted).HasColumnName("tasktobecompleted");
             entity.Property(e => e.Useconversationhistory).HasColumnName("useconversationhistory");
+            entity.Property(e => e.MaximumMailAgeDays).HasColumnName("maximum_mail_age_days");
 
             entity.HasOne(d => d.Customer).WithMany(p => p.Agents)
                 .HasForeignKey(d => d.CustomerId)

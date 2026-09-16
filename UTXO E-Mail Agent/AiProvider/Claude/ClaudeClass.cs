@@ -724,7 +724,7 @@ public class ClaudeClass : IAiProvider
         responseClass.AiDurationMs = stopwatch.ElapsedMilliseconds;
         responseClass.AiInputTokens = totalInputTokens;
         responseClass.AiOutputTokens = totalOutputTokens;
-        responseClass.AiCostUsd = CalculateCost(agent.Aimodel ?? "claude-sonnet-4-20250514", totalInputTokens, totalOutputTokens);
+        responseClass.AiCostUsd = CalculateCost(agent.Aimodel ?? "claude-opus-4-8", totalInputTokens, totalOutputTokens);
         
         Logger.Log($"[Claude API] Cost: ${responseClass.AiCostUsd:F4}, Duration: {responseClass.AiDurationMs}ms, Tokens: {totalInputTokens} in / {totalOutputTokens} out", agent.Id);
 

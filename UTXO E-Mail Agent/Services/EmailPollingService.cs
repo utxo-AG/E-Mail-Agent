@@ -115,6 +115,39 @@ public class EmailPollingService : BackgroundService
                             continue;
                         }
 
+                        // Skip bounces (Mailer-Daemon / DSN) and automatic replies (out-of-office, bulk).
+                        // Answering these would bounce again and create an endless mail loop.
+                        // The mail is already marked as read in GetMail, so it won't be re-fetched.
+                        if (mail.IsAutoReplyOrBounce)
+                        {
+                            await Logger.LogAsync($"[EmailPollingService] Skipping bounce/auto-reply from '{mail.From}' (Subject: '{mail.Subject}') - no answer sent", agent.Id);
+                            continue;
+                        }
+
+                        // Skip emails that are older than the agent's configured limit (0 / null = no limit).
+                        if (agent.MaximumMailAgeDays.HasValue && agent.MaximumMailAgeDays.Value > 0)
+                        {
+                            DateTime? receivedUtc = mail.ReceivedAt;
+                            if (receivedUtc == null && DateTime.TryParse(mail.CreatedAt, out var parsed))
+                            {
+                                receivedUtc = parsed.ToUniversalTime();
+                            }
+
+                            if (receivedUtc.HasValue)
+                            {
+                                var ageDays = (DateTime.UtcNow - receivedUtc.Value).TotalDays;
+                                if (ageDays > agent.MaximumMailAgeDays.Value)
+                                {
+                                    await Logger.LogAsync($"[EmailPollingService] Skipping email from '{mail.From}' (Subject: '{mail.Subject}') - too old ({ageDays:F1} days > {agent.MaximumMailAgeDays.Value} day limit)", agent.Id);
+                                    continue;
+                                }
+                            }
+                            else
+                            {
+                                Logger.LogWarning($"[EmailPollingService] Could not determine age of email '{mail.Subject}' - processing anyway", agent.Id);
+                            }
+                        }
+
                         // Generate a consistent message ID if not provided
                         var messageId = mail.Id ?? Guid.NewGuid().ToString();
                         

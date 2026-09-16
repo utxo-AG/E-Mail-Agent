@@ -21,6 +21,7 @@ public class AgentResponseDto
     public bool? Smtpusessl { get; set; }
     public DateTime? Lastpoll { get; set; }
     public bool Useconversationhistory { get; set; }
+    public int? MaximumMailAgeDays { get; set; }
 }
 
 public class CreateAgentDto
@@ -36,7 +37,7 @@ public class CreateAgentDto
     public bool? Emailusessl { get; set; }
     public string? Tasktobecompleted { get; set; }
     public string Aiprovider { get; set; } = "anthropic";
-    public string Aimodel { get; set; } = "claude-sonnet-4-20250514";
+    public string Aimodel { get; set; } = "claude-opus-4-8";
     public string Emailprovidertype { get; set; } = "imap";
     public string? Smtpserver { get; set; }
     public int? Smtpport { get; set; }
@@ -44,6 +45,7 @@ public class CreateAgentDto
     public string? Smtppassword { get; set; }
     public bool? Smtpusessl { get; set; }
     public bool Useconversationhistory { get; set; } = false;
+    public int? MaximumMailAgeDays { get; set; }
 }
 
 public class UpdateAgentDto
@@ -67,4 +69,5 @@ public class UpdateAgentDto
     public string? Smtppassword { get; set; }
     public bool? Smtpusessl { get; set; }
     public bool? Useconversationhistory { get; set; }
+    public int? MaximumMailAgeDays { get; set; }
 }

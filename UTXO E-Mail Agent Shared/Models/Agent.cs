@@ -62,6 +62,12 @@ public partial class Agent
     public bool Useconversationhistory { get; set; }
 
     /// <summary>
+    /// Maximum age (in days) an incoming email may have to still be answered by this agent.
+    /// Null or 0 means no limit (answer regardless of age).
+    /// </summary>
+    public int? MaximumMailAgeDays { get; set; }
+
+    /// <summary>
     /// Webhook verification token from inbound.new (for webhook-based email receiving)
     /// </summary>
     public string? Webhookverificationtoken { get; set; }

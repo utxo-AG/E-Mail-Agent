@@ -580,18 +580,11 @@ public class ClaudeCodeClass : IAiProvider
             {
                 var errorMsg = pythonResult?.Error ?? "Unknown error from Claude Code";
                 Logger.LogError($"[ClaudeCode] Error: {errorMsg}", agent.Id);
-                
-                var lang = GlobalFunctions.DetectLanguage(mailClass.Text) ?? agent.Defaultlanguage ?? "de";
-                var (fallbackText, fallbackSubject) = GlobalFunctions.GetFallbackMessages(lang);
-                
-                return new AiResponseClass
-                {
-                    EmailResponseText = fallbackText,
-                    EmailResponseSubject = fallbackSubject,
-                    EmailResponseHtml = $"<p>{System.Web.HttpUtility.HtmlEncode(fallbackText)}</p>",
-                    Attachments = Array.Empty<Attachment>(),
-                    AiExplanation = $"[ClaudeCode Error] {errorMsg}"
-                };
+
+                // Infrastructure failure (auth / model not found / no model run). Do NOT send a
+                // reply containing the error text. Throw so the caller retries the mail later
+                // (e.g. after the model id is fixed) instead of e-mailing garbage to the sender.
+                throw new ClaudeCodeRunException(errorMsg);
             }
 
             // Parse the AI response from the full response text
@@ -678,14 +671,19 @@ public class ClaudeCodeClass : IAiProvider
             Logger.Log($"[ClaudeCode] Response generated successfully", agent.Id);
             return responseClass;
         }
+        catch (ClaudeCodeRunException)
+        {
+            // Infrastructure failure - let the caller retry the mail instead of replying with an error.
+            throw;
+        }
         catch (Exception ex)
         {
             Logger.LogError($"[ClaudeCode] Exception: {ex.Message}", agent.Id);
             Logger.LogError($"[ClaudeCode] Stack: {ex.StackTrace}", agent.Id);
-            
+
             var lang = GlobalFunctions.DetectLanguage(mailClass.Text) ?? agent.Defaultlanguage ?? "de";
             var (fallbackText, fallbackSubject) = GlobalFunctions.GetFallbackMessages(lang);
-            
+
             return new AiResponseClass
             {
                 EmailResponseText = fallbackText,
@@ -825,4 +823,14 @@ public class ClaudeCodePythonResponse
     
     [JsonProperty("error")]
     public string? Error { get; set; }
+}
+
+/// <summary>
+/// Thrown when the Claude Code run failed at infrastructure level (authentication,
+/// model not found, no model run). The mail should be retried later, never answered
+/// with the error text.
+/// </summary>
+public class ClaudeCodeRunException : Exception
+{
+    public ClaudeCodeRunException(string message) : base(message) { }
 }

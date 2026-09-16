@@ -64,6 +64,21 @@ public class MailClass
         [JsonConverter(typeof(FlexibleAttachmentsConverter))]
         public string[] Attachments { get; set; }
 
+        /// <summary>
+        /// Received/sent date of the email in UTC (used for age-based filtering).
+        /// Null if the provider could not determine it.
+        /// </summary>
+        [JsonIgnore]
+        public DateTime? ReceivedAt { get; set; }
+
+        /// <summary>
+        /// True if this email is a bounce (DSN / Mailer-Daemon) or an automatic reply
+        /// (out-of-office, auto-submitted, bulk). Such mails must NOT be answered,
+        /// otherwise the reply bounces again and creates an endless mail loop.
+        /// </summary>
+        [JsonIgnore]
+        public bool IsAutoReplyOrBounce { get; set; }
+
 }
 
 /// <summary>

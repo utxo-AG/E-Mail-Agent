@@ -54,7 +54,8 @@ public class AgentsController : ControllerBase
                 Smtpusername = a.Smtpusername,
                 Smtpusessl = a.Smtpusessl,
                 Lastpoll = a.Lastpoll,
-                Useconversationhistory = a.Useconversationhistory
+                Useconversationhistory = a.Useconversationhistory,
+                MaximumMailAgeDays = a.MaximumMailAgeDays
             })
             .ToListAsync();
 
@@ -91,7 +92,8 @@ public class AgentsController : ControllerBase
                 Smtpusername = a.Smtpusername,
                 Smtpusessl = a.Smtpusessl,
                 Lastpoll = a.Lastpoll,
-                Useconversationhistory = a.Useconversationhistory
+                Useconversationhistory = a.Useconversationhistory,
+                MaximumMailAgeDays = a.MaximumMailAgeDays
             })
             .FirstOrDefaultAsync();
 
@@ -132,7 +134,8 @@ public class AgentsController : ControllerBase
             Smtpusername = dto.Smtpusername,
             Smtppassword = dto.Smtppassword,
             Smtpusessl = dto.Smtpusessl,
-            Useconversationhistory = dto.Useconversationhistory
+            Useconversationhistory = dto.Useconversationhistory,
+            MaximumMailAgeDays = dto.MaximumMailAgeDays
         };
 
         _db.Agents.Add(agent);
@@ -158,7 +161,8 @@ public class AgentsController : ControllerBase
             Smtpusername = agent.Smtpusername,
             Smtpusessl = agent.Smtpusessl,
             Lastpoll = agent.Lastpoll,
-            Useconversationhistory = agent.Useconversationhistory
+            Useconversationhistory = agent.Useconversationhistory,
+            MaximumMailAgeDays = agent.MaximumMailAgeDays
         };
 
         return CreatedAtAction(nameof(GetAgent), new { id = agent.Id }, response);
@@ -201,6 +205,7 @@ public class AgentsController : ControllerBase
         if (dto.Smtppassword != null) agent.Smtppassword = dto.Smtppassword;
         if (dto.Smtpusessl.HasValue) agent.Smtpusessl = dto.Smtpusessl;
         if (dto.Useconversationhistory.HasValue) agent.Useconversationhistory = dto.Useconversationhistory.Value;
+        if (dto.MaximumMailAgeDays.HasValue) agent.MaximumMailAgeDays = dto.MaximumMailAgeDays;
 
         await _db.SaveChangesAsync();
 
@@ -224,7 +229,8 @@ public class AgentsController : ControllerBase
             Smtpusername = agent.Smtpusername,
             Smtpusessl = agent.Smtpusessl,
             Lastpoll = agent.Lastpoll,
-            Useconversationhistory = agent.Useconversationhistory
+            Useconversationhistory = agent.Useconversationhistory,
+            MaximumMailAgeDays = agent.MaximumMailAgeDays
         };
 
         return Ok(response);

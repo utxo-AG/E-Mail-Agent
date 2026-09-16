@@ -207,6 +207,8 @@ E-Mail HTML:
         total_duration_ms = 0
         total_input_tokens = 0
         total_output_tokens = 0
+        result_is_error = False
+        result_subtype = None
         
         # Use ClaudeSDKClient for proper handling
         async with ClaudeSDKClient(options) as client:
@@ -242,6 +244,12 @@ E-Mail HTML:
                             
                 elif isinstance(message, ResultMessage):
                     log(f"[Result] Task completed!")
+                    # Capture error state (auth failure, model not found, execution error, etc.)
+                    if hasattr(message, 'is_error') and message.is_error:
+                        result_is_error = True
+                    if hasattr(message, 'subtype') and message.subtype:
+                        result_subtype = message.subtype
+                        log(f"[Result] Subtype: {message.subtype}")
                     if hasattr(message, 'duration_ms') and message.duration_ms:
                         total_duration_ms += message.duration_ms
                         log(f"[Result] Duration: {message.duration_ms}ms (Total: {total_duration_ms}ms)")
@@ -278,9 +286,30 @@ E-Mail HTML:
         log(f"[Summary] Total tokens: {total_input_tokens} input, {total_output_tokens} output")
         log("=" * 60)
         
+        # Detect failed runs so error text is never sent back as an email reply.
+        # A genuine model run always consumes input tokens; zero tokens + zero cost
+        # means the request never reached the model (auth failure, model not found, ...).
+        no_usage = (total_input_tokens == 0 and total_output_tokens == 0 and total_cost_usd == 0.0)
+        lower_resp = (full_response or "").lower()
+        error_phrases = [
+            "invalid authentication credentials",
+            "failed to authenticate",
+            "api error: 401",
+            "issue with the selected model",
+            "credit balance is too low",
+            "it may not exist or you may not have access",
+        ]
+        looks_like_error = any(p in lower_resp for p in error_phrases)
+        has_output = bool((full_response or "").strip())
+        # Treat as failed only when there is no usable output (never discard a real answer).
+        run_failed = (no_usage and (looks_like_error or not has_output)) or (result_is_error and not has_output)
+
+        if run_failed:
+            log(f"[Result] Run treated as FAILED (is_error={result_is_error}, subtype={result_subtype}, no_usage={no_usage})")
+
         # Build response
         response = {
-            "success": True,
+            "success": not run_failed,
             "response_text": full_response,
             "full_response": full_response,
             "files_created": [],
@@ -289,7 +318,7 @@ E-Mail HTML:
             "total_duration_ms": total_duration_ms,
             "total_input_tokens": total_input_tokens,
             "total_output_tokens": total_output_tokens,
-            "error": None
+            "error": (full_response.strip() if (full_response or "").strip() else f"Model run failed (subtype={result_subtype})") if run_failed else None
         }
         
         # Check for created files in output directory

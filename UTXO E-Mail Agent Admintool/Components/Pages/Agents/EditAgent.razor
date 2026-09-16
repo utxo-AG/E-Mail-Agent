@@ -231,20 +231,32 @@ else
 
                 <MudItem xs="12" md="6">
                     <MudSelect T="string" Label="AI Model" @bind-Value="agent.Aimodel" Required="true">
+                        <MudSelectItem Value="@("claude-opus-4-8")">Claude Opus 4.8</MudSelectItem>
+                        <MudSelectItem Value="@("claude-opus-4-7")">Claude Opus 4.7</MudSelectItem>
                         <MudSelectItem Value="@("claude-opus-4-6")">Claude Opus 4.6</MudSelectItem>
+                        <MudSelectItem Value="@("claude-opus-4-5-20251101")">Claude Opus 4.5</MudSelectItem>
+                        <MudSelectItem Value="@("claude-sonnet-4-6")">Claude Sonnet 4.6</MudSelectItem>
                         <MudSelectItem Value="@("claude-sonnet-4-5-20250929")">Claude Sonnet 4.5</MudSelectItem>
-                        <MudSelectItem Value="@("claude-sonnet-4-20250514")">Claude Sonnet 4</MudSelectItem>
                         <MudSelectItem Value="@("claude-haiku-4-5-20251001")">Claude Haiku 4.5</MudSelectItem>
-                        <MudSelectItem Value="@("claude-3-5-haiku-20241022")">Claude Haiku 3.5</MudSelectItem>
                     </MudSelect>
                 </MudItem>
 
                 <MudItem xs="12" md="6">
-                    <MudSwitch T="bool" @bind-Value="agent.Useconversationhistory" 
+                    <MudSwitch T="bool" @bind-Value="agent.Useconversationhistory"
                                Label="Use Conversation History"
                                Color="Color.Primary" />
                     <MudText Typo="Typo.caption" Class="mt-1">
                         When enabled, the AI will remember previous emails from the same sender (up to 10 messages).
+                    </MudText>
+                </MudItem>
+
+                <MudItem xs="12" md="6">
+                    <MudNumericField T="int?" @bind-Value="agent.MaximumMailAgeDays"
+                                     Label="Max. Mail-Alter (Tage)"
+                                     Min="0"
+                                     Placeholder="0 = kein Limit" />
+                    <MudText Typo="Typo.caption" Class="mt-1">
+                        Mails, die älter als diese Anzahl Tage sind, werden nicht mehr beantwortet. 0 oder leer = kein Limit.
                     </MudText>
                 </MudItem>
 
@@ -456,7 +468,7 @@ else
                 Emailprovider = "inbound",
                 Emailprovidertype = "polling",
                 Aiprovider = "claude",
-                Aimodel = "claude-sonnet-4-20250514"
+                Aimodel = "claude-opus-4-8"
             };
         }
         isLoading = false;
@@ -521,6 +533,7 @@ else
                     existingAgent.Aimodel = agent.Aimodel;
                     existingAgent.Tasktobecompleted = agent.Tasktobecompleted;
                     existingAgent.Useconversationhistory = agent.Useconversationhistory;
+                    existingAgent.MaximumMailAgeDays = agent.MaximumMailAgeDays;
                     existingAgent.Smtpserver = agent.Smtpserver;
                     existingAgent.Smtpport = agent.Smtpport;
                     existingAgent.Smtpusername = agent.Smtpusername;

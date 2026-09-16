@@ -197,17 +197,21 @@ public class ImapClass : IEmailProvider
                 }
             }
 
+            var fromAddress = message.From.Mailboxes.FirstOrDefault()?.Address ?? "unknown";
+
             var result = new MailClass
             {
                 Id = email.Id,
-                From = message.From.Mailboxes.FirstOrDefault()?.Address ?? "unknown",
+                From = fromAddress,
                 To = new[] { message.To.Mailboxes.FirstOrDefault()?.Address ?? agent.Emailaddress ?? "unknown" },
                 Subject = message.Subject ?? "(No Subject)",
                 Text = textBody,
                 Html = message.HtmlBody,
                 CreatedAt = message.Date.ToString("yyyy-MM-dd HH:mm:ss"),
+                ReceivedAt = message.Date.UtcDateTime,
                 Attachments = attachmentNames.ToArray(),
-                HasAttachments = attachmentNames.Any()
+                HasAttachments = attachmentNames.Any(),
+                IsAutoReplyOrBounce = IsBounceOrAutoReply(message, fromAddress, allParts)
             };
 
             // Mark as read
@@ -223,6 +227,68 @@ public class ImapClass : IEmailProvider
             Logger.LogError($"[IMAP] Error fetching email details: {ex.Message}");
             throw;
         }
+    }
+
+    /// <summary>
+    /// Detects whether a message is a delivery bounce (DSN / Mailer-Daemon) or an
+    /// automatic reply (out-of-office, vacation, auto-submitted, bulk mail).
+    /// These must never be answered to avoid endless mail loops.
+    /// </summary>
+    private static bool IsBounceOrAutoReply(MimeMessage message, string fromAddress, List<MimeEntity> allParts)
+    {
+        var from = (fromAddress ?? string.Empty).ToLowerInvariant();
+
+        // 1) Sender addresses that never want a reply
+        string[] daemonSenders = { "mailer-daemon", "postmaster@", "postmaster", "no-reply", "noreply", "no_reply", "donotreply", "do-not-reply", "bounce" };
+        if (daemonSenders.Any(s => from.Contains(s)))
+            return true;
+
+        // 2) Empty Return-Path (<>) is the classic bounce indicator
+        var returnPath = message.Headers["Return-Path"]?.Trim();
+        if (returnPath == "<>" || returnPath == "<MAILER-DAEMON>")
+            return true;
+
+        // 3) RFC 3834 Auto-Submitted header (anything other than "no")
+        var autoSubmitted = message.Headers["Auto-Submitted"]?.Trim();
+        if (!string.IsNullOrEmpty(autoSubmitted) && !autoSubmitted.Equals("no", StringComparison.OrdinalIgnoreCase))
+            return true;
+
+        // 4) Precedence: bulk / auto_reply / junk / list
+        var precedence = message.Headers["Precedence"]?.Trim().ToLowerInvariant();
+        if (precedence is "bulk" or "auto_reply" or "auto-reply" or "junk" or "list")
+            return true;
+
+        // 5) Auto-response suppression markers
+        if (!string.IsNullOrEmpty(message.Headers["X-Auto-Response-Suppress"]) ||
+            !string.IsNullOrEmpty(message.Headers["X-Autoreply"]) ||
+            !string.IsNullOrEmpty(message.Headers["X-Autorespond"]))
+            return true;
+
+        // 6) Delivery Status Notification (multipart/report with a delivery-status part)
+        if (message.Body?.ContentType?.MimeType?.Equals("multipart/report", StringComparison.OrdinalIgnoreCase) == true)
+            return true;
+        if (allParts.Any(p =>
+            {
+                var mime = p.ContentType?.MimeType;
+                return mime != null &&
+                       (mime.Equals("message/delivery-status", StringComparison.OrdinalIgnoreCase) ||
+                        mime.Equals("message/feedback-report", StringComparison.OrdinalIgnoreCase));
+            }))
+            return true;
+
+        // 7) Typical bounce / out-of-office subjects (fallback heuristic)
+        var subject = (message.Subject ?? string.Empty).ToLowerInvariant();
+        string[] subjectPatterns =
+        {
+            "undelivered mail", "mail delivery failed", "delivery status notification",
+            "returned mail", "mail delivery subsystem", "undeliverable", "delivery failure",
+            "out of office", "out-of-office", "auto-reply", "autoreply", "automatic reply",
+            "automatische antwort", "abwesenheit", "abwesenheitsnotiz"
+        };
+        if (subjectPatterns.Any(p => subject.Contains(p)))
+            return true;
+
+        return false;
     }
 
     public async Task MarkAsUnreadAsync(ListNewEmailsClass email, Agent agent)
@@ -260,6 +326,15 @@ public class ImapClass : IEmailProvider
     {
         try
         {
+            // Safety net: never reply to non-deliverable / no-reply addresses (prevents mail loops)
+            var recipient = (mail.From ?? string.Empty).ToLowerInvariant();
+            string[] unreplyable = { "mailer-daemon", "postmaster", "no-reply", "noreply", "no_reply", "donotreply", "do-not-reply", "bounce" };
+            if (string.IsNullOrWhiteSpace(recipient) || unreplyable.Any(s => recipient.Contains(s)))
+            {
+                Logger.Log($"[IMAP/SMTP] Skipping reply - recipient '{mail.From}' is a non-deliverable/no-reply address", agent.Id);
+                return;
+            }
+
             var message = new MimeMessage();
             message.From.Add(new MailboxAddress(agent.Emailaddress, agent.Emailaddress));
             message.To.Add(MailboxAddress.Parse(mail.From));

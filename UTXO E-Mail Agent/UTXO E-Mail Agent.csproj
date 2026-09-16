@@ -15,19 +15,19 @@
       <PackageReference Include="Microsoft.Graph" Version="5.56.0" />
       <PackageReference Include="Microsoft.Identity.Client" Version="4.61.3" />
       <PackageReference Include="MailKit" Version="4.14.1" />
-      <PackageReference Include="Microsoft.EntityFrameworkCore" Version="9.0.*" />
-      <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="9.0.*">
+      <PackageReference Include="Microsoft.EntityFrameworkCore" Version="9.0.12" />
+      <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="9.0.12">
         <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
         <PrivateAssets>all</PrivateAssets>
       </PackageReference>
-      <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" Version="9.0.*" />
-      <PackageReference Include="Microsoft.EntityFrameworkCore.Tools" Version="9.0.*">
+      <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" Version="9.0.12" />
+      <PackageReference Include="Microsoft.EntityFrameworkCore.Tools" Version="9.0.12">
         <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
         <PrivateAssets>all</PrivateAssets>
       </PackageReference>
       <PackageReference Include="Microsoft.Extensions.Configuration.Json" Version="10.0.2" />
       <PackageReference Include="Newtonsoft.Json" Version="13.0.4" />
-      <PackageReference Include="Pomelo.EntityFrameworkCore.MySql" Version="9.0.*" />
+      <PackageReference Include="Pomelo.EntityFrameworkCore.MySql" Version="9.0.0" />
       <PackageReference Include="Swashbuckle.AspNetCore" Version="10.1.2" />
     </ItemGroup>
 
