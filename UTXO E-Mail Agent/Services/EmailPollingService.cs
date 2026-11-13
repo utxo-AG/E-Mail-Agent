@@ -23,8 +23,8 @@ public class EmailPollingService : BackgroundService
         _scopeFactory = scopeFactory;
         _configuration = configuration;
         _pollingIntervalSeconds = int.Parse(_configuration["AppSettings:PollingIntervalSeconds"] ?? "60");
-        _connectionString = _configuration.GetConnectionString("DefaultConnection")
-            ?? throw new InvalidOperationException("Connection string 'DefaultConnection' not found.");
+        _connectionString = DatabaseConfig.ResolveConnectionString(
+            _configuration.GetConnectionString("DefaultConnection"));
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
