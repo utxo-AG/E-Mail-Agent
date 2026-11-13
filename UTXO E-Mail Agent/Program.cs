@@ -28,15 +28,17 @@ public class Program
         // Configuration
         var configuration = builder.Configuration;
         var pollingIntervalSeconds = int.Parse(configuration["AppSettings:PollingIntervalSeconds"] ?? "60");
-        var connectionString = configuration.GetConnectionString("DefaultConnection")
-            ?? throw new InvalidOperationException("Connection string 'DefaultConnection' not found.");
+        // Verbindung aus Umgebungsvariablen (DB_HOST/DB_USER/... oder UTXO_DB_CONNECTION)
+        // oder als Fallback aus appsettings.json.
+        var connectionString = DatabaseConfig.ResolveConnectionString(
+            configuration.GetConnectionString("DefaultConnection"));
 
         // Initialize logger with database connection
         Logger.Initialize(connectionString);
 
         // Add services
         builder.Services.AddDbContext<DefaultdbContext>(options =>
-            options.UseMySql(connectionString, ServerVersion.AutoDetect(connectionString),
+            options.UseMySql(connectionString, DatabaseConfig.GetServerVersion(connectionString),
                 mysqlOptions => mysqlOptions.UseQuerySplittingBehavior(QuerySplittingBehavior.SplitQuery)));
 
         // Add CORS for Admintool access

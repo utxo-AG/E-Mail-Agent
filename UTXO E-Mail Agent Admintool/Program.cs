@@ -35,13 +35,15 @@ builder.Services.AddSession(options =>
     options.Cookie.IsEssential = true;
 });
 
-// Add DbContext for MySQL database
-var connectionString = builder.Configuration.GetConnectionString("DefaultConnection")
-    ?? throw new InvalidOperationException("Connection string 'DefaultConnection' not found.");
+// Add DbContext for MariaDB/MySQL database.
+// Verbindung aus Umgebungsvariablen (DB_HOST/DB_USER/... oder UTXO_DB_CONNECTION)
+// oder als Fallback aus appsettings.json.
+var connectionString = DatabaseConfig.ResolveConnectionString(
+    builder.Configuration.GetConnectionString("DefaultConnection"));
 
 // Add DbContextFactory for Blazor components (replaces AddDbContext for better Blazor Server support)
 builder.Services.AddDbContextFactory<DefaultdbContext>(options =>
-    options.UseMySql(connectionString, ServerVersion.AutoDetect(connectionString),
+    options.UseMySql(connectionString, DatabaseConfig.GetServerVersion(connectionString),
         mysqlOptions => mysqlOptions.UseQuerySplittingBehavior(QuerySplittingBehavior.SplitQuery)));
 
 // Also register a scoped DbContext for services that need direct injection (like AuthService)
@@ -83,6 +85,23 @@ builder.Services.AddScoped<SkillUploadService>();
 builder.Services.AddAuthorization();
 
 var app = builder.Build();
+
+// Datenbank-Erstneuaufbau:
+// Wenn die Umgebungsvariable DB_INIT=true gesetzt ist (oder das Argument --init-db
+// übergeben wird), wird das komplette Schema aus dem Modell (DefaultdbContext) erzeugt.
+// EnsureCreated() legt Datenbank + alle Tabellen an, falls sie noch nicht existieren,
+// und lässt eine bereits vorhandene Datenbank unangetastet. Danach läuft das Tool normal weiter.
+if (string.Equals(Environment.GetEnvironmentVariable("DB_INIT"), "true", StringComparison.OrdinalIgnoreCase)
+    || args.Contains("--init-db"))
+{
+    using var initScope = app.Services.CreateScope();
+    var contextFactory = initScope.ServiceProvider.GetRequiredService<IDbContextFactory<DefaultdbContext>>();
+    await using var initDb = await contextFactory.CreateDbContextAsync();
+    var created = await initDb.Database.EnsureCreatedAsync();
+    Console.WriteLine(created
+        ? "[DB-Init] Datenbank und Tabellen wurden neu erstellt."
+        : "[DB-Init] Datenbank existiert bereits – kein Schema-Aufbau nötig.");
+}
 
 // Configure the HTTP request pipeline.
 if (!app.Environment.IsDevelopment())

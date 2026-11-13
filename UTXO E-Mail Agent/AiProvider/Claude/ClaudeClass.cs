@@ -959,7 +959,7 @@ public class ClaudeClass : IAiProvider
     private async Task SaveSkillIdToDatabase(int skillDbId, string anthropicSkillId)
     {
         var optionsBuilder = new DbContextOptionsBuilder<DefaultdbContext>();
-        optionsBuilder.UseMySql(_connectionString, await ServerVersion.AutoDetectAsync(_connectionString),
+        optionsBuilder.UseMySql(_connectionString, DatabaseConfig.GetServerVersion(_connectionString),
             mysqlOptions => mysqlOptions.UseQuerySplittingBehavior(QuerySplittingBehavior.SplitQuery));
 
         await using var db = new DefaultdbContext(optionsBuilder.Options);

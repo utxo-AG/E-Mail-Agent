@@ -14,7 +14,7 @@ public static class EmailMcpServer
     public static async Task<string> SearchCustomerEmails(string emailAddress, string connectionString, int limit = 5)
     {
         var optionsBuilder = new DbContextOptionsBuilder<DefaultdbContext>();
-        optionsBuilder.UseMySql(connectionString, Microsoft.EntityFrameworkCore.ServerVersion.AutoDetect(connectionString),
+        optionsBuilder.UseMySql(connectionString, DatabaseConfig.GetServerVersion(connectionString),
             mysqlOptions => mysqlOptions.UseQuerySplittingBehavior(QuerySplittingBehavior.SplitQuery));
         await using var db = new DefaultdbContext(optionsBuilder.Options);
 
@@ -54,7 +54,7 @@ public static class EmailMcpServer
     public static async Task<string> SearchBySubject(string searchTerm, string connectionString, int limit = 5)
     {
         var optionsBuilder = new DbContextOptionsBuilder<DefaultdbContext>();
-        optionsBuilder.UseMySql(connectionString, Microsoft.EntityFrameworkCore.ServerVersion.AutoDetect(connectionString),
+        optionsBuilder.UseMySql(connectionString, DatabaseConfig.GetServerVersion(connectionString),
             mysqlOptions => mysqlOptions.UseQuerySplittingBehavior(QuerySplittingBehavior.SplitQuery));
         await using var db = new DefaultdbContext(optionsBuilder.Options);
 
@@ -93,7 +93,7 @@ public static class EmailMcpServer
     public static async Task<string> GetEmailStats(int agentId, string connectionString)
     {
         var optionsBuilder = new DbContextOptionsBuilder<DefaultdbContext>();
-        optionsBuilder.UseMySql(connectionString, Microsoft.EntityFrameworkCore.ServerVersion.AutoDetect(connectionString),
+        optionsBuilder.UseMySql(connectionString, DatabaseConfig.GetServerVersion(connectionString),
             mysqlOptions => mysqlOptions.UseQuerySplittingBehavior(QuerySplittingBehavior.SplitQuery));
         await using var db = new DefaultdbContext(optionsBuilder.Options);
 

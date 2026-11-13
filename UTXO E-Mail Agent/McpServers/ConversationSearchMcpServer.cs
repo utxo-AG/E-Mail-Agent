@@ -23,7 +23,7 @@ public static class ConversationSearchMcpServer
         if (db == null && !string.IsNullOrEmpty(connectionString))
         {
             var optionsBuilder = new DbContextOptionsBuilder<DefaultdbContext>();
-            optionsBuilder.UseMySql(connectionString, ServerVersion.AutoDetect(connectionString),
+            optionsBuilder.UseMySql(connectionString, DatabaseConfig.GetServerVersion(connectionString),
                 mysqlOptions => mysqlOptions.UseQuerySplittingBehavior(QuerySplittingBehavior.SplitQuery));
             ownedDb = new DefaultdbContext(optionsBuilder.Options);
             db = ownedDb;
@@ -125,7 +125,7 @@ public static class ConversationSearchMcpServer
         if (db == null && !string.IsNullOrEmpty(connectionString))
         {
             var optionsBuilder = new DbContextOptionsBuilder<DefaultdbContext>();
-            optionsBuilder.UseMySql(connectionString, ServerVersion.AutoDetect(connectionString),
+            optionsBuilder.UseMySql(connectionString, DatabaseConfig.GetServerVersion(connectionString),
                 mysqlOptions => mysqlOptions.UseQuerySplittingBehavior(QuerySplittingBehavior.SplitQuery));
             ownedDb = new DefaultdbContext(optionsBuilder.Options);
             db = ownedDb;

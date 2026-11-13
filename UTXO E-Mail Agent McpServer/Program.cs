@@ -20,15 +20,14 @@ builder.Configuration
 builder.Logging.AddConsole(options => options.LogToStandardErrorThreshold = LogLevel.Trace);
 
 // Get database connection - read from config or environment variable
-var connectionString = builder.Configuration.GetConnectionString("DefaultConnection")
-    ?? Environment.GetEnvironmentVariable("UTXO_DB_CONNECTION") 
-    ?? "server=localhost;database=utxo_email_agent;user=root;password=root";
+var connectionString = DatabaseConfig.ResolveConnectionString(
+    builder.Configuration.GetConnectionString("DefaultConnection"));
 
 // Set the connection string for the static ApiTools class
 ApiTools.ConnectionString = connectionString;
 
 builder.Services.AddDbContext<DefaultdbContext>(options =>
-    options.UseMySql(connectionString, ServerVersion.AutoDetect(connectionString)));
+    options.UseMySql(connectionString, DatabaseConfig.GetServerVersion(connectionString)));
 
 builder.Services.AddMcpServer()
     .WithStdioServerTransport()
@@ -65,7 +64,7 @@ public class ApiTools
         try
         {
             var optionsBuilder = new DbContextOptionsBuilder<DefaultdbContext>();
-            optionsBuilder.UseMySql(ConnectionString, ServerVersion.AutoDetect(ConnectionString));
+            optionsBuilder.UseMySql(ConnectionString, DatabaseConfig.GetServerVersion(ConnectionString));
             
             await using var db = new DefaultdbContext(optionsBuilder.Options);
             
@@ -142,7 +141,7 @@ public class ApiTools
         try
         {
             var optionsBuilder = new DbContextOptionsBuilder<DefaultdbContext>();
-            optionsBuilder.UseMySql(ConnectionString, ServerVersion.AutoDetect(ConnectionString));
+            optionsBuilder.UseMySql(ConnectionString, DatabaseConfig.GetServerVersion(ConnectionString));
             
             await using var db = new DefaultdbContext(optionsBuilder.Options);
             
@@ -184,7 +183,7 @@ public class ApiTools
         try
         {
             var optionsBuilder = new DbContextOptionsBuilder<DefaultdbContext>();
-            optionsBuilder.UseMySql(ConnectionString, ServerVersion.AutoDetect(ConnectionString),
+            optionsBuilder.UseMySql(ConnectionString, DatabaseConfig.GetServerVersion(ConnectionString),
                 mysqlOptions => mysqlOptions.UseQuerySplittingBehavior(QuerySplittingBehavior.SplitQuery));
             await using var db = new DefaultdbContext(optionsBuilder.Options);
 
@@ -249,7 +248,7 @@ public class ApiTools
         try
         {
             var optionsBuilder = new DbContextOptionsBuilder<DefaultdbContext>();
-            optionsBuilder.UseMySql(ConnectionString, ServerVersion.AutoDetect(ConnectionString));
+            optionsBuilder.UseMySql(ConnectionString, DatabaseConfig.GetServerVersion(ConnectionString));
             await using var db = new DefaultdbContext(optionsBuilder.Options);
 
             var attachment = await db.ConversationAttachments

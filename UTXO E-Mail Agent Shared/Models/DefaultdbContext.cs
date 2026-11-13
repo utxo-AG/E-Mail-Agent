@@ -40,7 +40,10 @@ public partial class DefaultdbContext : DbContext
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder
-            .UseCollation("utf8mb4_0900_ai_ci")
+            // utf8mb4_general_ci ist MariaDB-kompatibel. Das ursprüngliche
+            // utf8mb4_0900_ai_ci existiert nur in MySQL 8 und würde unter
+            // MariaDB bei EnsureCreated() fehlschlagen.
+            .UseCollation("utf8mb4_general_ci")
             .HasCharSet("utf8mb4");
 
         modelBuilder.Entity<Administrator>(entity =>

@@ -6,9 +6,10 @@ using UTXO_E_Mail_Agent_Shared.Models;
 var builder = WebApplication.CreateBuilder(args);
 
 // Add Entity Framework
-var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
+var connectionString = DatabaseConfig.ResolveConnectionString(
+    builder.Configuration.GetConnectionString("DefaultConnection"));
 builder.Services.AddDbContext<DefaultdbContext>(options =>
-    options.UseMySql(connectionString, ServerVersion.AutoDetect(connectionString),
+    options.UseMySql(connectionString, DatabaseConfig.GetServerVersion(connectionString),
         mysqlOptions => mysqlOptions.UseQuerySplittingBehavior(QuerySplittingBehavior.SplitQuery)));
 
 // Add controllers
