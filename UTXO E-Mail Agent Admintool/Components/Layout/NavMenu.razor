@@ -1,9 +1,10 @@
 ﻿@using Microsoft.AspNetCore.Components.Authorization
 
-<div class="top-row ps-3 navbar navbar-dark">
-    <div class="container-fluid">
-        <a class="navbar-brand" href="">UTXO E-Mail Agent Admintool</a>
-    </div>
+<div class="nav-brand">
+    <a class="nav-brand-link" href="">
+        <MudIcon Icon="@Icons.Material.Filled.Mail" Color="Color.Primary" Class="mr-2" />
+        <span>UTXO E-Mail Agent</span>
+    </a>
 </div>
 
 <input type="checkbox" title="Navigation menu" class="navbar-toggler"/>
@@ -11,34 +12,34 @@
 <div class="nav-scrollable" onclick="document.querySelector('.navbar-toggler').click()">
     <AuthorizeView>
         <Authorized>
-            <MudNavMenu Class="mud-width-full" Color="Color.Default" Style="color: white;">
-                <MudNavLink Href="/" Match="NavLinkMatch.All" Icon="@Icons.Material.Filled.Home" IconColor="Color.Inherit">
-                    <span style="color: white;">Home</span>
+            <MudNavMenu Class="mud-width-full">
+                <MudNavLink Href="/" Match="NavLinkMatch.All" Icon="@Icons.Material.Filled.Home">
+                    Home
                 </MudNavLink>
 
                 <MudDivider Class="my-2" />
 
-                <MudNavGroup Title="Clients" Icon="@Icons.Material.Filled.People" IconColor="Color.Inherit" Expanded="true" Style="color: white;">
-                    <MudNavLink Href="/clients/manage" Icon="@Icons.Material.Filled.List" IconColor="Color.Primary">
-                        <span style="color: white;">Manage Clients</span>
+                <MudNavGroup Title="Clients" Icon="@Icons.Material.Filled.People" Expanded="true">
+                    <MudNavLink Href="/clients/manage" Icon="@Icons.Material.Filled.List">
+                        Manage Clients
                     </MudNavLink>
-                    <MudNavLink Href="/clients/add" Icon="@Icons.Material.Filled.PersonAdd" IconColor="Color.Success">
-                        <span style="color: white;">Add new Client</span>
-                    </MudNavLink>
-                </MudNavGroup>
-
-                <MudNavGroup Title="Agents" Icon="@Icons.Material.Filled.SmartToy" IconColor="Color.Inherit" Expanded="true" Style="color: white;">
-                    <MudNavLink Href="/agents/manage" Icon="@Icons.Material.Filled.List" IconColor="Color.Primary">
-                        <span style="color: white;">Manage Agents</span>
+                    <MudNavLink Href="/clients/add" Icon="@Icons.Material.Filled.PersonAdd">
+                        Add new Client
                     </MudNavLink>
                 </MudNavGroup>
 
-                <MudNavGroup Title="Administrators" Icon="@Icons.Material.Filled.AdminPanelSettings" IconColor="Color.Inherit" Expanded="true" Style="color: white;">
-                    <MudNavLink Href="/administrators/manage" Icon="@Icons.Material.Filled.List" IconColor="Color.Primary">
-                        <span style="color: white;">Manage Administrators</span>
+                <MudNavGroup Title="Agents" Icon="@Icons.Material.Filled.SmartToy" Expanded="true">
+                    <MudNavLink Href="/agents/manage" Icon="@Icons.Material.Filled.List">
+                        Manage Agents
                     </MudNavLink>
-                    <MudNavLink Href="/administrators/add" Icon="@Icons.Material.Filled.PersonAdd" IconColor="Color.Success">
-                        <span style="color: white;">Add new Administrator</span>
+                </MudNavGroup>
+
+                <MudNavGroup Title="Administrators" Icon="@Icons.Material.Filled.AdminPanelSettings" Expanded="true">
+                    <MudNavLink Href="/administrators/manage" Icon="@Icons.Material.Filled.List">
+                        Manage Administrators
+                    </MudNavLink>
+                    <MudNavLink Href="/administrators/add" Icon="@Icons.Material.Filled.PersonAdd">
+                        Add new Administrator
                     </MudNavLink>
                 </MudNavGroup>
             </MudNavMenu>

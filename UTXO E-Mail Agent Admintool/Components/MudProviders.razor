@@ -1,6 +1,63 @@
 @rendermode InteractiveServer
 
-<MudThemeProvider />
+<MudThemeProvider Theme="@_theme" />
 <MudPopoverProvider />
 <MudDialogProvider />
 <MudSnackbarProvider />
+
+@code {
+    // eRapport-angelehntes Theme: helles, aufgeräumtes Design mit kräftigem Royalblau.
+    private readonly MudTheme _theme = new()
+    {
+        PaletteLight = new PaletteLight
+        {
+            Primary = "#0029A3",            // Royalblau: Buttons, aktive Navigation, Links
+            PrimaryContrastText = "#FFFFFF",
+            Secondary = "#0F2461",          // Navy: Logo/dunkle Akzente
+            SecondaryContrastText = "#FFFFFF",
+            Tertiary = "#2563EB",
+            Info = "#0066CC",
+            Success = "#2E9E4F",            // frisches Grün ("aktiv")
+            Warning = "#F59E0B",            // Orange ("Pause")
+            Error = "#C0392B",              // Rot ("Dienstende")
+
+            Background = "#F6F8FB",
+            BackgroundGray = "#EEF1F6",
+            Surface = "#FFFFFF",
+
+            AppbarBackground = "#FFFFFF",
+            AppbarText = "#1D212A",
+
+            DrawerBackground = "#FFFFFF",
+            DrawerText = "#2B3440",
+            DrawerIcon = "#5A6475",
+
+            TextPrimary = "#1D212A",
+            TextSecondary = "#5A6475",
+            TextDisabled = "#9AA3B2",
+
+            ActionDefault = "#5A6475",
+            Divider = "#E6E8EC",
+            LinesDefault = "#E6E8EC",
+            LinesInputs = "#D6DAE1",
+            TableLines = "#EDEFF3",
+            TableHover = "#F3F6FB",
+        },
+        Typography = new Typography
+        {
+            Default = new DefaultTypography
+            {
+                FontFamily = new[] { "Inter", "Roboto", "Helvetica", "Arial", "sans-serif" }
+            },
+            H4 = new H4Typography { FontWeight = "600" },
+            H5 = new H5Typography { FontWeight = "600" },
+            H6 = new H6Typography { FontWeight = "600" },
+            Subtitle1 = new Subtitle1Typography { FontWeight = "600" },
+            Button = new ButtonTypography { FontWeight = "600", TextTransform = "none" },
+        },
+        LayoutProperties = new LayoutProperties
+        {
+            DefaultBorderRadius = "10px",
+        },
+    };
+}
