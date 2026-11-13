@@ -57,7 +57,7 @@ UTXO E-Mail Agent System/
 - **Blazor Server**: Interactive web UI
 - **MudBlazor**: Material Design component library
 - **Entity Framework Core**: Database ORM
-- **MySQL**: Database (via Pomelo.EntityFrameworkCore.MySql)
+- **MariaDB / MySQL**: Database (via Pomelo.EntityFrameworkCore.MySql)
 - **Claude AI SDK**: AI integration
 - **MailKit**: Email handling
 - **ASP.NET Core Identity**: Authentication and password management
@@ -100,28 +100,96 @@ dotnet build "UTXO E-Mail Agent.sln"
 
 ### Database Setup
 
-1. Update connection strings in:
-   - `Admintool/Program.cs`
-   - `UTXO E-Mail Agent Shared/Models/DefaultdbContext.cs`
+The database connection is resolved centrally by `DatabaseConfig`
+(`UTXO E-Mail Agent Shared/Models/DatabaseConfig.cs`) in the following order:
 
-2. Run EF Core migrations (if needed):
-   ```bash
-   dotnet ef database update --project "UTXO E-Mail Agent Shared"
-   ```
+1. Individual environment variables `DB_HOST` / `DB_PORT` / `DB_USER` / `DB_PASSWORD` / `DB_NAME`
+2. A full connection string via `UTXO_DB_CONNECTION`
+3. `ConnectionStrings:DefaultConnection` from `appsettings.json`
 
-### Application Settings
+This lets you run locally via `appsettings.json` and in containers (e.g. rstcloud)
+purely via environment variables.
 
-Create `appsettings.json` files based on the provided `.example` files:
+The target database is **MariaDB** (MySQL also works). No EF Core migrations are used
+for the `DefaultdbContext` — the schema is created directly from the model.
 
-**UTXO E-Mail Agent/appsettings.json**:
-```json
-{
-  "ClaudeApiKey": "your-claude-api-key",
-  "DatabaseConnectionString": "your-mysql-connection-string"
-}
-```
+#### Creating the schema (tables)
 
-**Admintool** configuration is in `Program.cs` (consider moving to `appsettings.json`).
+To build the complete database and all tables from the model, start the **Admintool**
+with the environment variable **`DB_INIT=true`** set (alternatively pass the
+`--init-db` argument). On startup it runs `EnsureCreated()`, which:
+
+- creates the database and all tables if they do **not** yet exist, and
+- leaves an existing database untouched.
+
+The Admintool then continues to run normally. The log shows either
+`[DB-Init] Datenbank und Tabellen wurden neu erstellt.` or
+`[DB-Init] Datenbank existiert bereits – kein Schema-Aufbau nötig.`
+
+#### Default administrator
+
+Because `EnsureCreated()` only creates the schema (no data), the init step also
+creates a **default administrator** — but only if no administrator exists yet:
+
+- Username: `admin` (override with `ADMIN_USERNAME`)
+- Password: taken from `ADMIN_PASSWORD` if set, otherwise a secure random password
+  is generated and **printed to the console/log**:
+
+  ```
+  ═══════════════════════════════════════════════════
+  [DB-Init] Standard-Administrator wurde angelegt:
+  [DB-Init]   Benutzername: admin
+  [DB-Init]   Passwort:     <generated password>
+  [DB-Init]   >> Bitte sicher notieren und nach dem ersten Login ändern!
+  ═══════════════════════════════════════════════════
+  ```
+
+> **Notes**
+> - `DB_INIT` is only honoured by the Admintool; the other services ignore it.
+> - The `DB_USER` must be allowed to run `CREATE DATABASE` if `DB_NAME` does not exist yet.
+> - The default admin is only created when the `administrators` table is empty — it is safe to leave `DB_INIT=true` on, but removing it after the first run is cleaner.
+> - A generated password ends up in the container logs. Use `ADMIN_PASSWORD` if you want to avoid that, and change the password after the first login.
+
+### Environment Variables
+
+Hierarchical .NET settings use a **double underscore** `__` as the separator
+(e.g. `Claude:ApiKey` → `Claude__ApiKey`). Environment variables override `appsettings.json`.
+
+**Database — required for all four services:**
+
+| Variable            | Required | Default            | Description                          |
+|---------------------|----------|--------------------|--------------------------------------|
+| `DB_HOST`           | yes      | –                  | MariaDB host                         |
+| `DB_PORT`           | no       | `3306`             | Database port                        |
+| `DB_USER`           | yes      | `root`             | Database user                        |
+| `DB_PASSWORD`       | yes      | *(empty)*          | Database password                    |
+| `DB_NAME`           | yes      | `utxo_email_agent` | Database name                        |
+| `DB_SERVER_VERSION` | no       | `11.4.0-mariadb`   | EF Core server version               |
+| `UTXO_DB_CONNECTION`| no       | –                  | Full connection string (alternative to the `DB_*` vars) |
+
+**Admintool only — first deploy:**
+
+| Variable         | Required | Default | Description                                                        |
+|------------------|----------|---------|--------------------------------------------------------------------|
+| `DB_INIT`        | no       | –       | `true` creates the schema + default admin on startup; remove afterwards |
+| `ADMIN_USERNAME` | no       | `admin` | Username of the default administrator                              |
+| `ADMIN_PASSWORD` | no       | *(random)* | Password of the default administrator; if unset, a random one is generated and printed to the log |
+
+**Functional settings per service** (`__` separator):
+
+| Service   | Variables |
+|-----------|-----------|
+| Admintool | `Claude__ApiKey`, `Email__ApiUrl`, `Email__BearerToken`, `Email__FromEmail`, `Email__FromName`, `AzureAd__TenantId`, `AzureAd__ClientId`, `AzureAd__ClientSecret`, `AzureAd__RedirectUri`, `AgentApi__BaseUrl` |
+| Agent     | `Claude__ApiKey`, `Email__ApiUrl`, `Email__BearerToken`, `AppSettings__PollingIntervalSeconds` (default `60`), `ClaudeCode__McpServerPath`, `ClaudeCode__WorkingDirectory`, `Python__Path` (+ `AzureAd__*` if Office365 is used) |
+| Api       | `Email__BearerToken`, `WebhookSecret`, `WebhookVerificationToken`, `AgentApiUrl` |
+| McpServer | *(only the `DB_*` variables above)* |
+
+### Application Settings (local development)
+
+For local development, create `appsettings.json` files based on the provided
+`.example` files (the real `appsettings.json` are git-ignored). At minimum set
+`ConnectionStrings:DefaultConnection`; the functional keys mirror the table above
+(e.g. `Claude:ApiKey`, `Email:BearerToken`).
 
 ### SMTP Configuration
 
@@ -149,9 +217,43 @@ dotnet run
 
 Navigate to `https://localhost:5001` (or the configured port).
 
+## 🐳 Docker
+
+Each application has its own Dockerfile:
+
+| Application | Dockerfile                               | Base image     | Port            |
+|-------------|------------------------------------------|----------------|-----------------|
+| Agent       | `UTXO E-Mail Agent/Dockerfile`           | `aspnet:9.0`   | 8080            |
+| Api         | `UTXO E-Mail Agent Api/Dockerfile`       | `aspnet:9.0`   | 8080            |
+| Admintool   | `UTXO E-Mail Agent Admintool/Dockerfile` | `aspnet:9.0`   | 8080 / 8081     |
+| McpServer   | `UTXO E-Mail Agent McpServer/Dockerfile` | `runtime:9.0`  | – (stdio only)  |
+
+All images share the **repository root** as build context (because of the shared
+project reference), so always build with `-f` from the repo root:
+
+```bash
+docker build -f "UTXO E-Mail Agent/Dockerfile"           -t utxo-agent .
+docker build -f "UTXO E-Mail Agent Api/Dockerfile"       -t utxo-api .
+docker build -f "UTXO E-Mail Agent Admintool/Dockerfile" -t utxo-admintool .
+docker build -f "UTXO E-Mail Agent McpServer/Dockerfile" -t utxo-mcpserver .
+```
+
+Configure the containers via the environment variables listed above. To create the
+schema on first deploy, start the Admintool once with `DB_INIT=true`:
+
+```bash
+docker run -e DB_INIT=true \
+  -e DB_HOST=... -e DB_USER=... -e DB_PASSWORD=... -e DB_NAME=... \
+  -p 8080:8080 utxo-admintool
+```
+
+> The McpServer communicates over STDIO (no network port). It only belongs in a
+> container if an MCP client launches it as a subprocess (`docker run -i`); it is not
+> a standalone network service.
+
 ## 📝 Initial Setup
 
-1. **Database Initialization**: Ensure the database schema exists
+1. **Database Initialization**: Create the schema by starting the Admintool with `DB_INIT=true` (see [Database Setup](#database-setup))
 2. **Create First Administrator**: Use the "Add Administrator" feature
 3. **Add Packages**: Define conversation packages with limits
 4. **Create Clients**: Add clients and assign packages

@@ -101,6 +101,52 @@ if (string.Equals(Environment.GetEnvironmentVariable("DB_INIT"), "true", StringC
     Console.WriteLine(created
         ? "[DB-Init] Datenbank und Tabellen wurden neu erstellt."
         : "[DB-Init] Datenbank existiert bereits – kein Schema-Aufbau nötig.");
+
+    // Standard-Administrator anlegen, falls noch keiner existiert.
+    // EnsureCreated() legt nur das Schema an, keine Daten – ohne diesen Schritt
+    // gäbe es keinen Login-Benutzer.
+    if (!await initDb.Administrators.AnyAsync())
+    {
+        var passwordService = initScope.ServiceProvider.GetRequiredService<PasswordService>();
+
+        var username = Environment.GetEnvironmentVariable("ADMIN_USERNAME");
+        if (string.IsNullOrWhiteSpace(username))
+        {
+            username = "admin";
+        }
+
+        // Passwort aus ADMIN_PASSWORD übernehmen oder sicher generieren.
+        var envPassword = Environment.GetEnvironmentVariable("ADMIN_PASSWORD");
+        var passwordWasGenerated = string.IsNullOrWhiteSpace(envPassword);
+        var password = passwordWasGenerated ? passwordService.GeneratePassword(16) : envPassword!;
+
+        initDb.Administrators.Add(new Administrator
+        {
+            Username = username,
+            Passwordhash = passwordService.HashPassword(password),
+            State = "active",
+            Loginattempts = 0
+        });
+        await initDb.SaveChangesAsync();
+
+        Console.WriteLine("═══════════════════════════════════════════════════");
+        Console.WriteLine("[DB-Init] Standard-Administrator wurde angelegt:");
+        Console.WriteLine($"[DB-Init]   Benutzername: {username}");
+        if (passwordWasGenerated)
+        {
+            Console.WriteLine($"[DB-Init]   Passwort:     {password}");
+            Console.WriteLine("[DB-Init]   >> Bitte sicher notieren und nach dem ersten Login ändern!");
+        }
+        else
+        {
+            Console.WriteLine("[DB-Init]   Passwort:     (aus ADMIN_PASSWORD übernommen)");
+        }
+        Console.WriteLine("═══════════════════════════════════════════════════");
+    }
+    else
+    {
+        Console.WriteLine("[DB-Init] Administrator(en) bereits vorhanden – kein neuer Benutzer angelegt.");
+    }
 }
 
 // Configure the HTTP request pipeline.
