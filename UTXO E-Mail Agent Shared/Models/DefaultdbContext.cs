@@ -82,7 +82,7 @@ public partial class DefaultdbContext : DbContext
                 .HasColumnName("agentname");
             entity.Property(e => e.Aimodel)
                 .HasMaxLength(255)
-                .HasDefaultValueSql("'claude-opus-4-8'")
+                .HasDefaultValueSql("'claude-opus-5-5'")
                 .HasColumnName("aimodel");
             entity.Property(e => e.Aiprovider)
                 .HasDefaultValueSql("'claude'")

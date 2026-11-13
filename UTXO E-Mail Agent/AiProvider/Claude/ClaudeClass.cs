@@ -724,7 +724,7 @@ public class ClaudeClass : IAiProvider
         responseClass.AiDurationMs = stopwatch.ElapsedMilliseconds;
         responseClass.AiInputTokens = totalInputTokens;
         responseClass.AiOutputTokens = totalOutputTokens;
-        responseClass.AiCostUsd = CalculateCost(agent.Aimodel ?? "claude-opus-4-8", totalInputTokens, totalOutputTokens);
+        responseClass.AiCostUsd = CalculateCost(agent.Aimodel ?? "claude-opus-5-5", totalInputTokens, totalOutputTokens);
         
         Logger.Log($"[Claude API] Cost: ${responseClass.AiCostUsd:F4}, Duration: {responseClass.AiDurationMs}ms, Tokens: {totalInputTokens} in / {totalOutputTokens} out", agent.Id);
 
@@ -737,13 +737,16 @@ public class ClaudeClass : IAiProvider
     /// </summary>
     private static decimal CalculateCost(string model, long inputTokens, long outputTokens)
     {
-        // Pricing per million tokens (input, output)
+        // Pricing per million tokens (input, output). Stand: 2026-11.
         var (inputPrice, outputPrice) = model.ToLower() switch
         {
-            var m when m.Contains("opus") => (15.00m, 75.00m),      // Claude Opus 4
-            var m when m.Contains("sonnet") => (3.00m, 15.00m),     // Claude Sonnet 4
-            var m when m.Contains("haiku") => (0.25m, 1.25m),       // Claude Haiku 3.5
-            _ => (3.00m, 15.00m)                                      // Default to Sonnet pricing
+            "claude-opus-5-5" => (4.00m, 20.00m),                   // Opus 5.5
+            var m when m.Contains("opus") => (5.00m, 25.00m),       // Opus 5 / 4.6 / 4.7 / 4.8
+            "claude-haiku-5-5" => (0.10m, 0.50m),                   // Haiku 5.5
+            var m when m.Contains("haiku") => (1.00m, 5.00m),       // Haiku 4.5
+            var m when m.Contains("sonnet-5") => (2.00m, 10.00m),   // Sonnet 5 / 5.5
+            var m when m.Contains("sonnet") => (3.00m, 15.00m),     // Sonnet 4.6
+            _ => (5.00m, 25.00m)                                     // Default: Opus-Tarif
         };
         
         var inputCost = (inputTokens / 1_000_000m) * inputPrice;

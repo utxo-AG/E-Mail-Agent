@@ -37,7 +37,7 @@ public class CreateAgentDto
     public bool? Emailusessl { get; set; }
     public string? Tasktobecompleted { get; set; }
     public string Aiprovider { get; set; } = "anthropic";
-    public string Aimodel { get; set; } = "claude-opus-4-8";
+    public string Aimodel { get; set; } = "claude-opus-5-5";
     public string Emailprovidertype { get; set; } = "imap";
     public string? Smtpserver { get; set; }
     public int? Smtpport { get; set; }

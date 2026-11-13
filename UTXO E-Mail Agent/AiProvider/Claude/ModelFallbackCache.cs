@@ -16,8 +16,8 @@ public static class ModelFallbackCache
     private static readonly TimeSpan OverloadWindow = TimeSpan.FromMinutes(3);
     private static readonly TimeSpan FallbackDuration = TimeSpan.FromMinutes(10);
 
-    private const string OpusModel = "claude-opus-4-6";
-    private const string SonnetFallback = "claude-sonnet-4-5-20250929";
+    private const string OpusModel = "claude-opus-5-5";
+    private const string SonnetFallback = "claude-sonnet-5-5";
 
     /// <summary>
     /// Records an overload error. If threshold is reached, activates Sonnet fallback.
