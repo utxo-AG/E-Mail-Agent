@@ -1,7 +1,8 @@
 FROM mcr.microsoft.com/dotnet/aspnet:9.0 AS base
 USER $APP_UID
 WORKDIR /app
-EXPOSE 8080
+# Der Agent bindet im Code fest auf Port 5051 (Program.cs: app.RunAsync("http://0.0.0.0:5051")).
+EXPOSE 5051
 
 FROM mcr.microsoft.com/dotnet/sdk:9.0 AS build
 ARG BUILD_CONFIGURATION=Release

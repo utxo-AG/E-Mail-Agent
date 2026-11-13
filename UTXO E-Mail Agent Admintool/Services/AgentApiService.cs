@@ -23,7 +23,17 @@ public class AgentApiService
     public async Task<ChatWithAgentResponse> SendMessageAsync(int agentId, string message)
     {
         var baseUrl = _configuration["AgentApi:BaseUrl"]
-            ?? throw new InvalidOperationException("AgentApi:BaseUrl not configured in appsettings.json");
+            ?? throw new InvalidOperationException(
+                "AgentApi:BaseUrl ist nicht konfiguriert. Setze die Umgebungsvariable AgentApi__BaseUrl " +
+                "(z. B. https://<agent-host> oder http://<agent-host>:5051).");
+
+        baseUrl = baseUrl.Trim();
+        if (!baseUrl.StartsWith("http://", StringComparison.OrdinalIgnoreCase) &&
+            !baseUrl.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException(
+                $"AgentApi:BaseUrl muss mit http:// oder https:// beginnen (aktueller Wert: '{baseUrl}').");
+        }
 
         var request = new ChatWithAgentRequest
         {

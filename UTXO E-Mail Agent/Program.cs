@@ -101,8 +101,15 @@ public class Program
         app.MapSearchConversationsEndpoints();
         app.MapHealthEndpoints(Version);
 
+        // Lausch-URL konfigurierbar für Container-Plattformen (rstcloud etc.):
+        // Reihenfolge: PORT-Env > ASPNETCORE_URLS > fester Port 5051 (lokaler Fallback).
+        var portEnv = Environment.GetEnvironmentVariable("PORT");
+        var aspnetUrlsEnv = Environment.GetEnvironmentVariable("ASPNETCORE_URLS");
+        var explicitBindUrl = !string.IsNullOrWhiteSpace(portEnv) ? $"http://0.0.0.0:{portEnv}" : null;
+        var displayBindUrl = explicitBindUrl ?? aspnetUrlsEnv ?? "http://0.0.0.0:5051";
+
         Console.WriteLine($"Polling interval: {pollingIntervalSeconds} seconds");
-        Console.WriteLine("API running on: http://localhost:5051");
+        Console.WriteLine($"API running on: {displayBindUrl}");
         Console.WriteLine("Endpoints:");
         Console.WriteLine("  POST /api/processtext - Process text with AI");
         Console.WriteLine("  POST /api/processemail - Queue email for AI processing");
@@ -111,9 +118,14 @@ public class Program
         Console.WriteLine("  POST /api/get_attachment - Download conversation attachment");
         Console.WriteLine("  GET /api/health - Health check");
         Console.WriteLine("");
-        Console.WriteLine("Swagger UI available at: http://localhost:5051/swagger");
+        Console.WriteLine($"Swagger UI available at: {displayBindUrl}/swagger");
 
-        // Run the web application
-        await app.RunAsync("http://0.0.0.0:5051");
+        // Run the web application (respektiert PORT bzw. ASPNETCORE_URLS, sonst 5051)
+        if (explicitBindUrl != null)
+            await app.RunAsync(explicitBindUrl);
+        else if (!string.IsNullOrWhiteSpace(aspnetUrlsEnv))
+            await app.RunAsync();
+        else
+            await app.RunAsync("http://0.0.0.0:5051");
     }
 }
