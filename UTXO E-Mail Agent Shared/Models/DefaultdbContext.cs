@@ -86,7 +86,7 @@ public partial class DefaultdbContext : DbContext
                 .HasColumnName("aimodel");
             entity.Property(e => e.Aiprovider)
                 .HasDefaultValueSql("'claude'")
-                .HasColumnType("enum('claude','openai','grok','gemini','claudecode')")
+                .HasColumnType("enum('claude','openai','grok','gemini','claudecode','rstcloud')")
                 .HasColumnName("aiprovider");
             entity.Property(e => e.CustomerId).HasColumnName("customer_id");
             entity.Property(e => e.Defaultlanguage)

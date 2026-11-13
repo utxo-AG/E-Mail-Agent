@@ -150,6 +150,17 @@ creates a **default administrator** — but only if no administrator exists yet:
 > - The default admin is only created when the `administrators` table is empty — it is safe to leave `DB_INIT=true` on, but removing it after the first run is cleaner.
 > - A generated password ends up in the container logs. Use `ADMIN_PASSWORD` if you want to avoid that, and change the password after the first login.
 
+#### Automatic schema migrations
+
+Because the model is database-first (no EF Core migrations), incremental schema changes
+are applied by a lightweight migration runner. On **every** Admintool start, pending SQL
+steps are applied automatically and tracked in a `schema_migrations` table, so each step
+runs only once — no external database access required. If the database is not reachable or
+not yet initialized, the step is skipped (start once with `DB_INIT=true` first).
+
+New changes are added as entries in `DatabaseMigrator`
+(`UTXO E-Mail Agent Shared/Models/DatabaseMigrator.cs`).
+
 ### Environment Variables
 
 Hierarchical .NET settings use a **double underscore** `__` as the separator
@@ -180,7 +191,7 @@ Hierarchical .NET settings use a **double underscore** `__` as the separator
 | Service   | Variables |
 |-----------|-----------|
 | Admintool | `Claude__ApiKey`, `Email__ApiUrl`, `Email__BearerToken`, `Email__FromEmail`, `Email__FromName`, `AzureAd__TenantId`, `AzureAd__ClientId`, `AzureAd__ClientSecret`, `AzureAd__RedirectUri`, `AgentApi__BaseUrl` |
-| Agent     | `Claude__ApiKey`, `Email__ApiUrl`, `Email__BearerToken`, `AppSettings__PollingIntervalSeconds` (default `60`), `ClaudeCode__McpServerPath`, `ClaudeCode__WorkingDirectory`, `Python__Path` (+ `AzureAd__*` if Office365 is used) |
+| Agent     | `Claude__ApiKey`, `Email__ApiUrl`, `Email__BearerToken`, `AppSettings__PollingIntervalSeconds` (default `60`), `ClaudeCode__McpServerPath`, `ClaudeCode__WorkingDirectory`, `Python__Path` (+ `AzureAd__*` if Office365 is used; `RstCloud__ApiKey` and optional `RstCloud__Endpoint` if the rstcloud/Qwen provider is used) |
 | Api       | `Email__BearerToken`, `WebhookSecret`, `WebhookVerificationToken`, `AgentApiUrl` |
 | McpServer | *(only the `DB_*` variables above)* |
 

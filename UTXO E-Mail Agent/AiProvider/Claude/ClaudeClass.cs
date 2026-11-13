@@ -758,7 +758,11 @@ public class ClaudeClass : IAiProvider
     /// <summary>
     /// Extracts JSON from Claude's response. Claude can write text before the JSON.
     /// </summary>
-    private static AiResponseClass ParseAiResponse(string fullText, string agentDefaultLanguage, string? emailText)
+    /// <summary>
+    /// Extrahiert die strukturierte JSON-Antwort (AiResponseClass) aus dem Modell-Text.
+    /// Public, damit andere Provider (z. B. RstCloudClass) dasselbe Antwortformat nutzen können.
+    /// </summary>
+    public static AiResponseClass ParseAiResponse(string fullText, string agentDefaultLanguage, string? emailText)
     {
         Logger.Log($"[ParseAiResponse] Attempting to parse response ({fullText?.Length ?? 0} characters)");
 

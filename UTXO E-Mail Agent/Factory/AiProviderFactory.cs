@@ -1,6 +1,7 @@
 using Microsoft.Extensions.Configuration;
 using UTXO_E_Mail_Agent.AiProvider.Claude;
 using UTXO_E_Mail_Agent.AiProvider.ClaudeCode;
+using UTXO_E_Mail_Agent.AiProvider.RstCloud;
 using UTXO_E_Mail_Agent.Interfaces;
 using UTXO_E_Mail_Agent_Shared.Models;
 
@@ -20,7 +21,9 @@ public static class AiProviderFactory
                 configuration),
             
             "claudecode" or "claude-code" => new ClaudeCodeClass(configuration),
-            
+
+            "rstcloud" => new RstCloudClass(configuration),
+
             _ => null
         };
     }

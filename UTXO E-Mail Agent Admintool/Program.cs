@@ -149,6 +149,34 @@ if (string.Equals(Environment.GetEnvironmentVariable("DB_INIT"), "true", StringC
     }
 }
 
+// Automatische Schema-Migrationen: bei jedem Start werden ausstehende SQL-Schritte
+// angewendet (getrackt in schema_migrations), sofern die Datenbank bereits existiert.
+// So verteilen sich DB-Änderungen ohne direkten Datenbankzugriff von außen.
+try
+{
+    using var migrateScope = app.Services.CreateScope();
+    var migrateFactory = migrateScope.ServiceProvider.GetRequiredService<IDbContextFactory<DefaultdbContext>>();
+    await using var migrateDb = await migrateFactory.CreateDbContextAsync();
+
+    if (await migrateDb.Database.CanConnectAsync())
+    {
+        var applied = await DatabaseMigrator.ApplyAsync(migrateDb);
+        Console.WriteLine(applied > 0
+            ? $"[DB-Migrate] {applied} Migration(en) angewendet."
+            : "[DB-Migrate] Schema ist aktuell – keine Migration nötig.");
+    }
+    else
+    {
+        Console.WriteLine("[DB-Migrate] Keine Datenbankverbindung – übersprungen.");
+    }
+}
+catch (Exception ex)
+{
+    // Migrationen dürfen den Start nicht verhindern (z. B. wenn die DB noch nicht
+    // initialisiert ist – dann zuerst mit DB_INIT=true starten).
+    Console.WriteLine($"[DB-Migrate] Übersprungen (Fehler): {ex.Message}");
+}
+
 // Configure the HTTP request pipeline.
 if (!app.Environment.IsDevelopment())
 {
